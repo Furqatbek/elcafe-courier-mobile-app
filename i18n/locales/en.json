@@ -27,7 +27,28 @@
     "forgot_password": "Forgot Password?",
     "login_button": "Login",
     "no_account": "Don't have an account? ",
-    "sign_up": "Sign Up"
+    "sign_up": "Sign Up",
+    "failed": "Login failed. Please try again."
+  },
+  "register": {
+    "create_account_subtitle": "Join our courier community",
+    "first_name_placeholder": "First Name",
+    "last_name_placeholder": "Last Name",
+    "email_placeholder": "Email Address",
+    "phone_placeholder": "Phone Number",
+    "password_placeholder": "Password",
+    "confirm_password_placeholder": "Confirm Password",
+    "by_signing_up": "By signing up, you agree to our",
+    "terms": "Terms of Service",
+    "and": "and",
+    "privacy": "Privacy Policy",
+    "register_button": "Create Account",
+    "have_account": "Already have an account? ",
+    "login": "Login",
+    "password_mismatch": "Passwords do not match",
+    "password_too_short": "Password must be at least 6 characters",
+    "registration_success": "Registration successful! Please login.",
+    "registration_failed": "Registration failed. Please try again."
   },
   "onboarding": {
     "welcome_title": "Deliver Faster. Earn More.",

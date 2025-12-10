@@ -87,7 +87,7 @@ export default function LoginScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>{t('login.no_account')}</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/register')}>
               <Text style={styles.linkText}>{t('login.sign_up')}</Text>
             </TouchableOpacity>
           </View>
