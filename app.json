@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "CourierApp UI Template",
-    "slug": "courierapp-ui-template",
+    "name": "ZBR Courier",
+    "slug": "zbr-courier",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rork-app",
+    "scheme": "zbr-courier",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rork.courierapp-ui-template",
+      "bundleIdentifier": "app.zbr.courier",
       "infoPlist": {
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
         "NSLocationAlwaysUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
@@ -30,7 +30,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.rork.courierapp_ui_template",
+      "package": "app.zbr.courier",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -43,10 +43,10 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/favicon.png",
+      "favicon": "./favicon.svg",
       "bundler": "metro",
       "output": "single",
-      "name": "ElCafe Courier"
+      "name": "ZBR Courier"
     },
     "plugins": [
       [
