@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 import { FingerSwipeEffect } from "@/components/FingerSwipeEffect";
+import { ToastProvider } from "@/components/Toast";
 import Colors from "@/constants/colors";
 
 import "@/i18n";
@@ -130,13 +131,15 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <FingerSwipeEffect>
-          <CourierProvider>
-            <AuthNavigator>
-              <RootLayoutNav />
-            </AuthNavigator>
-          </CourierProvider>
-        </FingerSwipeEffect>
+        <ToastProvider>
+          <FingerSwipeEffect>
+            <CourierProvider>
+              <AuthNavigator>
+                <RootLayoutNav />
+              </AuthNavigator>
+            </CourierProvider>
+          </FingerSwipeEffect>
+        </ToastProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   );
