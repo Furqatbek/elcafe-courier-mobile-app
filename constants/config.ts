@@ -1,5 +1,5 @@
 // API Configuration
-export const BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '';
+export const BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || 'http://localhost:8080';
 
 // API Endpoints - Based on courier-app-api.md documentation
 export const API_ENDPOINTS = {
