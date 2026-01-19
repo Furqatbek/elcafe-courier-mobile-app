@@ -30,10 +30,10 @@ export default function VerificationPendingScreen() {
   const handleContactSupport = (method: 'phone' | 'email' | 'chat') => {
     switch (method) {
       case 'phone':
-        Linking.openURL(\`tel:\${APP_CONFIG.SUPPORT_PHONE}\`);
+        Linking.openURL(`tel:${APP_CONFIG.SUPPORT_PHONE}`);
         break;
       case 'email':
-        Linking.openURL(\`mailto:\${APP_CONFIG.SUPPORT_EMAIL}?subject=Courier Verification\`);
+        Linking.openURL(`mailto:${APP_CONFIG.SUPPORT_EMAIL}?subject=Courier Verification`);
         break;
       case 'chat':
         router.push('/chat?type=support');
