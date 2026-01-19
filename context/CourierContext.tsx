@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_STATUS_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 
 export type OrderStatus = 'pending' | 'pickup' | 'delivery' | 'completed';
 
@@ -32,6 +32,15 @@ export interface LoginResponse {
     user: User;
   };
   timestamp: string;
+}
+
+export interface RefreshTokenResponse {
+  success: boolean;
+  message: string;
+  data: {
+    accessToken: string;
+    refreshToken: string;
+  };
 }
 
 export interface Order {
@@ -161,28 +170,229 @@ const MOCK_ORDERS: Order[] = [
   }
 ];
 
+const DEFAULT_STATS: DriverStats = {
+  todayEarnings: 0,
+  weekEarnings: 0,
+  monthEarnings: 0,
+  completedOrders: 0,
+  rating: 0,
+};
+
 export const [CourierProvider, useCourier] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
-  const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
-  const [stats, setStats] = useState<DriverStats>({
-    todayEarnings: 45.50,
-    weekEarnings: 320.00,
-    monthEarnings: 1250.00,
-    completedOrders: 145,
-    rating: 4.9,
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [stats, setStats] = useState<DriverStats>(DEFAULT_STATS);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Track if initial data has been loaded
+  const hasLoadedInitialData = useRef(false);
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
+  const refreshTokenRef = useRef<string | null>(null);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
+  }, [accessToken]);
+
+  useEffect(() => {
+    refreshTokenRef.current = refreshToken;
+  }, [refreshToken]);
+
+  // Refresh access token using refresh token
+  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    const currentRefreshToken = refreshTokenRef.current;
+    if (!currentRefreshToken || isRefreshing) {
+      return null;
+    }
+
+    setIsRefreshing(true);
+
+    try {
+      const isDevelopment = __DEV__ || !BASE_URL;
+
+      if (isDevelopment) {
+        // In development, just extend the mock token
+        const newToken = 'dev-mock-token-' + Date.now();
+        setAccessToken(newToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, newToken);
+        return newToken;
+      }
+
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken: currentRefreshToken }),
+      });
+
+      const data: RefreshTokenResponse = await response.json();
+
+      if (data.success) {
+        setAccessToken(data.data.accessToken);
+        setRefreshToken(data.data.refreshToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
+        return data.data.accessToken;
+      }
+
+      // Refresh failed, log user out
+      await logout();
+      return null;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      return null;
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing]);
+
+  // Helper function for authenticated API requests
+  const authenticatedFetch = useCallback(async (endpoint: string, options: RequestInit = {}) => {
+    const token = accessTokenRef.current;
+    if (!token) {
+      throw new Error('No access token available');
+    }
+
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+
+    // If unauthorized, try to refresh token
+    if (response.status === 401) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry with new token
+        return fetch(`${BASE_URL}${endpoint}`, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${refreshed}`,
+            ...options.headers,
+          },
+        });
+      }
+      throw new Error('Session expired');
+    }
+
+    return response;
+  }, [refreshAccessToken]);
+
+  // Fetch orders from API
+  const fetchOrders = useCallback(async () => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      // Use mock data in development
+      setOrders(MOCK_ORDERS);
+      return;
+    }
+
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ORDERS);
+      const data = await response.json();
+
+      if (data.success && Array.isArray(data.data)) {
+        setOrders(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+      // Keep existing orders on error
+    }
+  }, [authenticatedFetch]);
+
+  // Fetch stats from API
+  const fetchStats = useCallback(async () => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      // Use calculated stats from orders in development
+      const completedOrdersList = orders.filter(o => o.status === 'completed');
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const todayOrders = completedOrdersList.filter(o => new Date(o.createdAt) >= todayStart);
+      const weekOrders = completedOrdersList.filter(o => new Date(o.createdAt) >= weekStart);
+      const monthOrders = completedOrdersList.filter(o => new Date(o.createdAt) >= monthStart);
+
+      setStats({
+        todayEarnings: todayOrders.reduce((sum, o) => sum + o.deliveryFee + o.tip, 0),
+        weekEarnings: weekOrders.reduce((sum, o) => sum + o.deliveryFee + o.tip, 0),
+        monthEarnings: monthOrders.reduce((sum, o) => sum + o.deliveryFee + o.tip, 0),
+        completedOrders: completedOrdersList.length,
+        rating: 4.9, // Mock rating
+      });
+      return;
+    }
+
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.STATS);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setStats(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  }, [authenticatedFetch, orders]);
+
+  // Refresh all data
+  const refreshData = useCallback(async () => {
+    if (!user) return;
+
+    await Promise.all([
+      fetchOrders(),
+      fetchStats(),
+    ]);
+  }, [user, fetchOrders, fetchStats]);
+
+  // Logout function
+  const logout = useCallback(async () => {
+    // Clear refresh interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    setUser(null);
+    setAccessToken(null);
+    setRefreshToken(null);
+    setOrders([]);
+    setStats(DEFAULT_STATS);
+    setIsOnline(false);
+    hasLoadedInitialData.current = false;
+
+    await AsyncStorage.removeItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
+    await AsyncStorage.removeItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
+    await AsyncStorage.removeItem(TOKEN_CONFIG.USER_KEY);
+  }, []);
 
   // Restore session on mount
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem('accessToken');
-        const storedUser = await AsyncStorage.getItem('user');
-        const storedRefresh = await AsyncStorage.getItem('refreshToken');
-        
+        const storedToken = await AsyncStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
+        const storedUser = await AsyncStorage.getItem(TOKEN_CONFIG.USER_KEY);
+        const storedRefresh = await AsyncStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
+
         if (storedToken && storedUser) {
           setAccessToken(storedToken);
           setRefreshToken(storedRefresh);
@@ -190,18 +400,49 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
       } catch (e) {
         console.error('Failed to restore session', e);
+      } finally {
+        setIsSessionLoading(false);
       }
     };
-    
+
     restoreSession();
   }, []);
+
+  // Load initial data when user is authenticated
+  useEffect(() => {
+    if (user && !hasLoadedInitialData.current) {
+      hasLoadedInitialData.current = true;
+      refreshData();
+    }
+  }, [user, refreshData]);
+
+  // Set up auto-refresh for orders when online
+  useEffect(() => {
+    if (isOnline && user) {
+      // Clear any existing interval
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+
+      // Set up new interval
+      refreshIntervalRef.current = setInterval(() => {
+        fetchOrders();
+      }, ORDER_STATUS_CONFIG.REFRESH_INTERVAL);
+
+      return () => {
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+        }
+      };
+    }
+  }, [isOnline, user, fetchOrders]);
 
   const login = async (email: string, password: string): Promise<void> => {
     const isDevelopment = __DEV__ || !BASE_URL;
 
     if (isDevelopment) {
       console.log('Development mode: bypassing authentication');
-      
+
       const mockUser: User = {
         id: 1,
         email: email,
@@ -220,20 +461,21 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       };
 
       const mockToken = 'dev-mock-token-' + Date.now();
-      
+
       setAccessToken(mockToken);
       setRefreshToken(mockToken);
       setUser(mockUser);
-      
-      await AsyncStorage.setItem('accessToken', mockToken);
-      await AsyncStorage.setItem('refreshToken', mockToken);
-      await AsyncStorage.setItem('user', JSON.stringify(mockUser));
-      
+      hasLoadedInitialData.current = false; // Reset so data loads
+
+      await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, mockToken);
+      await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, mockToken);
+      await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(mockUser));
+
       return;
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.LOGIN}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -243,7 +485,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
       const text = await response.text();
       let data: LoginResponse;
-      
+
       try {
         data = JSON.parse(text);
       } catch (e) {
@@ -255,10 +497,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setAccessToken(data.data.accessToken);
         setRefreshToken(data.data.refreshToken);
         setUser(data.data.user);
-        
-        await AsyncStorage.setItem('accessToken', data.data.accessToken);
-        await AsyncStorage.setItem('refreshToken', data.data.refreshToken);
-        await AsyncStorage.setItem('user', JSON.stringify(data.data.user));
+        hasLoadedInitialData.current = false; // Reset so data loads
+
+        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
       } else {
         throw new Error(data.message || 'Login failed');
       }
@@ -268,23 +511,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   };
 
-  const logout = async () => {
-    setUser(null);
-    setAccessToken(null);
-    setRefreshToken(null);
-    await AsyncStorage.removeItem('accessToken');
-    await AsyncStorage.removeItem('refreshToken');
-    await AsyncStorage.removeItem('user');
-  };
-
   const toggleOnline = () => setIsOnline(prev => !prev);
 
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'completed'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'completed'), [orders]);
 
-  const updateOrderStatus = (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    // Optimistically update local state
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-    
+
     // Simple logic to simulate earning update on completion
     if (status === 'completed') {
       const order = orders.find(o => o.id === orderId);
@@ -296,11 +531,42 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }));
       }
     }
+
+    // In production, also update on server
+    const isDevelopment = __DEV__ || !BASE_URL;
+    if (!isDevelopment) {
+      try {
+        let endpoint = '';
+        switch (status) {
+          case 'pickup':
+            endpoint = API_ENDPOINTS.ORDERS.ACCEPT(orderId);
+            break;
+          case 'delivery':
+            endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
+            break;
+          case 'completed':
+            endpoint = API_ENDPOINTS.ORDERS.COMPLETE(orderId);
+            break;
+        }
+
+        if (endpoint) {
+          await authenticatedFetch(endpoint, { method: 'POST' });
+        }
+      } catch (error) {
+        console.error('Failed to update order status on server:', error);
+        // Optionally revert optimistic update
+      }
+    }
   };
+
+  // Check if user is authenticated (for navigation)
+  const isAuthenticated = useMemo(() => !!user && !!accessToken, [user, accessToken]);
 
   return {
     user,
     accessToken,
+    isAuthenticated,
+    isSessionLoading,
     login,
     logout,
     isOnline,
@@ -309,6 +575,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     activeOrders,
     completedOrders,
     stats,
-    updateOrderStatus
+    updateOrderStatus,
+    refreshData,
+    refreshAccessToken,
   };
 });
