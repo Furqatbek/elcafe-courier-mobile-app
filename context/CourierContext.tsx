@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_STATUS_CONFIG, LOCATION_CONFIG } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
@@ -498,7 +498,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       // Set up new interval
       refreshIntervalRef.current = setInterval(() => {
         fetchOrders();
-      }, ORDER_STATUS_CONFIG.REFRESH_INTERVAL);
+      }, ORDER_CONFIG.REFRESH_INTERVAL);
 
       return () => {
         if (refreshIntervalRef.current) {
@@ -793,8 +793,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     locationSubscriptionRef.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        distanceInterval: LOCATION_CONFIG.MIN_DISTANCE_METERS,
-        timeInterval: LOCATION_CONFIG.UPDATE_INTERVAL,
+        distanceInterval: LOCATION_CONFIG.DISTANCE_FILTER,
+        timeInterval: LOCATION_CONFIG.ACTIVE_INTERVAL,
       },
       (location) => {
         updateLocationOnServer(location.coords.latitude, location.coords.longitude);
