@@ -1,13 +1,14 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
-import { Stack } from 'expo-router';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { User, Mail, Phone, Hash, Briefcase, UserCircle } from 'lucide-react-native';
+import { User, Mail, Phone, Hash, Briefcase, UserCircle, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
 
 export default function PersonalInfoScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { user } = useCourier();
 
   const InfoItem = ({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) => (
@@ -24,7 +25,19 @@ export default function PersonalInfoScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t('settings.personal_info') }} />
+      <Stack.Screen
+        options={{
+          title: t('personal_info.title'),
+          headerRight: () => (
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => router.push('/edit-profile')}
+            >
+              <Edit2 size={20} color={Colors.primary} />
+            </TouchableOpacity>
+          ),
+        }}
+      />
       <ScrollView style={styles.container}>
         <Text style={styles.sectionTitle}>{t('personal_info.personal_details')}</Text>
         <View style={styles.section}>
@@ -80,6 +93,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     padding: 20,
     paddingBottom: 40,
+  },
+  editButton: {
+    padding: 8,
+    marginRight: 8,
   },
   sectionTitle: {
     fontSize: 14,

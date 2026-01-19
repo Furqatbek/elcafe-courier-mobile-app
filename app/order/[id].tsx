@@ -44,9 +44,8 @@ export default function OrderDetailScreen() {
       }
 
       if (nextStatus === 'completed') {
-        Alert.alert(t('common.success'), t('order_detail.delivery_completed'), [
-          { text: t('common.ok'), onPress: () => router.back() }
-        ]);
+        // Navigate to rating screen after completing delivery
+        router.replace(`/order-rating/${order.id}`);
       }
     }
   };
@@ -60,8 +59,17 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const renderContactButton = (icon: any, label: string, color: string) => (
-    <TouchableOpacity style={[styles.contactButton, { backgroundColor: color + '15' }]}>
+  const handleCall = () => {
+    // In a real app, this would initiate a call
+    Alert.alert(t('order_detail.call'), `Calling ${order.customerName}...`);
+  };
+
+  const handleChat = () => {
+    router.push(`/chat?type=customer&orderId=${order.id}`);
+  };
+
+  const renderContactButton = (icon: any, label: string, color: string, onPress: () => void) => (
+    <TouchableOpacity style={[styles.contactButton, { backgroundColor: color + '15' }]} onPress={onPress}>
       <View style={[styles.contactIcon, { backgroundColor: color }]}>
         {icon}
       </View>
@@ -137,8 +145,8 @@ export default function OrderDetailScreen() {
         {/* Contact Actions */}
         {order.status !== 'completed' && (
           <View style={styles.contactRow}>
-            {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary)}
-            {renderContactButton(<MessageSquare size={20} color="white" />, t('order_detail.chat'), Colors.secondary)}
+            {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCall)}
+            {renderContactButton(<MessageSquare size={20} color="white" />, t('order_detail.chat'), Colors.secondary, handleChat)}
           </View>
         )}
       </ScrollView>

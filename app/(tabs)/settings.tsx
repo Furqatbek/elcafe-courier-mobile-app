@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Settings as SettingsIcon, Globe } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -19,17 +19,8 @@ export default function SettingsScreen() {
   const { user } = useCourier();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
 
-  const changeLanguage = () => {
-    Alert.alert(
-      t('settings.choose_language'),
-      undefined,
-      [
-        { text: 'English', onPress: () => i18n.changeLanguage('en') },
-        { text: 'Русский', onPress: () => i18n.changeLanguage('ru') },
-        { text: "O'zbek", onPress: () => i18n.changeLanguage('uz') },
-        { text: t('common.cancel'), style: 'cancel' }
-      ]
-    );
+  const navigateToLanguage = () => {
+    router.push('/language');
   };
 
   const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement }: any) => (
@@ -85,19 +76,20 @@ export default function SettingsScreen() {
           title={t('settings.vehicle_info')} 
           onPress={() => router.push('/vehicle-info')}
         />
-        <MenuItem 
-          icon={Shield} 
-          title={t('settings.security')} 
+        <MenuItem
+          icon={Shield}
+          title={t('settings.security')}
+          onPress={() => router.push('/security')}
         />
       </View>
 
       <Text style={styles.sectionHeader}>{t('settings.preferences')}</Text>
       <View style={styles.section}>
-        <MenuItem 
-          icon={Globe} 
-          title={t('settings.language')} 
+        <MenuItem
+          icon={Globe}
+          title={t('settings.language')}
           subtitle={i18n.language === 'ru' ? 'Русский' : i18n.language === 'uz' ? "O'zbek" : 'English'}
-          onPress={changeLanguage}
+          onPress={navigateToLanguage}
         />
         <MenuItem 
           icon={Bell} 
@@ -119,9 +111,10 @@ export default function SettingsScreen() {
 
       <Text style={styles.sectionHeader}>{t('settings.support')}</Text>
       <View style={styles.section}>
-        <MenuItem 
-          icon={HelpCircle} 
-          title={t('settings.help_center')} 
+        <MenuItem
+          icon={HelpCircle}
+          title={t('settings.help_center')}
+          onPress={() => router.push('/help-center')}
         />
       </View>
 
