@@ -3,6 +3,9 @@ export const BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '';
 
 // API Endpoints
 export const API_ENDPOINTS = {
+  // tRPC endpoint for type-safe API calls
+  TRPC: '/api/trpc',
+
   AUTH: {
     LOGIN: '/api/v1/auth/login',
     REGISTER: '/api/v1/auth/register',
