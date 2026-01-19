@@ -1,36 +1,113 @@
 // API Configuration
 export const BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '';
 
-// API Endpoints
+// API Endpoints - Based on courier-app-api.md documentation
 export const API_ENDPOINTS = {
   // tRPC endpoint for type-safe API calls
   TRPC: '/api/trpc',
 
+  // Authentication endpoints
   AUTH: {
     LOGIN: '/api/v1/auth/login',
-    REGISTER: '/api/v1/auth/register',
     REFRESH: '/api/v1/auth/refresh',
-    LOGOUT: '/api/v1/auth/logout',
-    FORGOT_PASSWORD: '/api/v1/auth/forgot-password',
-    RESET_PASSWORD: '/api/v1/auth/reset-password',
+    ME: '/api/v1/auth/me',
+    PHONE_REQUEST_OTP: '/api/v1/auth/phone/request-otp',
+    PHONE_VERIFY_OTP: '/api/v1/auth/phone/verify-otp',
   },
+
+  // Courier profile & registration
   COURIER: {
-    PROFILE: '/api/v1/courier/profile',
-    UPDATE_PROFILE: '/api/v1/courier/profile',
-    UPDATE_LOCATION: '/api/v1/courier/location',
-    ORDERS: '/api/v1/courier/orders',
-    STATS: '/api/v1/courier/stats',
-    EARNINGS: '/api/v1/courier/earnings',
+    REGISTER: '/api/v1/couriers/register',
+    ME: '/api/v1/couriers/me',
+    UPDATE_STATUS: '/api/v1/couriers/me/status',
+    UPDATE_LOCATION: '/api/v1/couriers/me/location',
+    AVAILABLE_ORDERS: '/api/v1/couriers/me/available-orders',
+    ACTIVE_ORDERS: '/api/v1/couriers/me/orders/active',
+    ORDER_HISTORY: '/api/v1/couriers/me/orders/history',
+    EARNINGS: '/api/v1/couriers/me/earnings',
   },
+
+  // Order management endpoints
   ORDERS: {
-    LIST: '/api/v1/orders',
-    DETAIL: (id: string) => `/api/v1/orders/${id}`,
-    ACCEPT: (id: string) => `/api/v1/orders/${id}/accept`,
-    PICKUP: (id: string) => `/api/v1/orders/${id}/pickup`,
-    COMPLETE: (id: string) => `/api/v1/orders/${id}/complete`,
-    CANCEL: (id: string) => `/api/v1/orders/${id}/cancel`,
+    DETAIL: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}`,
+    ACCEPT: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/accept`,
+    PICKUP: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/pickup`,
+    TRANSIT: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/transit`,
+    COMPLETE: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/complete`,
+    ISSUE: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/issue`,
+  },
+
+  // Notifications
+  NOTIFICATIONS: {
+    LIST: '/api/v1/notifications',
+    UNREAD_COUNT: '/api/v1/notifications/unread/count',
+    MARK_READ: (id: string | number) => `/api/v1/notifications/${id}/read`,
   },
 } as const;
+
+// Courier Status Values
+export const COURIER_STATUS = {
+  OFFLINE: 'OFFLINE',
+  AVAILABLE: 'AVAILABLE',
+  BUSY: 'BUSY',
+  ON_BREAK: 'ON_BREAK',
+  PENDING_APPROVAL: 'PENDING_APPROVAL',
+} as const;
+
+export type CourierStatusType = typeof COURIER_STATUS[keyof typeof COURIER_STATUS];
+
+// Order Status Values
+export const ORDER_STATUS = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  PICKED_UP: 'PICKED_UP',
+  IN_TRANSIT: 'IN_TRANSIT',
+  DELIVERED: 'DELIVERED',
+  CANCELLED: 'CANCELLED',
+} as const;
+
+export type OrderStatusType = typeof ORDER_STATUS[keyof typeof ORDER_STATUS];
+
+// Vehicle Types
+export const VEHICLE_TYPES = {
+  BICYCLE: 'BICYCLE',
+  MOTORCYCLE: 'MOTORCYCLE',
+  CAR: 'CAR',
+} as const;
+
+export type VehicleType = typeof VEHICLE_TYPES[keyof typeof VEHICLE_TYPES];
+
+// Issue Types for reporting order issues
+export const ISSUE_TYPES = {
+  CUSTOMER_UNAVAILABLE: 'CUSTOMER_UNAVAILABLE',
+  WRONG_ADDRESS: 'WRONG_ADDRESS',
+  RESTAURANT_DELAY: 'RESTAURANT_DELAY',
+  ACCIDENT: 'ACCIDENT',
+  VEHICLE_ISSUE: 'VEHICLE_ISSUE',
+  OTHER: 'OTHER',
+} as const;
+
+export type IssueType = typeof ISSUE_TYPES[keyof typeof ISSUE_TYPES];
+
+// Notification Types
+export const NOTIFICATION_TYPES = {
+  NEW_ORDER_NEARBY: 'NEW_ORDER_NEARBY',
+  ORDER_ASSIGNED: 'ORDER_ASSIGNED',
+  ORDER_CANCELLED: 'ORDER_CANCELLED',
+  PAYOUT_ISSUED: 'PAYOUT_ISSUED',
+  VERIFICATION_APPROVED: 'VERIFICATION_APPROVED',
+  RATING_RECEIVED: 'RATING_RECEIVED',
+} as const;
+
+// Earnings Period Types
+export const EARNINGS_PERIOD = {
+  TODAY: 'TODAY',
+  THIS_WEEK: 'THIS_WEEK',
+  THIS_MONTH: 'THIS_MONTH',
+  CUSTOM: 'CUSTOM',
+} as const;
+
+export type EarningsPeriodType = typeof EARNINGS_PERIOD[keyof typeof EARNINGS_PERIOD];
 
 // Request Configuration
 export const REQUEST_CONFIG = {
@@ -44,15 +121,15 @@ export const TOKEN_CONFIG = {
   ACCESS_TOKEN_KEY: 'accessToken',
   REFRESH_TOKEN_KEY: 'refreshToken',
   USER_KEY: 'user',
-  // Refresh token 5 minutes before expiry (if JWT)
-  REFRESH_THRESHOLD_MS: 5 * 60 * 1000,
+  COURIER_PROFILE_KEY: 'courierProfile',
+  REFRESH_THRESHOLD_MS: 5 * 60 * 1000, // 5 minutes before expiry
 } as const;
 
 // Map Configuration
 export const MAP_CONFIG = {
   DEFAULT_REGION: {
-    latitude: 40.7128,
-    longitude: -74.0060,
+    latitude: 41.2995, // Tashkent default
+    longitude: 69.2401,
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   },
@@ -75,6 +152,7 @@ export const FEATURE_FLAGS = {
   ENABLE_ANALYTICS: false,
   ENABLE_CHAT: true,
   ENABLE_RATINGS: true,
+  ENABLE_PHONE_LOGIN: true,
 } as const;
 
 // App Configuration
@@ -85,28 +163,57 @@ export const APP_CONFIG = {
   MAX_PASSWORD_LENGTH: 128,
   PHONE_REGEX: /^\+?[\d\s-()]+$/,
   EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  OTP_LENGTH: 6,
+  OTP_RESEND_DELAY: 60, // seconds
   SUPPORT_EMAIL: 'support@courierapp.com',
-  SUPPORT_PHONE: '+1234567890',
+  SUPPORT_PHONE: '+998901234567',
 } as const;
 
-// Order Status Configuration
-export const ORDER_STATUS_CONFIG = {
-  REFRESH_INTERVAL: 30000, // 30 seconds
-  MAX_ACTIVE_ORDERS: 5,
-} as const;
-
-// Location Configuration
+// Location Update Intervals (in milliseconds)
 export const LOCATION_CONFIG = {
-  UPDATE_INTERVAL: 10000, // 10 seconds
+  IDLE_INTERVAL: 30000, // 30 seconds when idle
+  ACTIVE_INTERVAL: 5000, // 5 seconds during active delivery
+  FAST_INTERVAL: 3000, // 3 seconds when moving fast
+  BACKGROUND_INTERVAL: 60000, // 60 seconds in background
   DISTANCE_FILTER: 10, // meters
   ACCURACY: 'high' as const,
 } as const;
 
+// Order Configuration
+export const ORDER_CONFIG = {
+  REFRESH_INTERVAL: 30000, // 30 seconds
+  MAX_ACTIVE_ORDERS: 3,
+  NEW_ORDER_TIMEOUT: 300000, // 5 minutes to accept
+} as const;
+
 // Default Values
 export const DEFAULTS = {
-  CURRENCY: 'USD',
-  CURRENCY_SYMBOL: '$',
+  CURRENCY: 'UZS',
+  CURRENCY_SYMBOL: "so'm",
   LANGUAGE: 'en',
-  DATE_FORMAT: 'MM/DD/YYYY',
-  TIME_FORMAT: 'h:mm A',
+  DATE_FORMAT: 'DD/MM/YYYY',
+  TIME_FORMAT: 'HH:mm',
+  DEFAULT_RADIUS_KM: 10,
+} as const;
+
+// Navigation URLs for external map apps
+export const NAVIGATION_URLS = {
+  GOOGLE_MAPS: (lat: number, lng: number) =>
+    `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+  YANDEX_MAPS: (lat: number, lng: number) =>
+    `https://yandex.com/maps/?rtext=~${lat},${lng}&rtt=auto`,
+  APPLE_MAPS: (lat: number, lng: number) =>
+    `maps://maps.apple.com/?daddr=${lat},${lng}`,
+} as const;
+
+// WebSocket Configuration
+export const WEBSOCKET_CONFIG = {
+  URL: process.env.EXPO_PUBLIC_RORK_WS_URL || 'ws://localhost:8080/ws',
+  RECONNECT_INTERVAL: 5000,
+  MAX_RECONNECT_ATTEMPTS: 10,
+  TOPICS: {
+    NEW_ORDERS: '/user/queue/orders/new',
+    ORDER_STATUS: (orderId: string | number) => `/topic/orders/${orderId}/status`,
+    NOTIFICATIONS: '/user/queue/notifications',
+  },
 } as const;

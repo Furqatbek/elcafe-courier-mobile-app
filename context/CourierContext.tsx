@@ -1,9 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_STATUS_CONFIG } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_STATUS_CONFIG, LOCATION_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import * as Location from 'expo-location';
 
 export type OrderStatus = 'pending' | 'pickup' | 'delivery' | 'completed';
+export type CourierStatus = 'offline' | 'online' | 'busy';
+export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
 export interface User {
   id: number;
@@ -20,6 +23,50 @@ export interface User {
   active: boolean;
   emailVerified: boolean;
   createdAt: string;
+}
+
+export interface CourierProfile {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+  vehicleType: 'BICYCLE' | 'MOTORCYCLE' | 'CAR';
+  vehicleNumber?: string;
+  licenseNumber?: string;
+  status: CourierStatus;
+  verificationStatus: VerificationStatus;
+  rating: number;
+  totalDeliveries: number;
+  preferredRadius: number;
+  currentLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OtpRequestResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    otpId: string;
+    expiresAt: string;
+  };
+}
+
+export interface OtpVerifyResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    accessToken: string;
+    refreshToken: string;
+    user: User;
+    courier?: CourierProfile;
+    isNewUser: boolean;
+  };
 }
 
 export interface LoginResponse {
@@ -180,6 +227,7 @@ const DEFAULT_STATS: DriverStats = {
 
 export const [CourierProvider, useCourier] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
+  const [courierProfile, setCourierProfile] = useState<CourierProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -187,10 +235,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [stats, setStats] = useState<DriverStats>(DEFAULT_STATS);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<{latitude: number; longitude: number} | null>(null);
+  const [isLocationTracking, setIsLocationTracking] = useState(false);
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
 
@@ -365,6 +416,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     ]);
   }, [user, fetchOrders, fetchStats]);
 
+  // Stop location tracking
+  const stopLocationTracking = useCallback(async () => {
+    if (locationSubscriptionRef.current) {
+      locationSubscriptionRef.current.remove();
+      locationSubscriptionRef.current = null;
+    }
+    setIsLocationTracking(false);
+  }, []);
+
   // Logout function
   const logout = useCallback(async () => {
     // Clear refresh interval
@@ -372,18 +432,24 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       clearInterval(refreshIntervalRef.current);
     }
 
+    // Stop location tracking
+    await stopLocationTracking();
+
     setUser(null);
+    setCourierProfile(null);
     setAccessToken(null);
     setRefreshToken(null);
     setOrders([]);
     setStats(DEFAULT_STATS);
     setIsOnline(false);
+    setCurrentLocation(null);
     hasLoadedInitialData.current = false;
 
     await AsyncStorage.removeItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
     await AsyncStorage.removeItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
     await AsyncStorage.removeItem(TOKEN_CONFIG.USER_KEY);
-  }, []);
+    await AsyncStorage.removeItem('courier_profile');
+  }, [stopLocationTracking]);
 
   // Restore session on mount
   useEffect(() => {
@@ -392,11 +458,16 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         const storedToken = await AsyncStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
         const storedUser = await AsyncStorage.getItem(TOKEN_CONFIG.USER_KEY);
         const storedRefresh = await AsyncStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
+        const storedProfile = await AsyncStorage.getItem('courier_profile');
 
         if (storedToken && storedUser) {
           setAccessToken(storedToken);
           setRefreshToken(storedRefresh);
           setUser(JSON.parse(storedUser));
+
+          if (storedProfile) {
+            setCourierProfile(JSON.parse(storedProfile));
+          }
         }
       } catch (e) {
         console.error('Failed to restore session', e);
@@ -511,7 +582,238 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   };
 
-  const toggleOnline = () => setIsOnline(prev => !prev);
+  // Request OTP for phone login
+  const requestOtp = async (phone: string): Promise<OtpRequestResponse> => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      return {
+        success: true,
+        message: 'OTP sent successfully (development mode)',
+        data: {
+          otpId: 'dev-otp-' + Date.now(),
+          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        },
+      };
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_REQUEST_OTP}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Request OTP error:', error);
+      throw error;
+    }
+  };
+
+  // Verify OTP and login
+  const verifyOtp = async (phone: string, otp: string): Promise<OtpVerifyResponse> => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      if (otp !== '123456') {
+        throw new Error('Invalid OTP. Use 123456 in development mode.');
+      }
+
+      const mockUser: User = {
+        id: 1,
+        email: '',
+        firstName: 'Test',
+        lastName: 'Courier',
+        role: 'courier',
+        phone: phone,
+        vehicleType: 'MOTORCYCLE',
+        active: true,
+        emailVerified: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      const mockProfile: CourierProfile = {
+        id: 'courier-1',
+        userId: '1',
+        firstName: 'Test',
+        lastName: 'Courier',
+        phone: phone,
+        vehicleType: 'MOTORCYCLE',
+        status: 'offline',
+        verificationStatus: 'approved',
+        rating: 4.8,
+        totalDeliveries: 125,
+        preferredRadius: 5,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const mockToken = 'dev-mock-token-' + Date.now();
+
+      setAccessToken(mockToken);
+      setRefreshToken(mockToken);
+      setUser(mockUser);
+      setCourierProfile(mockProfile);
+      hasLoadedInitialData.current = false;
+
+      await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, mockToken);
+      await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, mockToken);
+      await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(mockUser));
+      await AsyncStorage.setItem('courier_profile', JSON.stringify(mockProfile));
+
+      return {
+        success: true,
+        message: 'Login successful',
+        data: {
+          accessToken: mockToken,
+          refreshToken: mockToken,
+          user: mockUser,
+          courier: mockProfile,
+          isNewUser: false,
+        },
+      };
+    }
+
+    try {
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_VERIFY_OTP}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp }),
+      });
+
+      const data: OtpVerifyResponse = await response.json();
+
+      if (data.success && data.data) {
+        setAccessToken(data.data.accessToken);
+        setRefreshToken(data.data.refreshToken);
+        setUser(data.data.user);
+        if (data.data.courier) {
+          setCourierProfile(data.data.courier);
+          await AsyncStorage.setItem('courier_profile', JSON.stringify(data.data.courier));
+        }
+        hasLoadedInitialData.current = false;
+
+        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Verify OTP error:', error);
+      throw error;
+    }
+  };
+
+  // Fetch courier profile
+  const fetchCourierProfile = useCallback(async () => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      return courierProfile;
+    }
+
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ME);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setCourierProfile(data.data);
+        await AsyncStorage.setItem('courier_profile', JSON.stringify(data.data));
+        return data.data;
+      }
+    } catch (error) {
+      console.error('Failed to fetch courier profile:', error);
+    }
+    return null;
+  }, [authenticatedFetch, courierProfile]);
+
+  // Update courier status (online/offline/busy)
+  const updateCourierStatus = useCallback(async (status: CourierStatus) => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      setCourierProfile(prev => prev ? { ...prev, status } : null);
+      setIsOnline(status === 'online');
+      return;
+    }
+
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_STATUS, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setCourierProfile(prev => prev ? { ...prev, status } : null);
+        setIsOnline(status === 'online');
+      }
+    } catch (error) {
+      console.error('Failed to update courier status:', error);
+      throw error;
+    }
+  }, [authenticatedFetch]);
+
+  // Update courier location to server
+  const updateLocationOnServer = useCallback(async (latitude: number, longitude: number) => {
+    const isDevelopment = __DEV__ || !BASE_URL;
+
+    if (isDevelopment) {
+      setCurrentLocation({ latitude, longitude });
+      return;
+    }
+
+    try {
+      await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_LOCATION, {
+        method: 'POST',
+        body: JSON.stringify({ latitude, longitude }),
+      });
+      setCurrentLocation({ latitude, longitude });
+    } catch (error) {
+      console.error('Failed to update location:', error);
+    }
+  }, [authenticatedFetch]);
+
+  // Start location tracking
+  const startLocationTracking = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      throw new Error('Location permission denied');
+    }
+
+    // Stop any existing subscription
+    if (locationSubscriptionRef.current) {
+      locationSubscriptionRef.current.remove();
+    }
+
+    // Start watching location
+    locationSubscriptionRef.current = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.High,
+        distanceInterval: LOCATION_CONFIG.MIN_DISTANCE_METERS,
+        timeInterval: LOCATION_CONFIG.UPDATE_INTERVAL,
+      },
+      (location) => {
+        updateLocationOnServer(location.coords.latitude, location.coords.longitude);
+      }
+    );
+
+    setIsLocationTracking(true);
+  }, [updateLocationOnServer]);
+
+  const toggleOnline = async () => {
+    const newStatus: CourierStatus = isOnline ? 'offline' : 'online';
+    await updateCourierStatus(newStatus);
+
+    if (newStatus === 'online') {
+      await startLocationTracking();
+    } else {
+      await stopLocationTracking();
+    }
+  };
 
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'completed'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'completed'), [orders]);
@@ -563,19 +865,40 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const isAuthenticated = useMemo(() => !!user && !!accessToken, [user, accessToken]);
 
   return {
+    // User and authentication
     user,
     accessToken,
     isAuthenticated,
     isSessionLoading,
     login,
     logout,
+    requestOtp,
+    verifyOtp,
+
+    // Courier profile
+    courierProfile,
+    fetchCourierProfile,
+    updateCourierStatus,
+
+    // Online status and location
     isOnline,
     toggleOnline,
+    currentLocation,
+    isLocationTracking,
+    startLocationTracking,
+    stopLocationTracking,
+    updateLocationOnServer,
+
+    // Orders
     orders,
     activeOrders,
     completedOrders,
-    stats,
     updateOrderStatus,
+
+    // Stats
+    stats,
+
+    // Data refresh
     refreshData,
     refreshAccessToken,
   };

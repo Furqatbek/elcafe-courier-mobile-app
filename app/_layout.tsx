@@ -19,7 +19,7 @@ const queryClient = new QueryClient();
 
 // Auth navigation handler component
 function AuthNavigator({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isSessionLoading } = useCourier();
+  const { isAuthenticated, isSessionLoading, courierProfile } = useCourier();
   const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -28,16 +28,26 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
     // Wait for navigation to be ready and session to be loaded
     if (!navigationState?.key || isSessionLoading) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'forgot-password' || segments[0] === 'onboarding';
+    const authScreens = ['login', 'login-otp', 'register', 'become-courier', 'forgot-password', 'onboarding'];
+    const inAuthGroup = authScreens.includes(segments[0] as string);
+    const inVerificationScreen = segments[0] === 'verification-pending';
 
-    if (isAuthenticated && inAuthGroup) {
-      // User is logged in but on auth screen, redirect to main app
-      router.replace('/(tabs)/orders');
+    if (isAuthenticated) {
+      // Check if courier needs verification
+      const needsVerification = courierProfile && courierProfile.verificationStatus !== 'approved';
+
+      if (needsVerification && !inVerificationScreen) {
+        // Redirect to verification pending screen
+        router.replace('/verification-pending');
+      } else if (!needsVerification && (inAuthGroup || inVerificationScreen)) {
+        // User is verified, redirect to main app
+        router.replace('/(tabs)/orders');
+      }
     } else if (!isAuthenticated && !inAuthGroup && segments[0] !== undefined) {
       // User is not logged in and not on auth screen, redirect to login
       router.replace('/login');
     }
-  }, [isAuthenticated, isSessionLoading, segments, navigationState?.key]);
+  }, [isAuthenticated, isSessionLoading, segments, navigationState?.key, courierProfile]);
 
   // Show loading screen while checking session
   if (isSessionLoading) {
@@ -58,13 +68,26 @@ function RootLayoutNav() {
       headerTintColor: Colors.primary,
       contentStyle: { backgroundColor: Colors.background }
     }}>
+      {/* Auth Screens */}
       <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="login-otp" options={{ headerShown: false }} />
       <Stack.Screen name="register" options={{ headerShown: false }} />
+      <Stack.Screen name="become-courier" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="verification-pending" options={{ headerShown: false }} />
+
+      {/* Main App */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+      {/* Order Screens */}
       <Stack.Screen name="order/[id]" options={{ headerShown: false, presentation: 'card' }} />
       <Stack.Screen name="order-rating/[orderId]" options={{ headerShown: false, presentation: 'card' }} />
+      <Stack.Screen name="available-orders" options={{ headerShown: true, title: 'Available Orders' }} />
+      <Stack.Screen name="report-issue" options={{ headerShown: true, title: 'Report Issue', presentation: 'modal' }} />
+
+      {/* Other Screens */}
+      <Stack.Screen name="notifications" options={{ headerShown: true }} />
       <Stack.Screen name="chat" options={{ headerShown: false, presentation: 'card' }} />
       <Stack.Screen name="+not-found" options={{ title: "Oops" }} />
     </Stack>
