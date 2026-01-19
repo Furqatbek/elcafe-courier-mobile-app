@@ -90,7 +90,7 @@ export default function NotificationsScreen() {
     }
 
     if (notification.data?.orderId) {
-      router.push(\`/order/\${notification.data.orderId}\`);
+      router.push(`/order/${notification.data.orderId}`);
     }
   };
 
