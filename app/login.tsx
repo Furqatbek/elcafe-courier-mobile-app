@@ -43,7 +43,7 @@ export default function LoginScreen() {
             <View style={styles.logoContainer}>
               <Box size={40} color={Colors.primary} />
             </View>
-            <Text style={styles.appName}>Courier<Text style={styles.appNameHighlight}>Pro</Text></Text>
+            <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
             <Text style={styles.subtitle}>{t('login.app_subtitle')}</Text>
           </View>
 

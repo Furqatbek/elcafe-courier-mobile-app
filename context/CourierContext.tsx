@@ -125,98 +125,6 @@ export interface DriverStats {
   rating: number;
 }
 
-const MOCK_ORDERS: Order[] = [
-  {
-    id: '101',
-    restaurantName: 'Burger King',
-    restaurantAddress: '123 Main St, New York',
-    customerName: 'John Doe',
-    customerAddress: '456 Broadway, New York',
-    deliveryFee: 5.50,
-    tip: 2.00,
-    status: 'pending',
-    distance: '2.5 km',
-    estimatedTime: '15 min',
-    createdAt: new Date().toISOString(),
-    items: ['Whopper Meal', 'Coke'],
-    pickupLocation: {
-      latitude: 40.7128,
-      longitude: -74.0060,
-    },
-    dropoffLocation: {
-      latitude: 40.7282,
-      longitude: -73.9942,
-    },
-    routeCoordinates: [
-      { latitude: 40.7128, longitude: -74.0060 },
-      { latitude: 40.7138, longitude: -74.0060 },
-      { latitude: 40.7138, longitude: -74.0020 },
-      { latitude: 40.7200, longitude: -74.0020 },
-      { latitude: 40.7200, longitude: -73.9980 },
-      { latitude: 40.7282, longitude: -73.9980 },
-      { latitude: 40.7282, longitude: -73.9942 },
-    ],
-  },
-  {
-    id: '102',
-    restaurantName: 'Sushi Place',
-    restaurantAddress: '789 5th Ave, New York',
-    customerName: 'Alice Smith',
-    customerAddress: '101 Park Ave, New York',
-    deliveryFee: 8.75,
-    tip: 4.50,
-    status: 'pickup',
-    distance: '4.2 km',
-    estimatedTime: '25 min',
-    createdAt: new Date().toISOString(),
-    items: ['Spicy Tuna Roll', 'Miso Soup'],
-    pickupLocation: {
-      latitude: 40.7589,
-      longitude: -73.9851,
-    },
-    dropoffLocation: {
-      latitude: 40.7484,
-      longitude: -73.9857,
-    },
-    routeCoordinates: [
-      { latitude: 40.7589, longitude: -73.9851 },
-      { latitude: 40.7550, longitude: -73.9851 },
-      { latitude: 40.7550, longitude: -73.9880 },
-      { latitude: 40.7500, longitude: -73.9880 },
-      { latitude: 40.7500, longitude: -73.9857 },
-      { latitude: 40.7484, longitude: -73.9857 },
-    ],
-  },
-  {
-    id: '103',
-    restaurantName: 'Pizza Hut',
-    restaurantAddress: '555 West St, New York',
-    customerName: 'Bob Brown',
-    customerAddress: '222 East St, New York',
-    deliveryFee: 6.00,
-    tip: 0,
-    status: 'completed',
-    distance: '3.0 km',
-    estimatedTime: '20 min',
-    createdAt: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-    items: ['Pepperoni Pizza'],
-    pickupLocation: {
-      latitude: 40.7308,
-      longitude: -74.0020,
-    },
-    dropoffLocation: {
-      latitude: 40.7410,
-      longitude: -73.9990,
-    },
-    routeCoordinates: [
-      { latitude: 40.7308, longitude: -74.0020 },
-      { latitude: 40.7350, longitude: -74.0020 },
-      { latitude: 40.7350, longitude: -73.9990 },
-      { latitude: 40.7410, longitude: -73.9990 },
-    ],
-  }
-];
-
 const DEFAULT_STATS: DriverStats = {
   todayEarnings: 0,
   weekEarnings: 0,
@@ -264,16 +172,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setIsRefreshing(true);
 
     try {
-      const isDevelopment = __DEV__ || !BASE_URL;
-
-      if (isDevelopment) {
-        // In development, just extend the mock token
-        const newToken = 'dev-mock-token-' + Date.now();
-        setAccessToken(newToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, newToken);
-        return newToken;
-      }
-
       const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
         method: 'POST',
         headers: {
@@ -341,16 +239,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      // Use mock data in development
-      setOrders(MOCK_ORDERS);
-      return;
-    }
-
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ORDERS);
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ACTIVE_ORDERS);
       const data = await response.json();
 
       if (data.success && Array.isArray(data.data)) {
@@ -364,38 +254,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Fetch stats from API
   const fetchStats = useCallback(async () => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      // Use calculated stats from orders in development
-      const completedOrdersList = orders.filter(o => o.status === 'completed');
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
-      const weekStart = new Date();
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-      weekStart.setHours(0, 0, 0, 0);
-
-      const monthStart = new Date();
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-
-      const todayOrders = completedOrdersList.filter(o => new Date(o.createdAt) >= todayStart);
-      const weekOrders = completedOrdersList.filter(o => new Date(o.createdAt) >= weekStart);
-      const monthOrders = completedOrdersList.filter(o => new Date(o.createdAt) >= monthStart);
-
-      setStats({
-        todayEarnings: todayOrders.reduce((sum, o) => sum + o.deliveryFee + o.tip, 0),
-        weekEarnings: weekOrders.reduce((sum, o) => sum + o.deliveryFee + o.tip, 0),
-        monthEarnings: monthOrders.reduce((sum, o) => sum + o.deliveryFee + o.tip, 0),
-        completedOrders: completedOrdersList.length,
-        rating: 4.9, // Mock rating
-      });
-      return;
-    }
-
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.STATS);
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.EARNINGS);
       const data = await response.json();
 
       if (data.success && data.data) {
@@ -404,7 +264,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     }
-  }, [authenticatedFetch, orders]);
+  }, [authenticatedFetch]);
 
   // Refresh all data
   const refreshData = useCallback(async () => {
@@ -509,42 +369,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [isOnline, user, fetchOrders]);
 
   const login = async (email: string, password: string): Promise<void> => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      console.log('Development mode: bypassing authentication');
-
-      const mockUser: User = {
-        id: 1,
-        email: email,
-        firstName: 'Test',
-        lastName: 'Courier',
-        role: 'courier',
-        phone: '+1234567890',
-        vehicleType: 'car',
-        vehiclePlate: 'ABC123',
-        licenseNumber: 'DL12345',
-        vehicleBrand: 'Toyota',
-        vehicleModel: 'Camry',
-        active: true,
-        emailVerified: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      const mockToken = 'dev-mock-token-' + Date.now();
-
-      setAccessToken(mockToken);
-      setRefreshToken(mockToken);
-      setUser(mockUser);
-      hasLoadedInitialData.current = false; // Reset so data loads
-
-      await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, mockToken);
-      await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, mockToken);
-      await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(mockUser));
-
-      return;
-    }
-
     try {
       const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.LOGIN}`, {
         method: 'POST',
@@ -584,19 +408,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Request OTP for phone login
   const requestOtp = async (phone: string): Promise<OtpRequestResponse> => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      return {
-        success: true,
-        message: 'OTP sent successfully (development mode)',
-        data: {
-          otpId: 'dev-otp-' + Date.now(),
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-        },
-      };
-    }
-
     try {
       const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_REQUEST_OTP}`, {
         method: 'POST',
@@ -614,68 +425,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Verify OTP and login
   const verifyOtp = async (phone: string, otp: string): Promise<OtpVerifyResponse> => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      if (otp !== '123456') {
-        throw new Error('Invalid OTP. Use 123456 in development mode.');
-      }
-
-      const mockUser: User = {
-        id: 1,
-        email: '',
-        firstName: 'Test',
-        lastName: 'Courier',
-        role: 'courier',
-        phone: phone,
-        vehicleType: 'MOTORCYCLE',
-        active: true,
-        emailVerified: false,
-        createdAt: new Date().toISOString(),
-      };
-
-      const mockProfile: CourierProfile = {
-        id: 'courier-1',
-        userId: '1',
-        firstName: 'Test',
-        lastName: 'Courier',
-        phone: phone,
-        vehicleType: 'MOTORCYCLE',
-        status: 'offline',
-        verificationStatus: 'approved',
-        rating: 4.8,
-        totalDeliveries: 125,
-        preferredRadius: 5,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      const mockToken = 'dev-mock-token-' + Date.now();
-
-      setAccessToken(mockToken);
-      setRefreshToken(mockToken);
-      setUser(mockUser);
-      setCourierProfile(mockProfile);
-      hasLoadedInitialData.current = false;
-
-      await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, mockToken);
-      await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, mockToken);
-      await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(mockUser));
-      await AsyncStorage.setItem('courier_profile', JSON.stringify(mockProfile));
-
-      return {
-        success: true,
-        message: 'Login successful',
-        data: {
-          accessToken: mockToken,
-          refreshToken: mockToken,
-          user: mockUser,
-          courier: mockProfile,
-          isNewUser: false,
-        },
-      };
-    }
-
     try {
       const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_VERIFY_OTP}`, {
         method: 'POST',
@@ -709,12 +458,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Fetch courier profile
   const fetchCourierProfile = useCallback(async () => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      return courierProfile;
-    }
-
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ME);
       const data = await response.json();
@@ -728,18 +471,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       console.error('Failed to fetch courier profile:', error);
     }
     return null;
-  }, [authenticatedFetch, courierProfile]);
+  }, [authenticatedFetch]);
 
   // Update courier status (online/offline/busy)
   const updateCourierStatus = useCallback(async (status: CourierStatus) => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      setCourierProfile(prev => prev ? { ...prev, status } : null);
-      setIsOnline(status === 'online');
-      return;
-    }
-
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_STATUS, {
         method: 'POST',
@@ -759,13 +494,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Update courier location to server
   const updateLocationOnServer = useCallback(async (latitude: number, longitude: number) => {
-    const isDevelopment = __DEV__ || !BASE_URL;
-
-    if (isDevelopment) {
-      setCurrentLocation({ latitude, longitude });
-      return;
-    }
-
     try {
       await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_LOCATION, {
         method: 'POST',
@@ -822,42 +550,33 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // Optimistically update local state
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
 
-    // Simple logic to simulate earning update on completion
-    if (status === 'completed') {
-      const order = orders.find(o => o.id === orderId);
-      if (order) {
-        setStats(prev => ({
-          ...prev,
-          todayEarnings: prev.todayEarnings + order.deliveryFee + order.tip,
-          completedOrders: prev.completedOrders + 1
-        }));
+    // Update on server
+    try {
+      let endpoint = '';
+      switch (status) {
+        case 'pickup':
+          endpoint = API_ENDPOINTS.ORDERS.ACCEPT(orderId);
+          break;
+        case 'delivery':
+          endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
+          break;
+        case 'completed':
+          endpoint = API_ENDPOINTS.ORDERS.COMPLETE(orderId);
+          break;
       }
-    }
 
-    // In production, also update on server
-    const isDevelopment = __DEV__ || !BASE_URL;
-    if (!isDevelopment) {
-      try {
-        let endpoint = '';
-        switch (status) {
-          case 'pickup':
-            endpoint = API_ENDPOINTS.ORDERS.ACCEPT(orderId);
-            break;
-          case 'delivery':
-            endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
-            break;
-          case 'completed':
-            endpoint = API_ENDPOINTS.ORDERS.COMPLETE(orderId);
-            break;
-        }
-
-        if (endpoint) {
-          await authenticatedFetch(endpoint, { method: 'POST' });
-        }
-      } catch (error) {
-        console.error('Failed to update order status on server:', error);
-        // Optionally revert optimistic update
+      if (endpoint) {
+        await authenticatedFetch(endpoint, { method: 'POST' });
       }
+
+      // Refresh stats after order status change
+      if (status === 'completed') {
+        await fetchStats();
+      }
+    } catch (error) {
+      console.error('Failed to update order status on server:', error);
+      // Revert optimistic update on error
+      await fetchOrders();
     }
   };
 
