@@ -375,7 +375,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ emailOrPhone: email, password }),
       });
 
       const text = await response.text();
@@ -477,7 +477,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const updateCourierStatus = useCallback(async (status: CourierStatus) => {
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_STATUS, {
-        method: 'POST',
+        method: 'PUT',
         body: JSON.stringify({ status }),
       });
 
@@ -496,7 +496,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const updateLocationOnServer = useCallback(async (latitude: number, longitude: number) => {
     try {
       await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_LOCATION, {
-        method: 'POST',
+        method: 'PUT',
         body: JSON.stringify({ latitude, longitude }),
       });
       setCurrentLocation({ latitude, longitude });
@@ -553,20 +553,28 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // Update on server
     try {
       let endpoint = '';
+      let method = 'POST';
+
       switch (status) {
         case 'pickup':
+          // Accept order - POST
           endpoint = API_ENDPOINTS.ORDERS.ACCEPT(orderId);
+          method = 'POST';
           break;
         case 'delivery':
+          // Picked up from restaurant - PUT
           endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
+          method = 'PUT';
           break;
         case 'completed':
+          // Complete delivery - POST
           endpoint = API_ENDPOINTS.ORDERS.COMPLETE(orderId);
+          method = 'POST';
           break;
       }
 
       if (endpoint) {
-        await authenticatedFetch(endpoint, { method: 'POST' });
+        await authenticatedFetch(endpoint, { method });
       }
 
       // Refresh stats after order status change
