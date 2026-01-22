@@ -93,7 +93,10 @@
     "away": "uzoqlikda",
     "items": "mahsulot",
     "accept": "Qabul qilish",
-    "accept_failed": "Buyurtmani qabul qilib bo'lmadi"
+    "accept_failed": "Buyurtmani qabul qilib bo'lmadi",
+    "new_order_available": "Yangi buyurtma!",
+    "tap_to_view": "Ko'rish uchun bosing",
+    "view": "Ko'rish"
   },
   "notifications_page": {
     "title": "Bildirishnomalar",

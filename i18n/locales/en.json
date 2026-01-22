@@ -93,7 +93,10 @@
     "away": "away",
     "items": "items",
     "accept": "Accept",
-    "accept_failed": "Failed to accept order"
+    "accept_failed": "Failed to accept order",
+    "new_order_available": "New Order Available!",
+    "tap_to_view": "Tap to view details",
+    "view": "View"
   },
   "notifications_page": {
     "title": "Notifications",

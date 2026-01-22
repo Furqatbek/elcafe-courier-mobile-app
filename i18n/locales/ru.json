@@ -93,7 +93,10 @@
     "away": "от вас",
     "items": "товаров",
     "accept": "Принять",
-    "accept_failed": "Не удалось принять заказ"
+    "accept_failed": "Не удалось принять заказ",
+    "new_order_available": "Новый заказ!",
+    "tap_to_view": "Нажмите для просмотра",
+    "view": "Смотреть"
   },
   "notifications_page": {
     "title": "Уведомления",

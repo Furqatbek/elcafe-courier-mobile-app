@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Vibration, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Bell } from 'lucide-react-native';
+import { Bell, Package } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
 import { OrderCard } from '@/components/OrderCard';
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
+import { useToast } from '@/components/Toast';
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -35,10 +36,79 @@ export default function OrdersScreen() {
     fetchOrderHistory,
     loadMoreHistory,
     unreadCount,
+    newOrderOffer,
+    clearNewOrderOffer,
   } = useCourier();
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
+  const [showNewOrderBanner, setShowNewOrderBanner] = useState(false);
+  const bannerAnim = useRef(new Animated.Value(-100)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Show notification when new order arrives
+  useEffect(() => {
+    if (newOrderOffer && isOnline) {
+      // Vibrate device
+      Vibration.vibrate([0, 200, 100, 200]);
+
+      // Show banner
+      setShowNewOrderBanner(true);
+      Animated.spring(bannerAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 50,
+        friction: 8,
+      }).start();
+
+      // Pulse animation for the banner
+      const pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.05,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulseAnimation.start();
+
+      // Auto-hide after 10 seconds
+      const timer = setTimeout(() => {
+        hideBanner();
+        pulseAnimation.stop();
+      }, 10000);
+
+      return () => {
+        clearTimeout(timer);
+        pulseAnimation.stop();
+      };
+    }
+  }, [newOrderOffer]);
+
+  const hideBanner = () => {
+    Animated.timing(bannerAnim, {
+      toValue: -100,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowNewOrderBanner(false);
+      clearNewOrderOffer();
+    });
+  };
+
+  const handleNewOrderPress = () => {
+    if (newOrderOffer) {
+      hideBanner();
+      router.push(`/available-order/${newOrderOffer.orderId}`);
+    }
+  };
 
   // Refresh available orders when tab changes to available
   useEffect(() => {
@@ -113,6 +183,43 @@ export default function OrdersScreen() {
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="orders">
       <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* New Order Notification Banner */}
+      {showNewOrderBanner && newOrderOffer && (
+        <Animated.View
+          style={[
+            styles.newOrderBanner,
+            {
+              transform: [
+                { translateY: bannerAnim },
+                { scale: pulseAnim },
+              ],
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.newOrderBannerContent}
+            onPress={handleNewOrderPress}
+            activeOpacity={0.9}
+          >
+            <View style={styles.newOrderIconContainer}>
+              <Package size={24} color={Colors.surface} />
+            </View>
+            <View style={styles.newOrderTextContainer}>
+              <Text style={styles.newOrderTitle}>{t('orders.new_order_available')}</Text>
+              <Text style={styles.newOrderSubtitle} numberOfLines={1}>
+                {newOrderOffer.restaurant?.name || t('orders.tap_to_view')}
+              </Text>
+            </View>
+            <View style={styles.newOrderAction}>
+              <Text style={styles.newOrderActionText}>{t('orders.view')}</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dismissButton} onPress={hideBanner}>
+            <Text style={styles.dismissText}>×</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>{t('orders.good_morning', { name: user?.firstName || '' })}</Text>
@@ -335,5 +442,72 @@ const styles = StyleSheet.create({
   loadingMore: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+  newOrderBanner: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    zIndex: 100,
+    backgroundColor: Colors.success,
+    borderRadius: 16,
+    shadowColor: Colors.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  newOrderBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    paddingRight: 40,
+  },
+  newOrderIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  newOrderTextContainer: {
+    flex: 1,
+  },
+  newOrderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.surface,
+    marginBottom: 2,
+  },
+  newOrderSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  newOrderAction: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  newOrderActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.surface,
+  },
+  dismissButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dismissText: {
+    fontSize: 20,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '300',
   },
 });
