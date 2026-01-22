@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Settings as SettingsIcon, Globe, Smartphone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -54,57 +54,64 @@ export default function SettingsScreen() {
     router.push('/language');
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      t('settings.logout_title'),
-      t('settings.logout_confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('settings.log_out'),
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await logout();
-              router.replace('/login');
-            } catch (error) {
-              console.error('Logout failed:', error);
-              // Still navigate to login even if API call fails
-              router.replace('/login');
-            } finally {
-              setIsLoggingOut(false);
-            }
-          },
-        },
-      ]
-    );
+  const handleLogout = async () => {
+    const confirmLogout = Platform.OS === 'web'
+      ? window.confirm(t('settings.logout_confirm'))
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            t('settings.logout_title'),
+            t('settings.logout_confirm'),
+            [
+              { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+              { text: t('settings.log_out'), style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
+
+    if (confirmLogout) {
+      setIsLoggingOut(true);
+      try {
+        await logout();
+        router.replace('/login');
+      } catch (error) {
+        console.error('Logout failed:', error);
+        router.replace('/login');
+      } finally {
+        setIsLoggingOut(false);
+      }
+    }
   };
 
-  const handleLogoutAllDevices = () => {
-    Alert.alert(
-      t('settings.logout_all_title'),
-      t('settings.logout_all_confirm'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('settings.logout_all'),
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              await logoutAllDevices();
-              router.replace('/login');
-            } catch (error) {
-              console.error('Logout all devices failed:', error);
-              Alert.alert(t('common.error'), t('settings.logout_all_failed'));
-            } finally {
-              setIsLoggingOut(false);
-            }
-          },
-        },
-      ]
-    );
+  const handleLogoutAllDevices = async () => {
+    const confirmLogout = Platform.OS === 'web'
+      ? window.confirm(t('settings.logout_all_confirm'))
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            t('settings.logout_all_title'),
+            t('settings.logout_all_confirm'),
+            [
+              { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+              { text: t('settings.logout_all'), style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
+
+    if (confirmLogout) {
+      setIsLoggingOut(true);
+      try {
+        await logoutAllDevices();
+        router.replace('/login');
+      } catch (error) {
+        console.error('Logout all devices failed:', error);
+        if (Platform.OS === 'web') {
+          window.alert(t('settings.logout_all_failed'));
+        } else {
+          Alert.alert(t('common.error'), t('settings.logout_all_failed'));
+        }
+      } finally {
+        setIsLoggingOut(false);
+      }
+    }
   };
 
   return (
