@@ -587,8 +587,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setIsLocationTracking(false);
   }, []);
 
-  // Logout function
-  const logout = useCallback(async () => {
+  // Clear local session data
+  const clearLocalSession = useCallback(async () => {
     // Clear refresh interval
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
@@ -616,6 +616,53 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     await AsyncStorage.removeItem(TOKEN_CONFIG.USER_KEY);
     await AsyncStorage.removeItem('courier_profile');
   }, [stopLocationTracking]);
+
+  // Logout function - revokes refresh token on server
+  const logout = useCallback(async () => {
+    try {
+      // Call logout API to revoke refresh token
+      if (refreshToken) {
+        await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.LOGOUT}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken }),
+        });
+      }
+    } catch (error) {
+      console.error('Logout API call failed:', error);
+      // Continue with local logout even if API call fails
+    }
+
+    // Always clear local session
+    await clearLocalSession();
+  }, [refreshToken, clearLocalSession]);
+
+  // Logout from all devices - revokes all refresh tokens
+  const logoutAllDevices = useCallback(async () => {
+    try {
+      if (accessToken) {
+        const response = await fetch(`${BASE_URL}${API_ENDPOINTS.USER.LOGOUT_ALL}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to logout from all devices');
+        }
+      }
+    } catch (error) {
+      console.error('Logout all devices API call failed:', error);
+      throw error;
+    }
+
+    // Clear local session after successful API call
+    await clearLocalSession();
+  }, [accessToken, clearLocalSession]);
 
   // Restore session on mount
   useEffect(() => {
@@ -1117,6 +1164,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     isSessionLoading,
     login,
     logout,
+    logoutAllDevices,
     requestOtp,
     verifyOtp,
 

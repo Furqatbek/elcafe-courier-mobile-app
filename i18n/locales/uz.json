@@ -5,6 +5,7 @@
     "settings": "Sozlamalar"
   },
   "common": {
+    "error": "Xato",
     "error_title": "Xato",
     "fill_all_fields": "Iltimos, barcha maydonlarni to'ldiring",
     "success": "Muvaffaqiyatli",
@@ -139,6 +140,14 @@
     "help_center": "Yordam markazi",
     "help_center_sub": "TSS, Qo'llab-quvvatlash bilan bog'lanish",
     "log_out": "Chiqish",
+    "logout_subtitle": "Bu qurilmadan chiqish",
+    "logout_title": "Chiqish",
+    "logout_confirm": "Bu qurilmadan chiqishni xohlaysizmi?",
+    "logout_all": "Barcha qurilmalardan chiqish",
+    "logout_all_subtitle": "Barcha qurilmalardan chiqish",
+    "logout_all_title": "Barcha qurilmalardan chiqish",
+    "logout_all_confirm": "Barcha qurilmalardan chiqishni xohlaysizmi? Har bir qurilmada qayta kirish kerak bo'ladi.",
+    "logout_all_failed": "Barcha qurilmalardan chiqib bo'lmadi. Qaytadan urinib ko'ring.",
     "version": "Versiya {{version}}"
   },
   "order_detail": {

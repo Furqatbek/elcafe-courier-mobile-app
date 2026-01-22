@@ -12,8 +12,14 @@ export const API_ENDPOINTS = {
     REGISTER: '/api/v1/auth/register',
     REFRESH: '/api/v1/auth/refresh',
     ME: '/api/v1/auth/me',
+    LOGOUT: '/api/v1/auth/logout',
     PHONE_REQUEST_OTP: '/api/v1/auth/phone/request-otp',
     PHONE_VERIFY_OTP: '/api/v1/auth/phone/verify-otp',
+  },
+
+  // User endpoints
+  USER: {
+    LOGOUT_ALL: '/api/v1/users/me/logout-all',
   },
 
   // Courier profile & registration

@@ -5,6 +5,7 @@
     "settings": "Settings"
   },
   "common": {
+    "error": "Error",
     "error_title": "Error",
     "fill_all_fields": "Please fill in all fields",
     "success": "Success",
@@ -139,6 +140,14 @@
     "help_center": "Help Center",
     "help_center_sub": "FAQ, Contact Support",
     "log_out": "Log Out",
+    "logout_subtitle": "Sign out from this device",
+    "logout_title": "Log Out",
+    "logout_confirm": "Are you sure you want to log out from this device?",
+    "logout_all": "Log Out All Devices",
+    "logout_all_subtitle": "Sign out from all devices",
+    "logout_all_title": "Log Out All Devices",
+    "logout_all_confirm": "Are you sure you want to log out from all devices? You will need to log in again on each device.",
+    "logout_all_failed": "Failed to log out from all devices. Please try again.",
     "version": "Version {{version}}"
   },
   "order_detail": {

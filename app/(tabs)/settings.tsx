@@ -1,7 +1,7 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Settings as SettingsIcon, Globe } from 'lucide-react-native';
+import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Settings as SettingsIcon, Globe, Smartphone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { useCourier } from '@/context/CourierContext';
@@ -16,22 +16,27 @@ const TAB_ROUTES = [
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { user } = useCourier();
-  const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  const { user, logout, logoutAllDevices } = useCourier();
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const navigateToLanguage = () => {
     router.push('/language');
   };
 
-  const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement }: any) => (
-    <TouchableOpacity 
-      style={styles.menuItem} 
+  const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, loading }: any) => (
+    <TouchableOpacity
+      style={styles.menuItem}
       onPress={onPress}
       activeOpacity={onPress ? 0.7 : 1}
-      disabled={!onPress && !rightElement}
+      disabled={!onPress && !rightElement || loading}
     >
       <View style={[styles.iconContainer, danger && styles.dangerIconContainer]}>
-        <Icon size={20} color={danger ? Colors.danger : Colors.primary} />
+        {loading ? (
+          <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.primary} />
+        ) : (
+          <Icon size={20} color={danger ? Colors.danger : Colors.primary} />
+        )}
       </View>
       <View style={styles.menuInfo}>
         <Text style={[styles.menuTitle, danger && styles.dangerText]}>{title}</Text>
@@ -42,7 +47,56 @@ export default function SettingsScreen() {
   );
 
   const handleLogout = () => {
-    router.replace('/login');
+    Alert.alert(
+      t('settings.logout_title'),
+      t('settings.logout_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.log_out'),
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              await logout();
+              router.replace('/login');
+            } catch (error) {
+              console.error('Logout failed:', error);
+              // Still navigate to login even if API call fails
+              router.replace('/login');
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogoutAllDevices = () => {
+    Alert.alert(
+      t('settings.logout_all_title'),
+      t('settings.logout_all_confirm'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.logout_all'),
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              await logoutAllDevices();
+              router.replace('/login');
+            } catch (error) {
+              console.error('Logout all devices failed:', error);
+              Alert.alert(t('common.error'), t('settings.logout_all_failed'));
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -119,11 +173,21 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.section, styles.logoutSection]}>
-        <MenuItem 
-          icon={LogOut} 
-          title={t('settings.log_out')} 
-          danger 
+        <MenuItem
+          icon={LogOut}
+          title={t('settings.log_out')}
+          subtitle={t('settings.logout_subtitle')}
+          danger
           onPress={handleLogout}
+          loading={isLoggingOut}
+        />
+        <MenuItem
+          icon={Smartphone}
+          title={t('settings.logout_all')}
+          subtitle={t('settings.logout_all_subtitle')}
+          danger
+          onPress={handleLogoutAllDevices}
+          loading={isLoggingOut}
         />
       </View>
       
