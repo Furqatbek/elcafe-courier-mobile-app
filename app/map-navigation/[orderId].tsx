@@ -213,13 +213,13 @@ export default function MapNavigationScreen() {
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.header, { top: insets.top + 10 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.replace('/(tabs)/orders')} style={styles.backButton}>
             <ArrowLeft color={Colors.text} size={24} />
           </TouchableOpacity>
         </View>
         <View style={styles.centered}>
           <Text style={styles.notFoundText}>{t('order_detail.not_found')}</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <TouchableOpacity onPress={() => router.replace('/(tabs)/orders')} style={styles.backLink}>
             <Text style={styles.backLinkText}>{t('common.back')}</Text>
           </TouchableOpacity>
         </View>
@@ -265,7 +265,7 @@ export default function MapNavigationScreen() {
       {/* Floating back button */}
       <View style={[styles.headerLeft, { top: insets.top + 10 }]}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(tabs)/orders')}
           style={styles.backButton}
         >
           <ArrowLeft color={Colors.text} size={24} />
