@@ -158,7 +158,7 @@ export default function OrdersScreen() {
 
       {activeTab === 'available' && (
         <FlatList
-          data={availableOrders}
+          data={isOnline ? availableOrders : []}
           keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderAvailableOrder}
           contentContainerStyle={styles.listContent}
