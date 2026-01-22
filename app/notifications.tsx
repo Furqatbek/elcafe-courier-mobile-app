@@ -21,9 +21,8 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { NOTIFICATION_TYPES } from '@/constants/config';
 import { useToast } from '@/components/Toast';
-import { api, Notification } from '@/services/api';
+import { useCourier, Notification } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
 
@@ -49,27 +48,20 @@ export default function NotificationsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
+  const {
+    notifications,
+    isLoadingNotifications,
+    fetchNotifications,
+    markNotificationAsRead,
+  } = useCourier();
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchNotifications = useCallback(async (showRefreshing = false) => {
-    if (showRefreshing) setIsRefreshing(true);
-    else setIsLoading(true);
-
-    try {
-      const data = await api.notifications.getAll();
-      setNotifications(data);
-    } catch (error: any) {
-      if (!showRefreshing) {
-        toast.error(error.message || t('notifications.fetch_error'));
-      }
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, [toast, t]);
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchNotifications();
+    setIsRefreshing(false);
+  }, [fetchNotifications]);
 
   useEffect(() => {
     fetchNotifications();
@@ -77,16 +69,7 @@ export default function NotificationsScreen() {
 
   const handleNotificationPress = async (notification: Notification) => {
     if (!notification.read) {
-      try {
-        await api.notifications.markAsRead(notification.id);
-        setNotifications((prev) =>
-          prev.map((n) =>
-            n.id === notification.id ? { ...n, read: true } : n
-          )
-        );
-      } catch (error) {
-        console.error('Failed to mark notification as read:', error);
-      }
+      await markNotificationAsRead(notification.id);
     }
 
     if (notification.data?.orderId) {
@@ -126,7 +109,7 @@ export default function NotificationsScreen() {
     <>
       <Stack.Screen options={{ title: t('notifications.title') }} />
       <View style={styles.container}>
-        {isLoading ? (
+        {isLoadingNotifications && notifications.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
           </View>
@@ -146,7 +129,7 @@ export default function NotificationsScreen() {
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
-                onRefresh={() => fetchNotifications(true)}
+                onRefresh={handleRefresh}
                 tintColor={Colors.primary}
               />
             }

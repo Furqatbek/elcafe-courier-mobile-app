@@ -206,6 +206,28 @@ const DEFAULT_HISTORY_PAGINATION: HistoryPagination = {
   hasMore: false,
 };
 
+// Notification type
+export type NotificationType =
+  | 'NEW_ORDER_NEARBY'
+  | 'ORDER_ASSIGNED'
+  | 'ORDER_CANCELLED'
+  | 'PAYOUT_ISSUED'
+  | 'VERIFICATION_APPROVED'
+  | 'RATING_RECEIVED';
+
+export interface Notification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+  data?: {
+    orderId?: number;
+    [key: string]: any;
+  };
+}
+
 const DEFAULT_STATS: DriverStats = {
   todayEarnings: 0,
   weekEarnings: 0,
@@ -234,6 +256,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyPagination, setHistoryPagination] = useState<HistoryPagination>(DEFAULT_HISTORY_PAGINATION);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
@@ -457,6 +482,59 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
+  // Fetch notifications
+  const fetchNotifications = useCallback(async () => {
+    setIsLoadingNotifications(true);
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.LIST);
+      const data = await response.json();
+
+      if (data.success && Array.isArray(data.data)) {
+        setNotifications(data.data);
+        // Update unread count based on fetched notifications
+        const unread = data.data.filter((n: Notification) => !n.read).length;
+        setUnreadCount(unread);
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error);
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  }, [authenticatedFetch]);
+
+  // Fetch unread notification count
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT);
+      const data = await response.json();
+
+      if (data.success && data.data !== undefined) {
+        setUnreadCount(data.data.count ?? data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch unread count:', error);
+    }
+  }, [authenticatedFetch]);
+
+  // Mark notification as read
+  const markNotificationAsRead = useCallback(async (notificationId: number) => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.MARK_READ(notificationId), {
+        method: 'PUT',
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setNotifications(prev =>
+          prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
+    }
+  }, [authenticatedFetch]);
+
   // Fetch available orders nearby
   const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
     setIsLoadingAvailableOrders(true);
@@ -493,8 +571,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       fetchOrders(),
       fetchStats(),
       fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude),
+      fetchUnreadCount(),
     ]);
-  }, [user, fetchOrders, fetchStats, fetchAvailableOrders, currentLocation]);
+  }, [user, fetchOrders, fetchStats, fetchAvailableOrders, fetchUnreadCount, currentLocation]);
 
   // Stop location tracking
   const stopLocationTracking = useCallback(async () => {
@@ -522,6 +601,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setOrders([]);
     setOrderHistory([]);
     setHistoryPagination(DEFAULT_HISTORY_PAGINATION);
+    setNotifications([]);
+    setUnreadCount(0);
     setStats(DEFAULT_STATS);
     setIsOnline(false);
     setCurrentLocation(null);
@@ -1008,6 +1089,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     earningsPeriod,
     isLoadingEarnings,
     fetchEarnings,
+
+    // Notifications
+    notifications,
+    unreadCount,
+    isLoadingNotifications,
+    fetchNotifications,
+    fetchUnreadCount,
+    markNotificationAsRead,
 
     // Data refresh
     refreshData,

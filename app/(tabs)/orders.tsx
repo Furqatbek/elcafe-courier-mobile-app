@@ -35,6 +35,7 @@ export default function OrdersScreen() {
     historyPagination,
     fetchOrderHistory,
     loadMoreHistory,
+    unreadCount,
   } = useCourier();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -130,12 +131,20 @@ export default function OrdersScreen() {
         </View>
         
         <View style={styles.headerRight}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => router.push('/notifications')}
           >
             <Bell size={24} color={Colors.text} />
-            <View style={styles.badge} />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                {unreadCount > 9 ? (
+                  <Text style={styles.badgeText}>9+</Text>
+                ) : unreadCount > 0 ? (
+                  <Text style={styles.badgeText}>{unreadCount}</Text>
+                ) : null}
+              </View>
+            )}
           </TouchableOpacity>
           <Switch
             value={isOnline}
@@ -263,14 +272,22 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: Colors.danger,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: Colors.surface,
+    fontSize: 10,
+    fontWeight: '700',
   },
   greeting: {
     fontSize: 20,
