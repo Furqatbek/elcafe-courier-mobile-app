@@ -16,12 +16,12 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
   const { t } = useTranslation();
   const [isAccepting, setIsAccepting] = useState(false);
 
-  const formatCurrency = (amount: number) => {
-    return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
+  const formatCurrency = (amount: number | undefined) => {
+    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
-  const formatDistance = (km: number) => {
-    return `${km.toFixed(1)} km`;
+  const formatDistance = (km: number | undefined) => {
+    return `${(km ?? 0).toFixed(1)} km`;
   };
 
   const formatTime = (dateString: string) => {

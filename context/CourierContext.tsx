@@ -660,27 +660,31 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       // Also add to available orders list
       setAvailableOrders((prev) => {
         // Check if order already exists
-        if (prev.some((o) => o.id === notification.orderId)) {
+        if (prev.some((o) => o.orderId === notification.orderId)) {
           return prev;
         }
         // Create an AvailableOrder from the notification
         const newOrder: AvailableOrder = {
-          id: notification.orderId,
+          orderId: notification.orderId,
           orderNumber: notification.orderNumber,
           restaurant: {
+            id: 0, // Will be fetched when viewing details
             name: notification.restaurant.name,
-            latitude: 0, // Will be fetched when viewing details
-            longitude: 0,
-          },
-          deliveryAddress: {
-            address: '',
+            address: '', // Will be fetched when viewing details
             latitude: 0,
             longitude: 0,
+            distance: notification.restaurant.distance,
+          },
+          deliveryAddress: {
+            fullAddress: '', // Will be fetched when viewing details
+            latitude: 0,
+            longitude: 0,
+            distance: notification.deliveryDistance,
           },
           estimatedEarnings: notification.estimatedEarnings,
           estimatedDistance: notification.deliveryDistance,
-          pickupDistance: notification.restaurant.distance,
-          expiresAt: notification.expiresAt,
+          itemCount: 0, // Will be fetched when viewing details
+          createdAt: new Date().toISOString(),
         };
         return [newOrder, ...prev];
       });
