@@ -48,25 +48,31 @@ export default function OrdersScreen() {
   const bannerAnim = useRef(new Animated.Value(-100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const previousOrderIdsRef = useRef<Set<number>>(new Set());
-  const isInitialLoadRef = useRef(true);
+  const hasInitializedRef = useRef(false);
+  const pulseAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect new orders from API fetches
   useEffect(() => {
-    if (!isOnline || availableOrders.length === 0) {
-      // Reset tracking when going offline or no orders
-      if (!isOnline) {
-        previousOrderIdsRef.current = new Set();
-        isInitialLoadRef.current = true;
-      }
+    // Reset when going offline
+    if (!isOnline) {
+      previousOrderIdsRef.current = new Set();
+      hasInitializedRef.current = false;
+      return;
+    }
+
+    // Skip if no orders yet
+    if (availableOrders.length === 0) {
       return;
     }
 
     const currentOrderIds = new Set(availableOrders.map(o => o.orderId));
 
-    // Skip notification on initial load
-    if (isInitialLoadRef.current) {
+    // First time seeing orders - just store them, don't notify
+    if (!hasInitializedRef.current) {
+      console.log('[Orders] Initial load, storing order IDs:', Array.from(currentOrderIds));
       previousOrderIdsRef.current = currentOrderIds;
-      isInitialLoadRef.current = false;
+      hasInitializedRef.current = true;
       return;
     }
 
@@ -75,18 +81,34 @@ export default function OrdersScreen() {
       order => !previousOrderIdsRef.current.has(order.orderId)
     );
 
+    console.log('[Orders] Checking for new orders:', {
+      previous: Array.from(previousOrderIdsRef.current),
+      current: Array.from(currentOrderIds),
+      newOrders: newOrders.map(o => o.orderId),
+      showingBanner: showNewOrderBanner
+    });
+
     // Show notification for the first new order
     if (newOrders.length > 0 && !showNewOrderBanner) {
       const newestOrder = newOrders[0];
-      showOrderNotification(newestOrder);
+      console.log('[Orders] New order detected! Showing notification for:', newestOrder.orderId);
+      triggerNotification(newestOrder);
     }
 
     // Update previous order IDs
     previousOrderIdsRef.current = currentOrderIds;
-  }, [availableOrders, isOnline]);
+  }, [availableOrders, isOnline, showNewOrderBanner]);
 
-  // Show notification for an order (from API or WebSocket)
-  const showOrderNotification = (order: AvailableOrder) => {
+  // Trigger notification for an order (from API or WebSocket)
+  const triggerNotification = useCallback((order: AvailableOrder) => {
+    // Clear any existing timer
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+    }
+    if (pulseAnimationRef.current) {
+      pulseAnimationRef.current.stop();
+    }
+
     // Vibrate device
     Vibration.vibrate([0, 200, 100, 200]);
 
@@ -94,7 +116,8 @@ export default function OrdersScreen() {
     setBannerOrder(order);
     setShowNewOrderBanner(true);
 
-    // Animate banner in
+    // Reset animation value and animate in
+    bannerAnim.setValue(-100);
     Animated.spring(bannerAnim, {
       toValue: 0,
       useNativeDriver: true,
@@ -103,7 +126,8 @@ export default function OrdersScreen() {
     }).start();
 
     // Pulse animation for the banner
-    const pulseAnimation = Animated.loop(
+    pulseAnim.setValue(1);
+    pulseAnimationRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.05,
@@ -117,23 +141,18 @@ export default function OrdersScreen() {
         }),
       ])
     );
-    pulseAnimation.start();
+    pulseAnimationRef.current.start();
 
     // Auto-hide after 10 seconds
-    const timer = setTimeout(() => {
+    hideTimerRef.current = setTimeout(() => {
       hideBanner();
-      pulseAnimation.stop();
     }, 10000);
-
-    return () => {
-      clearTimeout(timer);
-      pulseAnimation.stop();
-    };
-  };
+  }, [bannerAnim, pulseAnim]);
 
   // Show notification when new order arrives via WebSocket
   useEffect(() => {
     if (newOrderOffer && isOnline && !showNewOrderBanner) {
+      console.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
       // Convert WebSocket notification to AvailableOrder format for display
       const wsOrder: AvailableOrder = {
         orderId: newOrderOffer.orderId,
@@ -156,11 +175,33 @@ export default function OrdersScreen() {
         createdAt: new Date().toISOString(),
         pickupDistance: newOrderOffer.restaurant?.distance,
       };
-      showOrderNotification(wsOrder);
+      triggerNotification(wsOrder);
     }
-  }, [newOrderOffer]);
+  }, [newOrderOffer, isOnline, showNewOrderBanner, triggerNotification]);
 
-  const hideBanner = () => {
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current) {
+        clearTimeout(hideTimerRef.current);
+      }
+      if (pulseAnimationRef.current) {
+        pulseAnimationRef.current.stop();
+      }
+    };
+  }, []);
+
+  const hideBanner = useCallback(() => {
+    // Stop animations and clear timer
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    if (pulseAnimationRef.current) {
+      pulseAnimationRef.current.stop();
+      pulseAnimationRef.current = null;
+    }
+
     Animated.timing(bannerAnim, {
       toValue: -100,
       duration: 300,
@@ -170,7 +211,7 @@ export default function OrdersScreen() {
       setBannerOrder(null);
       clearNewOrderOffer();
     });
-  };
+  }, [bannerAnim, clearNewOrderOffer]);
 
   const handleNewOrderPress = () => {
     if (bannerOrder) {
