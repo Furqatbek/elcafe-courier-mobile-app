@@ -29,26 +29,39 @@ export interface User {
 }
 
 export interface CourierProfile {
-  id: string;
-  userId: string;
-  firstName: string;
-  lastName: string;
+  id: number | string;
+  userId: number | string;
+  userName?: string;
+  firstName?: string;
+  lastName?: string;
   phone: string;
   email?: string;
   vehicleType: 'BICYCLE' | 'MOTORCYCLE' | 'CAR';
   vehicleNumber?: string;
   licenseNumber?: string;
   status: CourierStatus;
-  verificationStatus: VerificationStatus;
-  rating: number;
-  totalDeliveries: number;
-  preferredRadius: number;
+  // API returns 'verified' boolean
+  verified?: boolean;
+  verifiedAt?: string;
+  // Legacy field - some APIs may return this instead
+  verificationStatus?: VerificationStatus;
+  // Location
+  currentLat?: number;
+  currentLng?: number;
   currentLocation?: {
     latitude: number;
     longitude: number;
   };
-  createdAt: string;
-  updatedAt: string;
+  preferredRadiusKm?: number;
+  preferredRadius?: number;
+  // Stats
+  rating?: number;
+  averageRating?: number;
+  totalDeliveries: number;
+  currentOrderCount?: number;
+  maxConcurrentOrders?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface OtpRequestResponse {
