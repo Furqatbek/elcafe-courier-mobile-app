@@ -568,11 +568,23 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   // Update courier location to server
-  const updateLocationOnServer = useCallback(async (latitude: number, longitude: number) => {
+  const updateLocationOnServer = useCallback(async (
+    latitude: number,
+    longitude: number,
+    accuracy?: number,
+    heading?: number,
+    speed?: number
+  ) => {
     try {
       await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_LOCATION, {
         method: 'PUT',
-        body: JSON.stringify({ latitude, longitude }),
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          accuracy: accuracy ?? null,
+          heading: heading ?? null,
+          speed: speed ?? null,
+        }),
       });
       setCurrentLocation({ latitude, longitude });
     } catch (error) {
@@ -581,6 +593,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   // Start location tracking
+  // Best practices: Idle (AVAILABLE) = 30s, Active Delivery = 5-10s, Moving Fast = 3-5s
   const startLocationTracking = useCallback(async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
@@ -592,20 +605,33 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       locationSubscriptionRef.current.remove();
     }
 
+    // Determine update interval based on whether courier has active orders
+    const hasActiveOrders = orders.some(o => o.status !== 'completed');
+    const timeInterval = hasActiveOrders
+      ? LOCATION_CONFIG.ACTIVE_INTERVAL  // 5 seconds during active delivery
+      : LOCATION_CONFIG.IDLE_INTERVAL;   // 30 seconds when idle
+
     // Start watching location
     locationSubscriptionRef.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
         distanceInterval: LOCATION_CONFIG.DISTANCE_FILTER,
-        timeInterval: LOCATION_CONFIG.ACTIVE_INTERVAL,
+        timeInterval,
       },
       (location) => {
-        updateLocationOnServer(location.coords.latitude, location.coords.longitude);
+        const { latitude, longitude, accuracy, heading, speed } = location.coords;
+        updateLocationOnServer(
+          latitude,
+          longitude,
+          accuracy ?? undefined,
+          heading ?? undefined,
+          speed ?? undefined
+        );
       }
     );
 
     setIsLocationTracking(true);
-  }, [updateLocationOnServer]);
+  }, [updateLocationOnServer, orders]);
 
   const toggleOnline = async () => {
     const newStatus: CourierStatus = isOnline ? 'OFFLINE' : 'AVAILABLE';
