@@ -25,7 +25,6 @@ export default function OrdersScreen() {
     availableOrders,
     isLoadingAvailableOrders,
     fetchAvailableOrders,
-    acceptOrder,
     isOnline,
     toggleOnline,
     currentLocation,
@@ -85,12 +84,6 @@ export default function OrdersScreen() {
     return null;
   }, [isLoadingHistory, historyPagination.hasMore]);
 
-  const handleAcceptOrder = async (orderId: number) => {
-    await acceptOrder(orderId);
-    // Switch to active tab after accepting
-    setActiveTab('active');
-  };
-
   const TabButton = ({ title, tab, count }: { title: string, tab: 'available' | 'active' | 'history', count?: number }) => (
     <TouchableOpacity
       style={[
@@ -110,7 +103,7 @@ export default function OrdersScreen() {
   );
 
   const renderAvailableOrder = ({ item }: { item: AvailableOrder }) => (
-    <AvailableOrderCard order={item} onAccept={handleAcceptOrder} />
+    <AvailableOrderCard order={item} />
   );
 
   const renderActiveOrder = ({ item }: { item: Order }) => (

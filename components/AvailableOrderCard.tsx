@@ -1,27 +1,28 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
-import { MapPin, Navigation, Package, Clock } from 'lucide-react-native';
+import React from 'react';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { MapPin, Navigation, Package, Clock, ChevronRight } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { AvailableOrder } from '@/context/CourierContext';
-import { Button } from './Button';
 import { DEFAULTS } from '@/constants/config';
 
 interface AvailableOrderCardProps {
   order: AvailableOrder;
-  onAccept: (orderId: number) => Promise<void>;
 }
 
-export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps) {
+export function AvailableOrderCard({ order }: AvailableOrderCardProps) {
   const { t } = useTranslation();
-  const [isAccepting, setIsAccepting] = useState(false);
+  const router = useRouter();
 
   const formatCurrency = (amount: number | undefined) => {
     return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
   const formatDistance = (km: number | undefined) => {
-    return `${(km ?? 0).toFixed(1)} km`;
+    const value = km ?? 0;
+    if (value < 1) return `${(value * 1000).toFixed(0)} m`;
+    return `${value.toFixed(1)} km`;
   };
 
   const formatTime = (dateString: string | undefined) => {
@@ -35,25 +36,15 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
     return t('orders.hours_ago', { count: Math.floor(diffMinutes / 60) }, `${Math.floor(diffMinutes / 60)}h ago`);
   };
 
-  const handleAccept = async () => {
-    setIsAccepting(true);
-    try {
-      await onAccept(order.orderId);
-    } catch (error: any) {
-      Alert.alert(
-        t('common.error_title', 'Error'),
-        error.message || t('orders.accept_failed', 'Failed to accept order')
-      );
-    } finally {
-      setIsAccepting(false);
-    }
+  const handlePress = () => {
+    router.push(`/available-order/${order.orderId}`);
   };
 
   // Calculate estimated earnings from delivery fee + tip
   const estimatedEarnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
 
   return (
-    <View style={styles.card}>
+    <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.7}>
       <View style={styles.header}>
         <View style={styles.orderInfo}>
           <Text style={styles.orderNumber}>{order.externalOrderNo}</Text>
@@ -107,16 +98,9 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
           </View>
         </View>
 
-        <Button
-          title={t('orders.accept', 'Accept')}
-          onPress={handleAccept}
-          isLoading={isAccepting}
-          variant="primary"
-          size="medium"
-          style={styles.acceptButton}
-        />
+        <ChevronRight size={24} color={Colors.textLight} />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -238,9 +222,6 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 14,
     color: Colors.textSecondary,
-  },
-  acceptButton: {
-    paddingHorizontal: 24,
   },
 });
 
