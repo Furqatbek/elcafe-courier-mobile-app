@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
@@ -16,14 +16,14 @@ import {
   MapPin,
   Package,
   DollarSign,
-  Clock,
   Navigation,
   Store,
   User,
+  Phone,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
-import { api, AvailableOrder } from '@/services/api';
+import { api } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
 import OrderMap from '@/components/OrderMap';
@@ -32,32 +32,16 @@ export default function AvailableOrderDetailScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { refreshOrders } = useCourier();
+  const { availableOrders, refreshOrders } = useCourier();
   const orderId = Number(id);
 
-  const [order, setOrder] = useState<AvailableOrder | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAccepting, setIsAccepting] = useState(false);
+  // Get order from context - no API call needed
+  const order = availableOrders.find(o => o.orderId === orderId);
 
-  useEffect(() => {
-    const fetchOrderDetails = async () => {
-      try {
-        setIsLoading(true);
-        const data = await api.orders.getAvailableOrderDetails(orderId);
-        setOrder(data);
-      } catch (error: any) {
-        Alert.alert(t('common.error'), error.message || t('available_orders.fetch_error'));
-        router.back();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOrderDetails();
-  }, [orderId]);
+  const [isAccepting, setIsAccepting] = React.useState(false);
 
   const formatCurrency = (amount: number | undefined) => {
-    return `${((amount ?? 0) / 1000).toFixed(0)}k ${DEFAULTS.CURRENCY_SYMBOL}`;
+    return `${((amount ?? 0)).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
   const formatDistance = (km: number | undefined) => {
@@ -84,15 +68,6 @@ export default function AvailableOrderDetailScreen() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
-
   if (!order) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -105,24 +80,23 @@ export default function AvailableOrderDetailScreen() {
     );
   }
 
-  // Support both flat and nested structures
-  const restaurantName = order.restaurantName ?? order.restaurant?.name ?? '-';
-  const restaurantAddress = order.restaurantAddress ?? order.restaurant?.address ?? '-';
-  const restaurantDistance = order.restaurantDistance ?? order.restaurant?.distance ?? 0;
-  const deliveryAddr = order.deliveryAddress ?? order.deliveryAddress?.fullAddress ?? '-';
-  const deliveryDistance = order.deliveryDistance ?? order.deliveryAddress?.distance ?? 0;
+  // Use flat structure from backend response
+  const restaurantName = order.restaurantName ?? '-';
+  const restaurantAddress = order.restaurantAddress ?? '-';
+  const deliveryAddr = order.deliveryAddress ?? '-';
   const customerName = order.customerName ?? '-';
-  const orderNumber = order.externalOrderNo ?? order.orderNumber ?? '-';
+  const customerPhone = order.customerPhone ?? null;
+  const orderNumber = order.externalOrderNo ?? '-';
+  const deliveryInstructions = order.deliveryInstructions ?? null;
   const earnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
-  const totalDistance = order.estimatedDistance ?? (restaurantDistance + deliveryDistance);
 
   // Create a minimal order object for the map
   const mapOrder = {
     orderId: order.orderId,
-    restaurantLat: order.restaurantLat ?? order.restaurant?.latitude ?? 0,
-    restaurantLng: order.restaurantLng ?? order.restaurant?.longitude ?? 0,
-    deliveryLat: order.deliveryLat ?? order.deliveryAddress?.latitude ?? 0,
-    deliveryLng: order.deliveryLng ?? order.deliveryAddress?.longitude ?? 0,
+    restaurantLat: order.restaurantLat ?? 0,
+    restaurantLng: order.restaurantLng ?? 0,
+    deliveryLat: order.deliveryLat ?? 0,
+    deliveryLng: order.deliveryLng ?? 0,
     restaurantName,
     customerName,
   };
@@ -160,10 +134,10 @@ export default function AvailableOrderDetailScreen() {
             </View>
             <View style={styles.divider} />
             <View style={styles.earningStat}>
-              <Navigation size={24} color={Colors.primary} />
+              <Package size={24} color={Colors.primary} />
               <View>
-                <Text style={styles.earningValue}>{formatDistance(totalDistance)}</Text>
-                <Text style={styles.earningLabel}>{t('available_orders.total_distance')}</Text>
+                <Text style={styles.earningValue}>{order.itemCount ?? 0}</Text>
+                <Text style={styles.earningLabel}>{t('available_orders.items')}</Text>
               </View>
             </View>
           </View>
@@ -179,7 +153,7 @@ export default function AvailableOrderDetailScreen() {
               <View style={[styles.locationIcon, { backgroundColor: Colors.primary + '20' }]}>
                 <Store size={20} color={Colors.primary} />
               </View>
-              <View style={styles.locationBadge}>
+              <View style={[styles.locationBadge, { backgroundColor: Colors.primary }]}>
                 <Text style={styles.locationBadgeText}>A</Text>
               </View>
             </View>
@@ -187,10 +161,6 @@ export default function AvailableOrderDetailScreen() {
               <Text style={styles.locationLabel}>{t('available_orders.pickup')}</Text>
               <Text style={styles.locationName}>{restaurantName}</Text>
               <Text style={styles.locationAddress}>{restaurantAddress}</Text>
-              <View style={styles.distanceRow}>
-                <MapPin size={14} color={Colors.textSecondary} />
-                <Text style={styles.distanceText}>{formatDistance(restaurantDistance)} {t('available_orders.from_you')}</Text>
-              </View>
             </View>
           </View>
 
@@ -214,34 +184,28 @@ export default function AvailableOrderDetailScreen() {
               <Text style={styles.locationLabel}>{t('available_orders.dropoff')}</Text>
               <Text style={styles.locationName}>{customerName}</Text>
               <Text style={styles.locationAddress}>{deliveryAddr}</Text>
-              <View style={styles.distanceRow}>
-                <Navigation size={14} color={Colors.textSecondary} />
-                <Text style={styles.distanceText}>{formatDistance(deliveryDistance)} {t('available_orders.from_pickup')}</Text>
-              </View>
+              {customerPhone && (
+                <View style={styles.phoneRow}>
+                  <Phone size={14} color={Colors.primary} />
+                  <Text style={styles.phoneText}>{customerPhone}</Text>
+                </View>
+              )}
+              {deliveryInstructions && (
+                <Text style={styles.instructionsText}>{deliveryInstructions}</Text>
+              )}
             </View>
           </View>
         </View>
 
-        {/* Order Info Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('available_orders.order_info')}</Text>
-          <View style={styles.infoRow}>
-            <View style={styles.infoItem}>
-              <Package size={20} color={Colors.textSecondary} />
-              <Text style={styles.infoLabel}>{t('available_orders.items')}</Text>
-              <Text style={styles.infoValue}>{order.itemCount}</Text>
-            </View>
-            {order.tipAmount && order.tipAmount > 0 && (
-              <View style={styles.infoItem}>
-                <DollarSign size={20} color={Colors.success} />
-                <Text style={styles.infoLabel}>{t('available_orders.tip')}</Text>
-                <Text style={[styles.infoValue, { color: Colors.success }]}>
-                  {formatCurrency(order.tipAmount)}
-                </Text>
-              </View>
-            )}
+        {/* Tip Info */}
+        {order.tipAmount && order.tipAmount > 0 && (
+          <View style={styles.tipCard}>
+            <DollarSign size={20} color={Colors.success} />
+            <Text style={styles.tipText}>
+              {t('available_orders.tip')}: {formatCurrency(order.tipAmount)}
+            </Text>
           </View>
-        </View>
+        )}
       </ScrollView>
 
       {/* Footer with Slide to Accept */}
@@ -429,16 +393,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     lineHeight: 20,
-    marginBottom: 8,
   },
-  distanceRow: {
+  phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 8,
   },
-  distanceText: {
+  phoneText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  instructionsText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: Colors.accent,
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   routeLine: {
     flexDirection: 'row',
@@ -453,23 +424,20 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: Colors.border,
   },
-  infoRow: {
-    flexDirection: 'row',
-    gap: 24,
-  },
-  infoItem: {
+  tipCard: {
+    backgroundColor: Colors.success + '15',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
-  infoLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  infoValue: {
+  tipText: {
     fontSize: 16,
     fontWeight: '700',
-    color: Colors.text,
+    color: Colors.success,
   },
   footer: {
     position: 'absolute',
