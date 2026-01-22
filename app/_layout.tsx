@@ -34,8 +34,10 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
     const inVerificationScreen = segments[0] === 'verification-pending';
 
     if (isAuthenticated) {
-      // Check if courier needs verification
-      const needsVerification = courierProfile && courierProfile.verificationStatus !== 'approved';
+      // Check if courier needs verification (only redirect if explicitly pending/rejected)
+      const needsVerification = courierProfile &&
+        courierProfile.verificationStatus &&
+        courierProfile.verificationStatus !== 'approved';
 
       if (needsVerification && !inVerificationScreen) {
         // Redirect to verification pending screen
