@@ -46,6 +46,10 @@ export default function OrderMap({
     longitude: deliveryLng,
   }), [deliveryLat, deliveryLng]);
 
+  // Determine destination based on order status in navigation mode
+  const isGoingToPickup = order.status === 'ACCEPTED';
+  const destination = isGoingToPickup ? pickupLocation : dropoffLocation;
+
   // Get user location
   useEffect(() => {
     if (!showUserLocation) return;
@@ -105,11 +109,20 @@ export default function OrderMap({
     };
   }, [showUserLocation]);
 
-  // Fetch route
+  // Fetch route - in navigation mode, route from user to destination
   useEffect(() => {
     let mounted = true;
     const loadRoute = async () => {
-      const routeInfo = await fetchRoute(pickupLocation, dropoffLocation);
+      let routeInfo: RouteInfo;
+
+      if (navigationMode && userLocation) {
+        // Navigation mode: route from user location to destination
+        routeInfo = await fetchRoute(userLocation, destination);
+      } else {
+        // Preview mode: route from pickup to dropoff
+        routeInfo = await fetchRoute(pickupLocation, dropoffLocation);
+      }
+
       if (mounted && routeInfo.coordinates.length > 0) {
         setRouteCoordinates(routeInfo.coordinates);
         onRouteUpdate?.(routeInfo);
@@ -117,7 +130,7 @@ export default function OrderMap({
     };
     loadRoute();
     return () => { mounted = false; };
-  }, [pickupLocation, dropoffLocation, recalculateTrigger]);
+  }, [pickupLocation, dropoffLocation, userLocation, navigationMode, destination, recalculateTrigger, order.status]);
 
   // Safe guard for native - though this file should only be loaded on web
   if (Platform.OS !== 'web') {
@@ -128,7 +141,7 @@ export default function OrderMap({
      );
   }
 
-  // Construct Leaflet Map HTML with user location
+  // Construct Leaflet Map HTML with navigation route
   const html = `
     <!DOCTYPE html>
     <html>
@@ -145,22 +158,56 @@ export default function OrderMap({
           }
           .user-marker {
             background-color: #4285F4;
-            width: 16px;
-            height: 16px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             border: 3px solid white;
             box-shadow: 0 0 8px rgba(66, 133, 244, 0.6);
             animation: pulse 2s infinite;
           }
+          .user-marker::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+          }
           @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.6); }
-            70% { box-shadow: 0 0 0 15px rgba(66, 133, 244, 0); }
+            70% { box-shadow: 0 0 0 20px rgba(66, 133, 244, 0); }
             100% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
           }
-          .user-accuracy {
-            background-color: rgba(66, 133, 244, 0.15);
-            border: 1px solid rgba(66, 133, 244, 0.3);
+          .destination-marker {
+            background-color: ${navigationMode && isGoingToPickup ? Colors.primary : Colors.accent};
+            width: 32px;
+            height: 32px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .destination-marker::after {
+            content: '${navigationMode && isGoingToPickup ? 'A' : 'B'}';
+            transform: rotate(45deg);
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+          }
+          .secondary-marker {
+            background-color: ${navigationMode && isGoingToPickup ? Colors.accent : Colors.primary};
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
+            opacity: 0.7;
           }
         </style>
       </head>
@@ -180,63 +227,113 @@ export default function OrderMap({
           const dropoff = [${dropoffLocation.latitude}, ${dropoffLocation.longitude}];
           const route = ${JSON.stringify(routeCoordinates.map(c => [c.latitude, c.longitude]))};
           const userLoc = ${userLocation ? `[${userLocation.latitude}, ${userLocation.longitude}]` : 'null'};
+          const navigationMode = ${navigationMode};
+          const isGoingToPickup = ${isGoingToPickup};
 
-          // Markers
-          const pickupIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: "<div style='background-color:${Colors.primary};width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);'></div>",
-            iconSize: [12, 12],
-            iconAnchor: [6, 6]
-          });
-
-          const dropoffIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: "<div style='background-color:${Colors.accent};width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);'></div>",
-            iconSize: [12, 12],
-            iconAnchor: [6, 6]
-          });
-
+          // User location marker (courier)
           const userIcon = L.divIcon({
             className: 'custom-div-icon',
             html: "<div class='user-marker'></div>",
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+
+          // Destination marker (where courier is heading)
+          const destinationIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div class='destination-marker'></div>",
+            iconSize: [32, 32],
+            iconAnchor: [16, 32]
+          });
+
+          // Secondary marker (the other point)
+          const secondaryIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div class='secondary-marker'></div>",
             iconSize: [16, 16],
             iconAnchor: [8, 8]
           });
 
-          L.marker(pickup, { icon: pickupIcon }).addTo(map)
-            .bindPopup("<b>Pickup</b><br>${restaurantName.replace(/'/g, "\\'")}");
+          if (navigationMode && userLoc) {
+            // Navigation mode: show user, destination, and secondary point
 
-          L.marker(dropoff, { icon: dropoffIcon }).addTo(map)
-            .bindPopup("<b>Dropoff</b><br>${customerName.replace(/'/g, "\\'")}");
+            // User marker
+            L.marker(userLoc, { icon: userIcon, zIndexOffset: 1000 }).addTo(map)
+              .bindPopup("<b>You</b>");
 
-          // User location marker
-          if (userLoc) {
-            // Add accuracy circle
-            L.circle(userLoc, {
-              radius: 50,
-              className: 'user-accuracy',
-              stroke: true,
-              weight: 1,
-              fillOpacity: 0.15
-            }).addTo(map);
+            // Current destination (pickup or dropoff)
+            const destPoint = isGoingToPickup ? pickup : dropoff;
+            const destName = isGoingToPickup ? "${restaurantName.replace(/'/g, "\\'")}" : "${customerName.replace(/'/g, "\\'")}";
+            L.marker(destPoint, { icon: destinationIcon, zIndexOffset: 500 }).addTo(map)
+              .bindPopup("<b>" + (isGoingToPickup ? "Pickup" : "Dropoff") + "</b><br>" + destName);
 
-            L.marker(userLoc, { icon: userIcon }).addTo(map)
-              .bindPopup("<b>Your Location</b>");
+            // Secondary point (shown smaller)
+            const secPoint = isGoingToPickup ? dropoff : pickup;
+            const secName = isGoingToPickup ? "${customerName.replace(/'/g, "\\'")}" : "${restaurantName.replace(/'/g, "\\'")}";
+            L.marker(secPoint, { icon: secondaryIcon }).addTo(map)
+              .bindPopup("<b>" + (isGoingToPickup ? "Dropoff" : "Pickup") + "</b><br>" + secName);
+
+            // Route from user to destination
+            if (route.length > 0) {
+              L.polyline(route, {
+                color: '${Colors.primary}',
+                weight: 5,
+                opacity: 0.9,
+                lineCap: 'round'
+              }).addTo(map);
+            }
+
+            // Fit bounds to show user and destination
+            const boundsPoints = [userLoc, destPoint];
+            if (route.length > 0) boundsPoints.push(...route);
+            const bounds = L.latLngBounds(boundsPoints);
+            map.fitBounds(bounds, { padding: [60, 60] });
+
+          } else {
+            // Preview mode: show pickup, dropoff, and optional user location
+
+            const pickupIcon = L.divIcon({
+              className: 'custom-div-icon',
+              html: "<div style='background-color:${Colors.primary};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);'></div>",
+              iconSize: [14, 14],
+              iconAnchor: [7, 7]
+            });
+
+            const dropoffIcon = L.divIcon({
+              className: 'custom-div-icon',
+              html: "<div style='background-color:${Colors.accent};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);'></div>",
+              iconSize: [14, 14],
+              iconAnchor: [7, 7]
+            });
+
+            L.marker(pickup, { icon: pickupIcon }).addTo(map)
+              .bindPopup("<b>Pickup</b><br>${restaurantName.replace(/'/g, "\\'")}");
+
+            L.marker(dropoff, { icon: dropoffIcon }).addTo(map)
+              .bindPopup("<b>Dropoff</b><br>${customerName.replace(/'/g, "\\'")}");
+
+            // User location if available
+            if (userLoc) {
+              L.marker(userLoc, { icon: userIcon, zIndexOffset: 1000 }).addTo(map)
+                .bindPopup("<b>You</b>");
+            }
+
+            // Route from pickup to dropoff
+            if (route.length > 0) {
+              L.polyline(route, {
+                color: '${Colors.primary}',
+                weight: 4,
+                opacity: 0.8,
+                lineCap: 'round'
+              }).addTo(map);
+            }
+
+            // Fit bounds
+            const boundsPoints = [pickup, dropoff, ...route];
+            if (userLoc) boundsPoints.push(userLoc);
+            const bounds = L.latLngBounds(boundsPoints);
+            map.fitBounds(bounds, { padding: [40, 40] });
           }
-
-          // Route Polyline
-          const polyline = L.polyline(route, {
-            color: '${Colors.primary}',
-            weight: 4,
-            opacity: 0.8,
-            lineCap: 'round'
-          }).addTo(map);
-
-          // Fit bounds - include user location if available
-          const boundsPoints = [pickup, dropoff, ...route];
-          if (userLoc) boundsPoints.push(userLoc);
-          const bounds = L.latLngBounds(boundsPoints);
-          map.fitBounds(bounds, { padding: [40, 40] });
 
           // Force resize to ensure correct rendering
           setTimeout(() => { map.invalidateSize(); }, 100);
@@ -251,7 +348,7 @@ export default function OrderMap({
         srcDoc: html,
         style: { width: '100%', height: '100%', border: 'none' },
         title: "Order Route Map",
-        key: userLocation ? `${userLocation.latitude}-${userLocation.longitude}` : 'no-user-loc'
+        key: `${userLocation?.latitude}-${userLocation?.longitude}-${order.status}-${recalculateTrigger}`
       })}
     </View>
   );

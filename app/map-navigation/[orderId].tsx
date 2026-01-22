@@ -2,28 +2,27 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone } from 'lucide-react-native';
+import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone, Store, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
-import { useCourier } from '@/context/CourierContext';
+import { useCourier, OrderStatus } from '@/context/CourierContext';
 import OrderMap from '@/components/OrderMap';
 import { SlideButton } from '@/components/SlideButton';
 import { RouteInfo } from '@/lib/routing';
-import * as Location from 'expo-location';
 
 export default function MapNavigationScreen() {
   const { t } = useTranslation();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const router = useRouter();
-  const { orders, completeOrder, refreshOrders } = useCourier();
+  const { orders, updateOrderStatus, completeOrder, refreshData } = useCourier();
   const insets = useSafeAreaInsets();
 
   const numericOrderId = Number(orderId);
   const [order, setOrder] = useState(orders.find(o => o.orderId === numericOrderId));
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
+  const [recalculateTrigger, setRecalculateTrigger] = useState(0);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
 
   // Keep order in sync with context
   useEffect(() => {
@@ -36,7 +35,7 @@ export default function MapNavigationScreen() {
   // Fetch order if not found
   useEffect(() => {
     if (!order) {
-      refreshOrders();
+      refreshData();
     }
   }, []);
 
@@ -44,11 +43,52 @@ export default function MapNavigationScreen() {
     setRouteInfo(info);
   }, []);
 
-  const handleLocationUpdate = useCallback((location: Location.LocationObject) => {
-    setCurrentLocation(location);
-  }, []);
+  // Determine current destination based on order status
+  const isGoingToPickup = order?.status === 'ACCEPTED';
 
-  const handleSlideComplete = async () => {
+  // Get destination info based on current status
+  const getDestinationInfo = () => {
+    if (!order) return { label: '', address: '', name: '', phone: '' };
+
+    if (isGoingToPickup) {
+      return {
+        label: t('navigation.heading_to_pickup'),
+        address: order.restaurantAddress ?? '-',
+        name: order.restaurantName ?? '-',
+        phone: null,
+        icon: Store,
+        color: Colors.primary,
+      };
+    } else {
+      return {
+        label: t('navigation.heading_to_dropoff'),
+        address: order.deliveryAddress ?? '-',
+        name: order.customerName ?? '-',
+        phone: order.customerPhone ?? null,
+        icon: User,
+        color: Colors.accent,
+      };
+    }
+  };
+
+  // Handle pickup confirmation
+  const handlePickupComplete = async () => {
+    if (!order || isUpdatingStatus) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      await updateOrderStatus(order.orderId, 'PICKED_UP');
+      // Trigger route recalculation for new destination
+      setRecalculateTrigger(prev => prev + 1);
+    } catch (error) {
+      Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Handle delivery completion
+  const handleDeliveryComplete = async () => {
     if (!order || isUpdatingStatus) return;
 
     setIsUpdatingStatus(true);
@@ -68,9 +108,10 @@ export default function MapNavigationScreen() {
     }
   };
 
-  const handleCallCustomer = () => {
-    if (order?.customerPhone) {
-      Linking.openURL(`tel:${order.customerPhone}`);
+  const handleCall = () => {
+    const dest = getDestinationInfo();
+    if (dest.phone) {
+      Linking.openURL(`tel:${dest.phone}`);
     } else {
       Alert.alert(t('order_detail.call'), t('order_detail.no_phone'));
     }
@@ -79,8 +120,8 @@ export default function MapNavigationScreen() {
   const handleOpenExternalNav = () => {
     if (!order) return;
 
-    const lat = order.deliveryLat;
-    const lng = order.deliveryLng;
+    const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;
+    const lng = isGoingToPickup ? order.restaurantLng : order.deliveryLng;
 
     if (!lat || !lng) return;
 
@@ -149,23 +190,26 @@ export default function MapNavigationScreen() {
     );
   }
 
+  const destination = getDestinationInfo();
+  const DestIcon = destination.icon;
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Full screen map with real-time location */}
+      {/* Full screen map with real-time navigation */}
       <View style={styles.mapContainer}>
         <OrderMap
           order={order}
           navigationMode={true}
           showUserLocation={true}
           onRouteUpdate={handleRouteUpdate}
-          onLocationUpdate={handleLocationUpdate}
+          recalculateTrigger={recalculateTrigger}
         />
       </View>
 
       {/* Floating back button */}
-      <View style={[styles.header, { top: insets.top + 10 }]}>
+      <View style={[styles.headerLeft, { top: insets.top + 10 }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backButton}
@@ -174,9 +218,19 @@ export default function MapNavigationScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Status badge */}
+      <View style={[styles.headerCenter, { top: insets.top + 10 }]}>
+        <View style={[styles.statusBadge, { backgroundColor: destination.color + '20' }]}>
+          <DestIcon size={16} color={destination.color} />
+          <Text style={[styles.statusText, { color: destination.color }]}>
+            {destination.label}
+          </Text>
+        </View>
+      </View>
+
       {/* Route Info Banner */}
       {routeInfo && (
-        <View style={[styles.routeBanner, { top: insets.top + 10 }]}>
+        <View style={[styles.routeBanner, { top: insets.top + 70 }]}>
           <View style={styles.routeBannerItem}>
             <Clock size={18} color={Colors.primary} />
             <Text style={styles.routeBannerValue}>{formatDuration(routeInfo.duration)}</Text>
@@ -189,34 +243,67 @@ export default function MapNavigationScreen() {
         </View>
       )}
 
-      {/* Bottom card with delivery info and slide button */}
+      {/* Bottom card with destination info and slide button */}
       <View style={[styles.bottomCard, { paddingBottom: insets.bottom + 20 }]}>
-        {/* Delivery Address */}
-        <View style={styles.deliveryInfo}>
-          <View style={styles.deliveryContent}>
-            <Text style={styles.deliveryLabel}>{t('navigation.delivering_to')}</Text>
-            <Text style={styles.customerName}>{order.customerName ?? '-'}</Text>
-            <Text style={styles.deliveryAddress} numberOfLines={2}>
-              {order.deliveryAddress ?? '-'}
+        {/* Destination Info */}
+        <View style={styles.destinationInfo}>
+          <View style={[styles.destinationIcon, { backgroundColor: destination.color + '15' }]}>
+            <DestIcon size={24} color={destination.color} />
+          </View>
+          <View style={styles.destinationContent}>
+            <Text style={styles.destinationLabel}>
+              {isGoingToPickup ? t('navigation.heading_to_pickup') : t('navigation.delivering_to')}
+            </Text>
+            <Text style={styles.destinationName}>{destination.name}</Text>
+            <Text style={styles.destinationAddress} numberOfLines={2}>
+              {destination.address}
             </Text>
           </View>
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleCallCustomer}>
-              <Phone size={22} color={Colors.primary} />
-            </TouchableOpacity>
+            {destination.phone && (
+              <TouchableOpacity style={styles.actionButton} onPress={handleCall}>
+                <Phone size={22} color={destination.color} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.actionButton} onPress={handleOpenExternalNav}>
-              <NavigationIcon size={22} color={Colors.primary} />
+              <NavigationIcon size={22} color={destination.color} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Slide to deliver button */}
+        {/* Progress indicator */}
+        <View style={styles.progressContainer}>
+          <View style={styles.progressStep}>
+            <View style={[styles.progressDot, styles.progressDotCompleted]} />
+            <Text style={styles.progressLabel}>{t('navigation.accepted')}</Text>
+          </View>
+          <View style={[styles.progressLine, !isGoingToPickup && styles.progressLineCompleted]} />
+          <View style={styles.progressStep}>
+            <View style={[styles.progressDot, !isGoingToPickup && styles.progressDotCompleted]} />
+            <Text style={styles.progressLabel}>{t('navigation.picked_up')}</Text>
+          </View>
+          <View style={styles.progressLine} />
+          <View style={styles.progressStep}>
+            <View style={styles.progressDot} />
+            <Text style={styles.progressLabel}>{t('navigation.delivered')}</Text>
+          </View>
+        </View>
+
+        {/* Slide button - changes based on status */}
         <View style={styles.slideContainer}>
-          <SlideButton
-            title={t('navigation.slide_delivered')}
-            onComplete={handleSlideComplete}
-            disabled={isUpdatingStatus}
-          />
+          {isGoingToPickup ? (
+            <SlideButton
+              title={t('navigation.slide_picked_up')}
+              onComplete={handlePickupComplete}
+              disabled={isUpdatingStatus}
+            />
+          ) : (
+            <SlideButton
+              title={t('navigation.slide_delivered')}
+              onComplete={handleDeliveryComplete}
+              disabled={isUpdatingStatus}
+            />
+          )}
         </View>
       </View>
     </View>
@@ -257,6 +344,18 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
   },
+  headerLeft: {
+    position: 'absolute',
+    left: 20,
+    zIndex: 10,
+  },
+  headerCenter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
   header: {
     position: 'absolute',
     left: 20,
@@ -275,15 +374,34 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
   routeBanner: {
     position: 'absolute',
+    left: 20,
     right: 20,
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -294,18 +412,18 @@ const styles = StyleSheet.create({
   routeBannerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   routeBannerValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
   },
   routeBannerDivider: {
     width: 1,
-    height: 20,
+    height: 24,
     backgroundColor: Colors.border,
-    marginHorizontal: 12,
+    marginHorizontal: 20,
   },
   bottomCard: {
     position: 'absolute',
@@ -322,15 +440,23 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 12,
   },
-  deliveryInfo: {
+  destinationInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  deliveryContent: {
+  destinationIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  destinationContent: {
     flex: 1,
   },
-  deliveryLabel: {
+  destinationLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textLight,
@@ -338,31 +464,68 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 4,
   },
-  customerName: {
-    fontSize: 20,
+  destinationName: {
+    fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
     marginBottom: 4,
   },
-  deliveryAddress: {
-    fontSize: 15,
+  destinationAddress: {
+    fontSize: 14,
     color: Colors.textSecondary,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginLeft: 16,
+    marginLeft: 8,
   },
   actionButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.primary + '15',
+    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    paddingVertical: 12,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+  },
+  progressStep: {
+    alignItems: 'center',
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.border,
+    marginBottom: 6,
+  },
+  progressDotCompleted: {
+    backgroundColor: Colors.success,
+  },
+  progressLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: Colors.border,
+    marginHorizontal: 8,
+    marginBottom: 20,
+  },
+  progressLineCompleted: {
+    backgroundColor: Colors.success,
+  },
+  progressLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
   slideContainer: {
-    marginTop: 8,
+    marginTop: 4,
   },
 });
