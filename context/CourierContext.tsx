@@ -189,6 +189,23 @@ const DEFAULT_EARNINGS: EarningsSummary = {
   breakdown: [],
 };
 
+// Pagination info for order history
+export interface HistoryPagination {
+  page: number;
+  size: number;
+  totalPages: number;
+  totalElements: number;
+  hasMore: boolean;
+}
+
+const DEFAULT_HISTORY_PAGINATION: HistoryPagination = {
+  page: 0,
+  size: 10,
+  totalPages: 0,
+  totalElements: 0,
+  hasMore: false,
+};
+
 const DEFAULT_STATS: DriverStats = {
   todayEarnings: 0,
   weekEarnings: 0,
@@ -214,6 +231,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [earnings, setEarnings] = useState<EarningsSummary>(DEFAULT_EARNINGS);
   const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
   const [earningsPeriod, setEarningsPeriod] = useState<EarningsPeriod>('THIS_WEEK');
+  const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyPagination, setHistoryPagination] = useState<HistoryPagination>(DEFAULT_HISTORY_PAGINATION);
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
@@ -366,6 +386,77 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     await fetchEarnings('THIS_WEEK');
   }, [fetchEarnings]);
 
+  // Fetch order history with pagination
+  const fetchOrderHistory = useCallback(async (
+    page: number = 0,
+    size: number = 10,
+    dateFrom?: string,
+    dateTo?: string,
+    append: boolean = false
+  ) => {
+    setIsLoadingHistory(true);
+    try {
+      // Build query params
+      const params = new URLSearchParams();
+      params.append('page', page.toString());
+      params.append('size', size.toString());
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
+
+      const queryString = params.toString();
+      const endpoint = `${API_ENDPOINTS.COURIER.ORDER_HISTORY}?${queryString}`;
+
+      const response = await authenticatedFetch(endpoint);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const historyData = data.data;
+        const orders = historyData.content || historyData.orders || historyData;
+
+        if (append) {
+          setOrderHistory(prev => [...prev, ...orders]);
+        } else {
+          setOrderHistory(orders);
+        }
+
+        // Update pagination info
+        setHistoryPagination({
+          page: historyData.number ?? page,
+          size: historyData.size ?? size,
+          totalPages: historyData.totalPages ?? 1,
+          totalElements: historyData.totalElements ?? orders.length,
+          hasMore: historyData.number < (historyData.totalPages - 1),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch order history:', error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, [authenticatedFetch]);
+
+  // Load more history (for infinite scroll)
+  const loadMoreHistory = useCallback(async () => {
+    if (isLoadingHistory || !historyPagination.hasMore) return;
+    await fetchOrderHistory(historyPagination.page + 1, historyPagination.size, undefined, undefined, true);
+  }, [fetchOrderHistory, historyPagination, isLoadingHistory]);
+
+  // Fetch single order details
+  const fetchOrderDetails = useCallback(async (orderId: number | string): Promise<Order | null> => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.DETAIL(orderId));
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        return data.data as Order;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch order details:', error);
+      return null;
+    }
+  }, [authenticatedFetch]);
+
   // Fetch available orders nearby
   const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
     setIsLoadingAvailableOrders(true);
@@ -429,6 +520,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setAccessToken(null);
     setRefreshToken(null);
     setOrders([]);
+    setOrderHistory([]);
+    setHistoryPagination(DEFAULT_HISTORY_PAGINATION);
     setStats(DEFAULT_STATS);
     setIsOnline(false);
     setCurrentLocation(null);
@@ -892,6 +985,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     activeOrders,
     completedOrders,
     updateOrderStatus,
+
+    // Order history
+    orderHistory,
+    isLoadingHistory,
+    historyPagination,
+    fetchOrderHistory,
+    loadMoreHistory,
+    fetchOrderDetails,
 
     // Available orders (nearby orders to accept)
     availableOrders,

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
-import { useCourier, OrderStatus } from '@/context/CourierContext';
+import { useCourier, OrderStatus, Order } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
 import { StatusBadge } from '@/components/StatusBadge';
 import OrderMap from '@/components/OrderMap';
@@ -15,18 +15,45 @@ export default function OrderDetailScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { orders, updateOrderStatus } = useCourier();
+  const { orders, orderHistory, updateOrderStatus, fetchOrderDetails } = useCourier();
   const orderId = Number(id);
-  const [order, setOrder] = useState(orders.find(o => o.orderId === orderId));
+  const [order, setOrder] = useState<Order | null | undefined>(
+    orders.find(o => o.orderId === orderId) || orderHistory.find(o => o.orderId === orderId)
+  );
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setOrder(orders.find(o => o.orderId === orderId));
-  }, [orders, orderId]);
+    // First check local state
+    const localOrder = orders.find(o => o.orderId === orderId) || orderHistory.find(o => o.orderId === orderId);
+    if (localOrder) {
+      setOrder(localOrder);
+    } else {
+      // Fetch from API if not found locally
+      const loadOrder = async () => {
+        setIsLoading(true);
+        const fetchedOrder = await fetchOrderDetails(orderId);
+        setOrder(fetchedOrder);
+        setIsLoading(false);
+      };
+      loadOrder();
+    }
+  }, [orders, orderHistory, orderId, fetchOrderDetails]);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   if (!order) {
     return (
-      <View style={styles.container}>
-        <Text>{t('order_detail.not_found')}</Text>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text style={styles.notFoundText}>{t('order_detail.not_found')}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -196,6 +223,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notFoundText: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+  },
+  backLink: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  backLinkText: {
+    fontSize: 16,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +22,6 @@ export default function OrdersScreen() {
   const insets = useSafeAreaInsets();
   const {
     activeOrders,
-    completedOrders,
     availableOrders,
     isLoadingAvailableOrders,
     fetchAvailableOrders,
@@ -31,9 +30,15 @@ export default function OrdersScreen() {
     toggleOnline,
     currentLocation,
     user,
+    orderHistory,
+    isLoadingHistory,
+    historyPagination,
+    fetchOrderHistory,
+    loadMoreHistory,
   } = useCourier();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
 
   // Refresh available orders when tab changes to available
   useEffect(() => {
@@ -42,11 +47,42 @@ export default function OrdersScreen() {
     }
   }, [activeTab, isOnline]);
 
+  // Fetch order history when tab changes to history
+  useEffect(() => {
+    if (activeTab === 'history' && orderHistory.length === 0) {
+      fetchOrderHistory(0, 10);
+    }
+  }, [activeTab]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
     setIsRefreshing(false);
   };
+
+  const handleHistoryRefresh = useCallback(async () => {
+    setIsHistoryRefreshing(true);
+    await fetchOrderHistory(0, 10);
+    setIsHistoryRefreshing(false);
+  }, [fetchOrderHistory]);
+
+  const handleLoadMoreHistory = useCallback(() => {
+    if (!isLoadingHistory && historyPagination.hasMore) {
+      loadMoreHistory();
+    }
+  }, [isLoadingHistory, historyPagination.hasMore, loadMoreHistory]);
+
+  const renderHistoryFooter = useCallback(() => {
+    if (!historyPagination.hasMore) return null;
+    if (isLoadingHistory) {
+      return (
+        <View style={styles.loadingMore}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+        </View>
+      );
+    }
+    return null;
+  }, [isLoadingHistory, historyPagination.hasMore]);
 
   const handleAcceptOrder = async (orderId: number) => {
     await acceptOrder(orderId);
@@ -170,15 +206,30 @@ export default function OrdersScreen() {
 
       {activeTab === 'history' && (
         <FlatList
-          data={completedOrders}
+          data={orderHistory}
           keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderActiveOrder}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isHistoryRefreshing}
+              onRefresh={handleHistoryRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
+          onEndReached={handleLoadMoreHistory}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={renderHistoryFooter}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                {t('orders.no_history', 'No delivery history')}
-              </Text>
+              {isLoadingHistory && orderHistory.length === 0 ? (
+                <ActivityIndicator size="large" color={Colors.primary} />
+              ) : (
+                <Text style={styles.emptyStateText}>
+                  {t('orders.no_history', 'No delivery history')}
+                </Text>
+              )}
             </View>
           }
         />
@@ -270,5 +321,9 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     textAlign: 'center',
     fontSize: 16,
+  },
+  loadingMore: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
 });
