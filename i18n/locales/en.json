@@ -528,6 +528,22 @@
     "chat": "Chat",
     "logout": "Log Out"
   },
+  "realtime": {
+    "new_order": "New Order!",
+    "new_order_nearby": "New order available nearby",
+    "from_restaurant": "From {{restaurant}}",
+    "pickup_distance": "{{distance}} km to pickup",
+    "delivery_distance": "{{distance}} km delivery",
+    "estimated_earnings": "Earn {{amount}}",
+    "expires_in": "Expires in {{minutes}} min",
+    "view_order": "View Order",
+    "dismiss": "Dismiss",
+    "connecting": "Connecting...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "reconnecting": "Reconnecting...",
+    "connection_error": "Connection error"
+  },
   "errors": {
     "network": "Network error. Please check your connection.",
     "auth": "Session expired. Please login again.",

@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, WEBSOCKET_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
+import websocketService, { NewOrderNotification, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
 
 export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'PICKED_UP' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
@@ -10,6 +11,9 @@ export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
 // Re-export IssueType from config for convenience
 export type { IssueType } from '@/constants/config';
+
+// Re-export WebSocket types for convenience
+export type { NewOrderNotification, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
 
 export interface User {
   id: number;
@@ -275,6 +279,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+
+  // WebSocket state
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const [newOrderOffer, setNewOrderOffer] = useState<NewOrderNotification | null>(null);
+  const wsUnsubscribeRefs = useRef<(() => void)[]>([]);
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
@@ -605,6 +614,123 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setIsLocationTracking(false);
   }, []);
 
+  // WebSocket connection management
+  const connectWebSocket = useCallback((token: string) => {
+    // Set up event handlers
+    websocketService.onConnected(() => {
+      console.log('[CourierContext] WebSocket connected');
+      setIsWebSocketConnected(true);
+    });
+
+    websocketService.onDisconnected(() => {
+      console.log('[CourierContext] WebSocket disconnected');
+      setIsWebSocketConnected(false);
+    });
+
+    websocketService.onError((error) => {
+      console.error('[CourierContext] WebSocket error:', error);
+      setIsWebSocketConnected(false);
+    });
+
+    // Connect to WebSocket
+    websocketService.connect(token);
+  }, []);
+
+  const disconnectWebSocket = useCallback(() => {
+    // Unsubscribe from all topics
+    wsUnsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
+    wsUnsubscribeRefs.current = [];
+
+    // Disconnect
+    websocketService.disconnect();
+    setIsWebSocketConnected(false);
+    setNewOrderOffer(null);
+  }, []);
+
+  // Subscribe to WebSocket topics
+  const subscribeToWebSocketTopics = useCallback(() => {
+    // Clear existing subscriptions
+    wsUnsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
+    wsUnsubscribeRefs.current = [];
+
+    // Subscribe to new orders
+    const unsubNewOrders = websocketService.subscribeToNewOrders((notification) => {
+      console.log('[CourierContext] New order received:', notification);
+      setNewOrderOffer(notification);
+      // Also add to available orders list
+      setAvailableOrders((prev) => {
+        // Check if order already exists
+        if (prev.some((o) => o.id === notification.orderId)) {
+          return prev;
+        }
+        // Create an AvailableOrder from the notification
+        const newOrder: AvailableOrder = {
+          id: notification.orderId,
+          orderNumber: notification.orderNumber,
+          restaurant: {
+            name: notification.restaurant.name,
+            latitude: 0, // Will be fetched when viewing details
+            longitude: 0,
+          },
+          deliveryAddress: {
+            address: '',
+            latitude: 0,
+            longitude: 0,
+          },
+          estimatedEarnings: notification.estimatedEarnings,
+          estimatedDistance: notification.deliveryDistance,
+          pickupDistance: notification.restaurant.distance,
+          expiresAt: notification.expiresAt,
+        };
+        return [newOrder, ...prev];
+      });
+    });
+    wsUnsubscribeRefs.current.push(unsubNewOrders);
+
+    // Subscribe to personal notifications
+    const unsubNotifications = websocketService.subscribeToNotifications((notification) => {
+      console.log('[CourierContext] Notification received:', notification);
+      // Add to notifications list
+      setNotifications((prev) => {
+        const newNotification: Notification = {
+          id: notification.id,
+          type: notification.type as any,
+          title: notification.title,
+          message: notification.message,
+          read: false,
+          createdAt: notification.createdAt,
+          data: notification.data as any,
+        };
+        return [newNotification, ...prev];
+      });
+      // Increment unread count
+      setUnreadCount((prev) => prev + 1);
+    });
+    wsUnsubscribeRefs.current.push(unsubNotifications);
+  }, []);
+
+  // Subscribe to order status updates for active orders
+  const subscribeToOrderStatusUpdates = useCallback((orderId: string | number) => {
+    const unsubscribe = websocketService.subscribeToOrderStatus(orderId, (statusUpdate) => {
+      console.log('[CourierContext] Order status update:', statusUpdate);
+      // Update the order in the orders list
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === statusUpdate.orderId
+            ? { ...order, status: statusUpdate.status as OrderStatus }
+            : order
+        )
+      );
+    });
+    wsUnsubscribeRefs.current.push(unsubscribe);
+    return unsubscribe;
+  }, []);
+
+  // Clear new order offer (after user views/dismisses it)
+  const clearNewOrderOffer = useCallback(() => {
+    setNewOrderOffer(null);
+  }, []);
+
   // Clear local session data
   const clearLocalSession = useCallback(async () => {
     // Clear refresh interval
@@ -614,6 +740,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     // Stop location tracking
     await stopLocationTracking();
+
+    // Disconnect WebSocket
+    disconnectWebSocket();
 
     setUser(null);
     setCourierProfile(null);
@@ -627,6 +756,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setStats(DEFAULT_STATS);
     setIsOnline(false);
     setCurrentLocation(null);
+    setNewOrderOffer(null);
     hasLoadedInitialData.current = false;
 
     await AsyncStorage.removeItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
@@ -717,6 +847,33 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       refreshData();
     }
   }, [user, refreshData]);
+
+  // Connect to WebSocket when authenticated
+  useEffect(() => {
+    if (accessToken && user) {
+      connectWebSocket(accessToken);
+      subscribeToWebSocketTopics();
+    }
+
+    return () => {
+      // Cleanup on unmount or when auth changes
+      if (!accessToken || !user) {
+        disconnectWebSocket();
+      }
+    };
+  }, [accessToken, user, connectWebSocket, subscribeToWebSocketTopics, disconnectWebSocket]);
+
+  // Subscribe to order status updates for active orders
+  useEffect(() => {
+    if (isWebSocketConnected && orders.length > 0) {
+      // Subscribe to status updates for all active orders
+      orders.forEach((order) => {
+        if (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') {
+          subscribeToOrderStatusUpdates(order.id);
+        }
+      });
+    }
+  }, [isWebSocketConnected, orders, subscribeToOrderStatusUpdates]);
 
   // Set up auto-refresh for orders when online
   useEffect(() => {
@@ -1238,6 +1395,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     fetchNotifications,
     fetchUnreadCount,
     markNotificationAsRead,
+
+    // WebSocket / Real-time updates
+    isWebSocketConnected,
+    newOrderOffer,
+    clearNewOrderOffer,
+    connectWebSocket,
+    disconnectWebSocket,
 
     // Data refresh
     refreshData,

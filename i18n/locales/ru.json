@@ -556,6 +556,22 @@
     "chat": "Чат",
     "logout": "Выйти"
   },
+  "realtime": {
+    "new_order": "Новый заказ!",
+    "new_order_nearby": "Новый заказ поблизости",
+    "from_restaurant": "Из {{restaurant}}",
+    "pickup_distance": "{{distance}} км до точки",
+    "delivery_distance": "{{distance}} км доставка",
+    "estimated_earnings": "Заработок {{amount}}",
+    "expires_in": "Истекает через {{minutes}} мин",
+    "view_order": "Посмотреть",
+    "dismiss": "Отклонить",
+    "connecting": "Подключение...",
+    "connected": "Подключено",
+    "disconnected": "Отключено",
+    "reconnecting": "Переподключение...",
+    "connection_error": "Ошибка подключения"
+  },
   "errors": {
     "network_error": "Ошибка сети. Проверьте подключение к интернету.",
     "server_error": "Ошибка сервера. Попробуйте позже.",

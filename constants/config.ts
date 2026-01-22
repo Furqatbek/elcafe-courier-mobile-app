@@ -213,11 +213,14 @@ export const NAVIGATION_URLS = {
     `maps://maps.apple.com/?daddr=${lat},${lng}`,
 } as const;
 
-// WebSocket Configuration
+// WebSocket Configuration (STOMP over SockJS)
 export const WEBSOCKET_CONFIG = {
-  URL: process.env.EXPO_PUBLIC_RORK_WS_URL || 'ws://localhost:8080/ws',
+  // SockJS uses HTTP/HTTPS, it handles WebSocket upgrade internally
+  URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE_URL}/ws`,
   RECONNECT_INTERVAL: 5000,
   MAX_RECONNECT_ATTEMPTS: 10,
+  HEARTBEAT_INCOMING: 10000,
+  HEARTBEAT_OUTGOING: 10000,
   TOPICS: {
     NEW_ORDERS: '/user/queue/orders/new',
     ORDER_STATUS: (orderId: string | number) => `/topic/orders/${orderId}/status`,

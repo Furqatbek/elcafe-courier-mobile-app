@@ -556,6 +556,22 @@
     "chat": "Chat",
     "logout": "Chiqish"
   },
+  "realtime": {
+    "new_order": "Yangi buyurtma!",
+    "new_order_nearby": "Yaqinda yangi buyurtma mavjud",
+    "from_restaurant": "{{restaurant}} dan",
+    "pickup_distance": "{{distance}} km olish nuqtasiga",
+    "delivery_distance": "{{distance}} km yetkazib berish",
+    "estimated_earnings": "Daromad {{amount}}",
+    "expires_in": "{{minutes}} daqiqadan keyin tugaydi",
+    "view_order": "Ko'rish",
+    "dismiss": "Yopish",
+    "connecting": "Ulanmoqda...",
+    "connected": "Ulangan",
+    "disconnected": "Uzilgan",
+    "reconnecting": "Qayta ulanmoqda...",
+    "connection_error": "Ulanish xatosi"
+  },
   "errors": {
     "network_error": "Tarmoq xatosi. Internet ulanishini tekshiring.",
     "server_error": "Server xatosi. Keyinroq urinib ko'ring.",
