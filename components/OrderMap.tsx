@@ -1,4 +1,4 @@
-import React, { createElement, useEffect, useState, useMemo } from 'react';
+import React, { createElement, useEffect, useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 // @ts-ignore
 import { Order } from '@/context/CourierContext';
@@ -9,13 +9,23 @@ import * as Location from 'expo-location';
 interface OrderMapProps {
   order: Order;
   navigationMode?: boolean;
+  showUserLocation?: boolean;
   onLocationUpdate?: (location: Location.LocationObject) => void;
   onRouteUpdate?: (routeInfo: RouteInfo) => void;
   recalculateTrigger?: number;
 }
 
-export default function OrderMap({ order, navigationMode = false }: OrderMapProps) {
+export default function OrderMap({
+  order,
+  navigationMode = false,
+  showUserLocation = false,
+  onLocationUpdate,
+  onRouteUpdate,
+  recalculateTrigger,
+}: OrderMapProps) {
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>([]);
+  const [userLocation, setUserLocation] = useState<Coordinate | null>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   // Support both flat (new backend) and nested (old interface) field names
   const restaurantLat = order.restaurantLat ?? order.restaurant?.latitude ?? 0;
@@ -36,17 +46,78 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
     longitude: deliveryLng,
   }), [deliveryLat, deliveryLng]);
 
+  // Get user location
+  useEffect(() => {
+    if (!showUserLocation) return;
+
+    let mounted = true;
+
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Location permission denied');
+          return;
+        }
+
+        // Get initial location
+        const currentLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        if (mounted) {
+          setUserLocation({
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+          });
+          onLocationUpdate?.(currentLocation);
+        }
+
+        // Watch for location updates
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 3000,
+            distanceInterval: 10,
+          },
+          (location) => {
+            if (mounted) {
+              setUserLocation({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+              });
+              onLocationUpdate?.(location);
+            }
+          }
+        );
+      } catch (error) {
+        console.error('Error getting location:', error);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      mounted = false;
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, [showUserLocation]);
+
+  // Fetch route
   useEffect(() => {
     let mounted = true;
     const loadRoute = async () => {
-        const routeInfo = await fetchRoute(pickupLocation, dropoffLocation);
-        if (mounted && routeInfo.coordinates.length > 0) {
-            setRouteCoordinates(routeInfo.coordinates);
-        }
+      const routeInfo = await fetchRoute(pickupLocation, dropoffLocation);
+      if (mounted && routeInfo.coordinates.length > 0) {
+        setRouteCoordinates(routeInfo.coordinates);
+        onRouteUpdate?.(routeInfo);
+      }
     };
     loadRoute();
     return () => { mounted = false; };
-  }, [pickupLocation, dropoffLocation]);
+  }, [pickupLocation, dropoffLocation, recalculateTrigger]);
 
   // Safe guard for native - though this file should only be loaded on web
   if (Platform.OS !== 'web') {
@@ -57,7 +128,7 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
      );
   }
 
-  // Construct Leaflet Map HTML
+  // Construct Leaflet Map HTML with user location
   const html = `
     <!DOCTYPE html>
     <html>
@@ -72,6 +143,25 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
             border-radius: 8px;
             padding: 0;
           }
+          .user-marker {
+            background-color: #4285F4;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 8px rgba(66, 133, 244, 0.6);
+            animation: pulse 2s infinite;
+          }
+          @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.6); }
+            70% { box-shadow: 0 0 0 15px rgba(66, 133, 244, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
+          }
+          .user-accuracy {
+            background-color: rgba(66, 133, 244, 0.15);
+            border: 1px solid rgba(66, 133, 244, 0.3);
+            border-radius: 50%;
+          }
         </style>
       </head>
       <body>
@@ -79,7 +169,7 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
         <script>
           // Initialize map
           const map = L.map('map', { zoomControl: false });
-          
+
           // Add OpenStreetMap tiles
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
@@ -89,6 +179,7 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
           const pickup = [${pickupLocation.latitude}, ${pickupLocation.longitude}];
           const dropoff = [${dropoffLocation.latitude}, ${dropoffLocation.longitude}];
           const route = ${JSON.stringify(routeCoordinates.map(c => [c.latitude, c.longitude]))};
+          const userLoc = ${userLocation ? `[${userLocation.latitude}, ${userLocation.longitude}]` : 'null'};
 
           // Markers
           const pickupIcon = L.divIcon({
@@ -105,22 +196,46 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
             iconAnchor: [6, 6]
           });
 
+          const userIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div class='user-marker'></div>",
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          });
+
           L.marker(pickup, { icon: pickupIcon }).addTo(map)
             .bindPopup("<b>Pickup</b><br>${restaurantName.replace(/'/g, "\\'")}");
 
           L.marker(dropoff, { icon: dropoffIcon }).addTo(map)
             .bindPopup("<b>Dropoff</b><br>${customerName.replace(/'/g, "\\'")}");
 
+          // User location marker
+          if (userLoc) {
+            // Add accuracy circle
+            L.circle(userLoc, {
+              radius: 50,
+              className: 'user-accuracy',
+              stroke: true,
+              weight: 1,
+              fillOpacity: 0.15
+            }).addTo(map);
+
+            L.marker(userLoc, { icon: userIcon }).addTo(map)
+              .bindPopup("<b>Your Location</b>");
+          }
+
           // Route Polyline
-          const polyline = L.polyline(route, { 
-            color: '${Colors.primary}', 
+          const polyline = L.polyline(route, {
+            color: '${Colors.primary}',
             weight: 4,
             opacity: 0.8,
             lineCap: 'round'
           }).addTo(map);
-          
-          // Fit bounds
-          const bounds = L.latLngBounds([pickup, dropoff, ...route]);
+
+          // Fit bounds - include user location if available
+          const boundsPoints = [pickup, dropoff, ...route];
+          if (userLoc) boundsPoints.push(userLoc);
+          const bounds = L.latLngBounds(boundsPoints);
           map.fitBounds(bounds, { padding: [40, 40] });
 
           // Force resize to ensure correct rendering
@@ -135,7 +250,8 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
       {createElement('iframe', {
         srcDoc: html,
         style: { width: '100%', height: '100%', border: 'none' },
-        title: "Order Route Map"
+        title: "Order Route Map",
+        key: userLocation ? `${userLocation.latitude}-${userLocation.longitude}` : 'no-user-loc'
       })}
     </View>
   );

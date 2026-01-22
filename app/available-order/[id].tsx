@@ -119,7 +119,7 @@ export default function AvailableOrderDetailScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Map Preview */}
         <View style={styles.mapContainer}>
-          <OrderMap order={mapOrder as any} />
+          <OrderMap order={mapOrder as any} showUserLocation={true} />
         </View>
 
         {/* Earnings Card */}
