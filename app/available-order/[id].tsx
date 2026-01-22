@@ -23,7 +23,6 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
-import { api } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
 import OrderMap from '@/components/OrderMap';
@@ -32,7 +31,7 @@ export default function AvailableOrderDetailScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { availableOrders, refreshOrders } = useCourier();
+  const { availableOrders, acceptOrder } = useCourier();
   const orderId = Number(id);
 
   // Get order from context - no API call needed
@@ -57,9 +56,8 @@ export default function AvailableOrderDetailScreen() {
 
     setIsAccepting(true);
     try {
-      await api.orders.acceptOrder(order.orderId);
-      // Refresh orders list in context
-      await refreshOrders();
+      // Use context's acceptOrder which handles state properly
+      await acceptOrder(order.orderId);
       // Navigate directly to map navigation screen
       router.replace(`/map-navigation/${order.orderId}`);
     } catch (error: any) {
