@@ -155,7 +155,7 @@ export default function OrdersScreen() {
       {activeTab === 'active' && (
         <FlatList
           data={activeOrders}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderActiveOrder}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -171,7 +171,7 @@ export default function OrdersScreen() {
       {activeTab === 'history' && (
         <FlatList
           data={completedOrders}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderActiveOrder}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={

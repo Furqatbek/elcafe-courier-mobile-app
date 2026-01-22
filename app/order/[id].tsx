@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Phone, MessageSquare, Navigation, ArrowLeft } from 'lucide-react-native';
+import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { DEFAULTS } from '@/constants/config';
 import { useCourier, OrderStatus } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -15,11 +16,12 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { orders, updateOrderStatus } = useCourier();
-  const [order, setOrder] = useState(orders.find(o => o.id === id));
-  
+  const orderId = Number(id);
+  const [order, setOrder] = useState(orders.find(o => o.orderId === orderId));
+
   useEffect(() => {
-    setOrder(orders.find(o => o.id === id));
-  }, [orders, id]);
+    setOrder(orders.find(o => o.orderId === orderId));
+  }, [orders, orderId]);
 
   if (!order) {
     return (
@@ -29,43 +31,58 @@ export default function OrderDetailScreen() {
     );
   }
 
+  const formatCurrency = (amount: number) => {
+    return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
+  };
+
   const handleSlideComplete = () => {
     let nextStatus: OrderStatus | null = null;
-    
-    if (order.status === 'pending') nextStatus = 'pickup';
-    else if (order.status === 'pickup') nextStatus = 'delivery';
-    else if (order.status === 'delivery') nextStatus = 'completed';
+
+    if (order.status === 'ACCEPTED') nextStatus = 'PICKED_UP';
+    else if (order.status === 'PICKED_UP') nextStatus = 'DELIVERING';
+    else if (order.status === 'DELIVERING') nextStatus = 'DELIVERED';
 
     if (nextStatus) {
-      updateOrderStatus(order.id, nextStatus);
+      updateOrderStatus(order.orderId, nextStatus);
 
-      if (nextStatus === 'pickup') {
-        router.push(`/map-navigation/${order.id}`);
+      if (nextStatus === 'PICKED_UP') {
+        router.push(`/map-navigation/${order.orderId}`);
       }
 
-      if (nextStatus === 'completed') {
+      if (nextStatus === 'DELIVERED') {
         // Navigate to rating screen after completing delivery
-        router.replace(`/order-rating/${order.id}`);
+        router.replace(`/order-rating/${order.orderId}`);
       }
     }
   };
 
   const getButtonTitle = () => {
     switch (order.status) {
-      case 'pending': return t('order_detail.slide_accept');
-      case 'pickup': return t('order_detail.slide_pickup');
-      case 'delivery': return t('order_detail.slide_delivery');
+      case 'ACCEPTED': return t('order_detail.slide_pickup');
+      case 'PICKED_UP': return t('order_detail.slide_delivery');
+      case 'DELIVERING': return t('order_detail.slide_delivery');
       default: return t('order_detail.order_completed');
     }
   };
 
-  const handleCall = () => {
-    // In a real app, this would initiate a call
-    Alert.alert(t('order_detail.call'), `Calling ${order.customerName}...`);
+  const handleCallCustomer = () => {
+    const phoneNumber = order.customer.phone;
+    if (phoneNumber) {
+      Linking.openURL(`tel:${phoneNumber}`);
+    } else {
+      Alert.alert(t('order_detail.call'), t('order_detail.no_phone', 'Phone number not available'));
+    }
+  };
+
+  const handleCallRestaurant = () => {
+    const phoneNumber = order.restaurant.phone;
+    if (phoneNumber) {
+      Linking.openURL(`tel:${phoneNumber}`);
+    }
   };
 
   const handleChat = () => {
-    router.push(`/chat?type=customer&orderId=${order.id}`);
+    router.push(`/chat?type=customer&orderId=${order.orderId}`);
   };
 
   const renderContactButton = (icon: any, label: string, color: string, onPress: () => void) => (
@@ -80,13 +97,13 @@ export default function OrderDetailScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       {/* Custom Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft color={Colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order #{order.id}</Text>
+        <Text style={styles.headerTitle}>{order.orderNumber}</Text>
         <StatusBadge status={order.status} />
       </View>
 
@@ -94,33 +111,41 @@ export default function OrderDetailScreen() {
         {/* Map View */}
         <View style={styles.mapContainer}>
           <OrderMap order={order} />
-          
-          <View style={styles.distanceBadge}>
-            <Navigation size={14} color={Colors.surface} />
-            <Text style={styles.distanceText}>{order.distance} • {order.estimatedTime}</Text>
+
+          <View style={styles.paymentBadge}>
+            <CreditCard size={14} color={order.isPaid ? Colors.success : Colors.accent} />
+            <Text style={[styles.paymentText, { color: order.isPaid ? Colors.success : Colors.accent }]}>
+              {order.isPaid ? t('order_detail.paid') : order.paymentMethod}
+            </Text>
           </View>
         </View>
 
         {/* Action Card */}
         <View style={styles.card}>
           <View style={styles.locationSection}>
-            <View style={styles.timelineItem}>
+            <TouchableOpacity style={styles.timelineItem} onPress={handleCallRestaurant}>
               <View style={[styles.timelineDot, { backgroundColor: Colors.primary }]} />
               <View style={styles.timelineContent}>
                 <Text style={styles.locationLabel}>{t('order_detail.pickup_label')}</Text>
-                <Text style={styles.locationName}>{order.restaurantName}</Text>
-                <Text style={styles.locationAddress}>{order.restaurantAddress}</Text>
+                <Text style={styles.locationName}>{order.restaurant.name}</Text>
+                <Text style={styles.locationAddress}>{order.restaurant.address}</Text>
+                {order.restaurant.phone && (
+                  <Text style={styles.phoneText}>{order.restaurant.phone}</Text>
+                )}
               </View>
-            </View>
-            
+            </TouchableOpacity>
+
             <View style={styles.timelineLine} />
-            
+
             <View style={styles.timelineItem}>
               <View style={[styles.timelineDot, { backgroundColor: Colors.accent }]} />
               <View style={styles.timelineContent}>
                 <Text style={styles.locationLabel}>{t('order_detail.dropoff_label')}</Text>
-                <Text style={styles.locationName}>{order.customerName}</Text>
-                <Text style={styles.locationAddress}>{order.customerAddress}</Text>
+                <Text style={styles.locationName}>{order.customer.name}</Text>
+                <Text style={styles.locationAddress}>{order.deliveryAddress.fullAddress}</Text>
+                {order.deliveryAddress.instructions && (
+                  <Text style={styles.instructionsText}>{order.deliveryAddress.instructions}</Text>
+                )}
               </View>
             </View>
           </View>
@@ -128,35 +153,37 @@ export default function OrderDetailScreen() {
           <View style={styles.divider} />
 
           <View style={styles.orderInfo}>
-            <View>
-              <Text style={styles.infoLabel}>{t('order_detail.order_items')}</Text>
+            <View style={styles.itemsSection}>
+              <View style={styles.itemsHeader}>
+                <Package size={16} color={Colors.textLight} />
+                <Text style={styles.infoLabel}>{t('order_detail.order_items')} ({order.items.length})</Text>
+              </View>
               {order.items.map((item, index) => (
-                <Text key={index} style={styles.infoValue}>• {item}</Text>
+                <Text key={index} style={styles.infoValue}>• {item.quantity}x {item.name}</Text>
               ))}
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.infoLabel}>{t('order_detail.est_earnings')}</Text>
-              <Text style={styles.earningsValue}>${(order.deliveryFee + order.tip).toFixed(2)}</Text>
-              {order.tip > 0 && <Text style={styles.tipText}>{t('order_detail.includes_tip', { amount: order.tip })}</Text>}
+              <Text style={styles.earningsValue}>{formatCurrency(order.totalAmount)}</Text>
             </View>
           </View>
         </View>
 
         {/* Contact Actions */}
-        {order.status !== 'completed' && (
+        {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
           <View style={styles.contactRow}>
-            {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCall)}
+            {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCallCustomer)}
             {renderContactButton(<MessageSquare size={20} color="white" />, t('order_detail.chat'), Colors.secondary, handleChat)}
           </View>
         )}
       </ScrollView>
 
       {/* Footer Action */}
-      {order.status !== 'completed' && (
+      {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
         <View style={styles.footer}>
-          <SlideButton 
+          <SlideButton
             key={order.status}
-            title={getButtonTitle()} 
+            title={getButtonTitle()}
             onComplete={handleSlideComplete}
           />
         </View>
@@ -199,20 +226,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     overflow: 'hidden',
   },
-  distanceBadge: {
+  paymentBadge: {
     position: 'absolute',
     top: 16,
     right: 16,
-    backgroundColor: Colors.secondary,
+    backgroundColor: Colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  distanceText: {
-    color: Colors.surface,
+  paymentText: {
     fontSize: 12,
     fontWeight: '700',
   },
@@ -276,6 +306,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
   },
+  phoneText: {
+    fontSize: 13,
+    color: Colors.primary,
+    marginTop: 4,
+  },
+  instructionsText: {
+    fontSize: 13,
+    color: Colors.accent,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
   divider: {
     height: 1,
     backgroundColor: Colors.border,
@@ -284,6 +325,16 @@ const styles = StyleSheet.create({
   orderInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  itemsSection: {
+    flex: 1,
+    marginRight: 16,
+  },
+  itemsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
   },
   infoLabel: {
     fontSize: 12,
@@ -300,10 +351,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: Colors.success,
-  },
-  tipText: {
-    fontSize: 12,
-    color: Colors.textLight,
   },
   contactRow: {
     flexDirection: 'row',

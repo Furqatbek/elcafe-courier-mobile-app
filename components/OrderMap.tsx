@@ -1,4 +1,4 @@
-import React, { createElement, useEffect, useState } from 'react';
+import React, { createElement, useEffect, useState, useMemo } from 'react';
 import { View, StyleSheet, Platform, Text } from 'react-native';
 // @ts-ignore
 import { Order } from '@/context/CourierContext';
@@ -15,19 +15,30 @@ interface OrderMapProps {
 }
 
 export default function OrderMap({ order, navigationMode = false }: OrderMapProps) {
-  const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>(order.routeCoordinates);
+  const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>([]);
+
+  // Derive pickup and dropoff locations from the new Order structure
+  const pickupLocation = useMemo(() => ({
+    latitude: order.restaurant.latitude,
+    longitude: order.restaurant.longitude,
+  }), [order.restaurant.latitude, order.restaurant.longitude]);
+
+  const dropoffLocation = useMemo(() => ({
+    latitude: order.deliveryAddress.latitude,
+    longitude: order.deliveryAddress.longitude,
+  }), [order.deliveryAddress.latitude, order.deliveryAddress.longitude]);
 
   useEffect(() => {
     let mounted = true;
     const loadRoute = async () => {
-        const routeInfo = await fetchRoute(order.pickupLocation, order.dropoffLocation);
+        const routeInfo = await fetchRoute(pickupLocation, dropoffLocation);
         if (mounted && routeInfo.coordinates.length > 0) {
             setRouteCoordinates(routeInfo.coordinates);
         }
     };
     loadRoute();
     return () => { mounted = false; };
-  }, [order.pickupLocation, order.dropoffLocation]);
+  }, [pickupLocation, dropoffLocation]);
 
   // Safe guard for native - though this file should only be loaded on web
   if (Platform.OS !== 'web') {
@@ -67,10 +78,10 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
           }).addTo(map);
 
           // Data
-          const pickup = [${order.pickupLocation.latitude}, ${order.pickupLocation.longitude}];
-          const dropoff = [${order.dropoffLocation.latitude}, ${order.dropoffLocation.longitude}];
+          const pickup = [${pickupLocation.latitude}, ${pickupLocation.longitude}];
+          const dropoff = [${dropoffLocation.latitude}, ${dropoffLocation.longitude}];
           const route = ${JSON.stringify(routeCoordinates.map(c => [c.latitude, c.longitude]))};
-          
+
           // Markers
           const pickupIcon = L.divIcon({
             className: 'custom-div-icon',
@@ -87,10 +98,10 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
           });
 
           L.marker(pickup).addTo(map)
-            .bindPopup("<b>Pickup</b><br>${order.restaurantName}");
-            
+            .bindPopup("<b>Pickup</b><br>${order.restaurant.name.replace(/'/g, "\\'")}");
+
           L.marker(dropoff).addTo(map)
-            .bindPopup("<b>Dropoff</b><br>${order.customerName}");
+            .bindPopup("<b>Dropoff</b><br>${order.customer.name.replace(/'/g, "\\'")}");
 
           // Route Polyline
           const polyline = L.polyline(route, { 

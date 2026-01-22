@@ -4,7 +4,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 
-export type OrderStatus = 'pending' | 'pickup' | 'delivery' | 'completed';
+export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'PICKED_UP' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -90,31 +90,38 @@ export interface RefreshTokenResponse {
   };
 }
 
+export interface OrderItem {
+  name: string;
+  quantity: number;
+}
+
 export interface Order {
-  id: string;
-  restaurantName: string;
-  restaurantAddress: string;
-  customerName: string;
-  customerAddress: string;
-  deliveryFee: number;
-  tip: number;
+  orderId: number;
+  orderNumber: string;
   status: OrderStatus;
-  distance: string;
-  estimatedTime: string;
-  createdAt: string;
-  items: string[];
-  pickupLocation: {
+  restaurant: {
+    id: number;
+    name: string;
+    address: string;
+    phone: string;
     latitude: number;
     longitude: number;
   };
-  dropoffLocation: {
-    latitude: number;
-    longitude: number;
+  customer: {
+    name: string;
+    phone: string;
   };
-  routeCoordinates: Array<{
+  deliveryAddress: {
+    fullAddress: string;
     latitude: number;
     longitude: number;
-  }>;
+    instructions?: string;
+  };
+  items: OrderItem[];
+  paymentMethod: 'CASH' | 'CARD';
+  isPaid: boolean;
+  totalAmount: number;
+  createdAt?: string;
 }
 
 export interface DriverStats {
@@ -703,8 +710,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   };
 
-  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'completed'), [orders]);
-  const completedOrders = useMemo(() => orders.filter(o => o.status === 'completed'), [orders]);
+  const activeOrders = useMemo(() => orders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'), [orders]);
+  const completedOrders = useMemo(() => orders.filter(o => o.status === 'DELIVERED'), [orders]);
 
   // Accept an available order
   const acceptOrder = useCallback(async (orderId: number | string) => {
@@ -715,12 +722,18 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.data) {
         // Remove from available orders
         setAvailableOrders(prev => prev.filter(o => o.orderId !== orderId));
-        // Refresh active orders to include the newly accepted order
-        await fetchOrders();
-        return data.data;
+
+        // Add accepted order to active orders
+        const acceptedOrder: Order = data.data;
+        setOrders(prev => [acceptedOrder, ...prev]);
+
+        // Update courier status to BUSY since they have an active order
+        setCourierProfile(prev => prev ? { ...prev, status: 'BUSY' } : null);
+
+        return acceptedOrder;
       } else {
         throw new Error(data.message || 'Failed to accept order');
       }
@@ -728,29 +741,29 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       console.error('Failed to accept order:', error);
       throw error;
     }
-  }, [authenticatedFetch, fetchOrders]);
+  }, [authenticatedFetch]);
 
-  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
+  const updateOrderStatus = async (orderId: number | string, status: OrderStatus) => {
     // Optimistically update local state
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o));
 
     // Update on server
     try {
       let endpoint = '';
-      let method = 'POST';
+      let method = 'PUT';
 
       switch (status) {
-        case 'pickup':
-          // Accept order - POST
-          endpoint = API_ENDPOINTS.ORDERS.ACCEPT(orderId);
-          method = 'POST';
-          break;
-        case 'delivery':
+        case 'PICKED_UP':
           // Picked up from restaurant - PUT
           endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
           method = 'PUT';
           break;
-        case 'completed':
+        case 'DELIVERING':
+          // On the way to customer
+          endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
+          method = 'PUT';
+          break;
+        case 'DELIVERED':
           // Complete delivery - POST
           endpoint = API_ENDPOINTS.ORDERS.COMPLETE(orderId);
           method = 'POST';
@@ -761,9 +774,16 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         await authenticatedFetch(endpoint, { method });
       }
 
-      // Refresh stats after order status change
-      if (status === 'completed') {
+      // Refresh stats and set status back to AVAILABLE after delivery completed
+      if (status === 'DELIVERED') {
         await fetchStats();
+        // Check if there are more active orders
+        const remainingActive = orders.filter(o =>
+          o.orderId !== orderId && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
+        );
+        if (remainingActive.length === 0) {
+          setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
+        }
       }
     } catch (error) {
       console.error('Failed to update order status on server:', error);

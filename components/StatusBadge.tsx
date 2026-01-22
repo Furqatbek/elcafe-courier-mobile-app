@@ -13,14 +13,18 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 
   const getStyle = () => {
     switch (status) {
-      case 'pending':
+      case 'PENDING':
         return { bg: '#FEF3C7', text: '#D97706' }; // Amber
-      case 'pickup':
+      case 'ACCEPTED':
         return { bg: '#DBEAFE', text: '#2563EB' }; // Blue
-      case 'delivery':
+      case 'PICKED_UP':
         return { bg: '#E0F2FE', text: '#0284C7' }; // Sky
-      case 'completed':
+      case 'DELIVERING':
+        return { bg: '#FEE2E2', text: '#DC2626' }; // Red (urgent)
+      case 'DELIVERED':
         return { bg: '#D1FAE5', text: '#059669' }; // Emerald
+      case 'CANCELLED':
+        return { bg: '#F3F4F6', text: '#6B7280' }; // Gray
       default:
         return { bg: Colors.background, text: Colors.text };
     }
@@ -30,10 +34,12 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 
   const getStatusText = () => {
     switch (status) {
-      case 'pending': return t('common.status_pending');
-      case 'pickup': return t('common.status_pickup');
-      case 'delivery': return t('common.status_delivery');
-      case 'completed': return t('common.status_completed');
+      case 'PENDING': return t('common.status_pending', 'PENDING');
+      case 'ACCEPTED': return t('common.status_accepted', 'ACCEPTED');
+      case 'PICKED_UP': return t('common.status_picked_up', 'PICKED UP');
+      case 'DELIVERING': return t('common.status_delivering', 'DELIVERING');
+      case 'DELIVERED': return t('common.status_delivered', 'DELIVERED');
+      case 'CANCELLED': return t('common.status_cancelled', 'CANCELLED');
       default: return (status as string).toUpperCase();
     }
   };
