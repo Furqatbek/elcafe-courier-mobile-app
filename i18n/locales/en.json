@@ -21,7 +21,9 @@
     "status_cancelled": "CANCELLED",
     "today": "Today",
     "this_week": "This Week",
-    "month": "Month"
+    "month": "Month",
+    "min": "min",
+    "hour": "h"
   },
   "login": {
     "app_subtitle": "Deliver faster, earn more.",
@@ -474,12 +476,36 @@
     "dropoff": "DROP-OFF",
     "total_distance": "Total",
     "accept": "Accept",
+    "view_details": "View Details",
     "order_accepted": "Order accepted! Navigate to pickup.",
     "accept_error": "Failed to accept order. Please try again.",
     "location_permission_required": "Location permission is required to find nearby orders.",
     "offline_title": "You're Offline",
     "offline_message": "Go online to start receiving order requests",
-    "go_online": "Go Online"
+    "go_online": "Go Online",
+    "new_order": "New",
+    "estimated_earnings": "Est. Earnings",
+    "route_details": "Route Details",
+    "from_you": "from you",
+    "from_pickup": "from pickup",
+    "order_info": "Order Info",
+    "items": "Items",
+    "tip": "Tip",
+    "slide_to_accept": "Slide to Accept Order",
+    "accepting": "Accepting order..."
+  },
+  "navigation": {
+    "heading_to_pickup": "Heading to Pickup",
+    "heading_to_dropoff": "Heading to Drop-off",
+    "slide_picked_up": "Slide when Picked Up",
+    "slide_start_delivery": "Slide to Start Delivery",
+    "slide_delivered": "Slide when Delivered",
+    "accepted": "Accepted",
+    "picked_up": "Picked Up",
+    "delivered": "Delivered",
+    "delivery_completed": "Delivery Completed!",
+    "order_cancelled": "Order Cancelled",
+    "back_to_orders": "Back to Orders"
   },
   "report_issue": {
     "title": "Report Issue",

@@ -137,14 +137,30 @@ export interface OrderItem {
 
 export interface AvailableOrder {
   orderId: number;
-  orderNumber: string;
-  restaurant: Restaurant;
-  deliveryAddress: DeliveryAddress;
-  estimatedDistance: number;
-  estimatedEarnings: number;
+  // Flat structure (new backend)
+  externalOrderNo?: string;
+  restaurantId?: number;
+  restaurantName?: string;
+  restaurantAddress?: string;
+  restaurantLat?: number;
+  restaurantLng?: number;
+  restaurantDistance?: number;
+  deliveryAddress?: string;
+  deliveryLat?: number;
+  deliveryLng?: number;
+  deliveryDistance?: number;
+  customerName?: string;
+  deliveryFee?: number;
+  tipAmount?: number;
+  total?: number;
   itemCount: number;
   createdAt: string;
   expiresAt?: string;
+  estimatedDistance?: number;
+  // Nested structure (legacy support)
+  orderNumber?: string;
+  restaurant?: Restaurant;
+  estimatedEarnings?: number;
 }
 
 export interface ActiveOrder {
@@ -481,6 +497,9 @@ export const ordersApi = {
     if (queryString) endpoint += `?${queryString}`;
     return apiClient.get<AvailableOrder[]>(endpoint);
   },
+
+  getAvailableOrderDetails: (orderId: string | number) =>
+    apiClient.get<AvailableOrder>(`${API_ENDPOINTS.COURIER.AVAILABLE_ORDERS}/${orderId}`),
 
   getActiveOrders: () => apiClient.get<ActiveOrder[]>(API_ENDPOINTS.COURIER.ACTIVE_ORDERS),
 

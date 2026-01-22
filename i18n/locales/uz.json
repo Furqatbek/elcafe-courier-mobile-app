@@ -21,7 +21,9 @@
     "status_cancelled": "BEKOR QILINDI",
     "today": "Bugun",
     "this_week": "Bu hafta",
-    "month": "Oy"
+    "month": "Oy",
+    "min": "daq",
+    "hour": "s"
   },
   "login": {
     "app_subtitle": "Tezroq yetkazing, ko'proq daromad oling.",
@@ -487,11 +489,36 @@
     "earnings": "Daromad",
     "distance": "Masofa",
     "accept": "Qabul qilish",
+    "view_details": "Batafsil",
     "accepting": "Qabul qilinmoqda...",
     "order_accepted": "Buyurtma qabul qilindi!",
     "accept_failed": "Buyurtmani qabul qilib bo'lmadi. Qayta urinib ko'ring.",
     "items": "{{count}} ta mahsulot",
-    "estimated_time": "~{{time}} daq"
+    "estimated_time": "~{{time}} daq",
+    "new_order": "Yangi",
+    "estimated_earnings": "Taxminiy daromad",
+    "route_details": "Marshrut tafsilotlari",
+    "total_distance": "Jami",
+    "from_you": "sizdan",
+    "from_pickup": "olish nuqtasidan",
+    "order_info": "Buyurtma ma'lumoti",
+    "tip": "Choy puli",
+    "slide_to_accept": "Qabul qilish uchun suring",
+    "fetch_error": "Buyurtmalarni yuklash imkonsiz",
+    "location_permission_required": "Joylashuvni aniqlash uchun ruxsat kerak"
+  },
+  "navigation": {
+    "heading_to_pickup": "Restoranga yo'l olmoqda",
+    "heading_to_dropoff": "Mijozga yo'l olmoqda",
+    "slide_picked_up": "Olingandan keyin suring",
+    "slide_start_delivery": "Yetkazishni boshlash uchun suring",
+    "slide_delivered": "Yetkazilgandan keyin suring",
+    "accepted": "Qabul qilindi",
+    "picked_up": "Olindi",
+    "delivered": "Yetkazildi",
+    "delivery_completed": "Yetkazib berish yakunlandi!",
+    "order_cancelled": "Buyurtma bekor qilindi",
+    "back_to_orders": "Buyurtmalarga qaytish"
   },
   "report_issue": {
     "title": "Muammo haqida xabar berish",

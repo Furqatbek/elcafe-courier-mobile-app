@@ -1,0 +1,502 @@
+import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  ActivityIndicator,
+} from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import {
+  ArrowLeft,
+  MapPin,
+  Package,
+  DollarSign,
+  Clock,
+  Navigation,
+  Store,
+  User,
+} from 'lucide-react-native';
+import Colors from '@/constants/colors';
+import { DEFAULTS } from '@/constants/config';
+import { api, AvailableOrder } from '@/services/api';
+import { useCourier } from '@/context/CourierContext';
+import { SlideButton } from '@/components/SlideButton';
+import OrderMap from '@/components/OrderMap';
+
+export default function AvailableOrderDetailScreen() {
+  const { t } = useTranslation();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const { refreshOrders } = useCourier();
+  const orderId = Number(id);
+
+  const [order, setOrder] = useState<AvailableOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAccepting, setIsAccepting] = useState(false);
+
+  useEffect(() => {
+    const fetchOrderDetails = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.orders.getAvailableOrderDetails(orderId);
+        setOrder(data);
+      } catch (error: any) {
+        Alert.alert(t('common.error'), error.message || t('available_orders.fetch_error'));
+        router.back();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOrderDetails();
+  }, [orderId]);
+
+  const formatCurrency = (amount: number | undefined) => {
+    return `${((amount ?? 0) / 1000).toFixed(0)}k ${DEFAULTS.CURRENCY_SYMBOL}`;
+  };
+
+  const formatDistance = (km: number | undefined) => {
+    const value = km ?? 0;
+    if (value < 1) {
+      return `${(value * 1000).toFixed(0)} m`;
+    }
+    return `${value.toFixed(1)} km`;
+  };
+
+  const handleAcceptOrder = async () => {
+    if (!order) return;
+
+    setIsAccepting(true);
+    try {
+      await api.orders.acceptOrder(order.orderId);
+      // Refresh orders list in context
+      await refreshOrders();
+      // Navigate directly to map navigation screen
+      router.replace(`/map-navigation/${order.orderId}`);
+    } catch (error: any) {
+      setIsAccepting(false);
+      Alert.alert(t('common.error'), error.message || t('available_orders.accept_error'));
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (!order) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Text style={styles.notFoundText}>{t('order_detail.not_found')}</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Support both flat and nested structures
+  const restaurantName = order.restaurantName ?? order.restaurant?.name ?? '-';
+  const restaurantAddress = order.restaurantAddress ?? order.restaurant?.address ?? '-';
+  const restaurantDistance = order.restaurantDistance ?? order.restaurant?.distance ?? 0;
+  const deliveryAddr = order.deliveryAddress ?? order.deliveryAddress?.fullAddress ?? '-';
+  const deliveryDistance = order.deliveryDistance ?? order.deliveryAddress?.distance ?? 0;
+  const customerName = order.customerName ?? '-';
+  const orderNumber = order.externalOrderNo ?? order.orderNumber ?? '-';
+  const earnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
+  const totalDistance = order.estimatedDistance ?? (restaurantDistance + deliveryDistance);
+
+  // Create a minimal order object for the map
+  const mapOrder = {
+    orderId: order.orderId,
+    restaurantLat: order.restaurantLat ?? order.restaurant?.latitude ?? 0,
+    restaurantLng: order.restaurantLng ?? order.restaurant?.longitude ?? 0,
+    deliveryLat: order.deliveryLat ?? order.deliveryAddress?.latitude ?? 0,
+    deliveryLng: order.deliveryLng ?? order.deliveryAddress?.longitude ?? 0,
+    restaurantName,
+    customerName,
+  };
+
+  return (
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Custom Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ArrowLeft color={Colors.text} size={24} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{orderNumber}</Text>
+        <View style={styles.newBadge}>
+          <Text style={styles.newBadgeText}>{t('available_orders.new_order')}</Text>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Map Preview */}
+        <View style={styles.mapContainer}>
+          <OrderMap order={mapOrder as any} />
+        </View>
+
+        {/* Earnings Card */}
+        <View style={styles.earningsCard}>
+          <View style={styles.earningsRow}>
+            <View style={styles.earningStat}>
+              <DollarSign size={24} color={Colors.success} />
+              <View>
+                <Text style={styles.earningValue}>{formatCurrency(earnings)}</Text>
+                <Text style={styles.earningLabel}>{t('available_orders.estimated_earnings')}</Text>
+              </View>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.earningStat}>
+              <Navigation size={24} color={Colors.primary} />
+              <View>
+                <Text style={styles.earningValue}>{formatDistance(totalDistance)}</Text>
+                <Text style={styles.earningLabel}>{t('available_orders.total_distance')}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Route Details Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('available_orders.route_details')}</Text>
+
+          {/* Pickup Location */}
+          <View style={styles.locationSection}>
+            <View style={styles.locationHeader}>
+              <View style={[styles.locationIcon, { backgroundColor: Colors.primary + '20' }]}>
+                <Store size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.locationBadge}>
+                <Text style={styles.locationBadgeText}>A</Text>
+              </View>
+            </View>
+            <View style={styles.locationContent}>
+              <Text style={styles.locationLabel}>{t('available_orders.pickup')}</Text>
+              <Text style={styles.locationName}>{restaurantName}</Text>
+              <Text style={styles.locationAddress}>{restaurantAddress}</Text>
+              <View style={styles.distanceRow}>
+                <MapPin size={14} color={Colors.textSecondary} />
+                <Text style={styles.distanceText}>{formatDistance(restaurantDistance)} {t('available_orders.from_you')}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.routeLine}>
+            <View style={styles.routeDot} />
+            <View style={styles.routeDot} />
+            <View style={styles.routeDot} />
+          </View>
+
+          {/* Dropoff Location */}
+          <View style={styles.locationSection}>
+            <View style={styles.locationHeader}>
+              <View style={[styles.locationIcon, { backgroundColor: Colors.accent + '20' }]}>
+                <User size={20} color={Colors.accent} />
+              </View>
+              <View style={[styles.locationBadge, { backgroundColor: Colors.accent }]}>
+                <Text style={styles.locationBadgeText}>B</Text>
+              </View>
+            </View>
+            <View style={styles.locationContent}>
+              <Text style={styles.locationLabel}>{t('available_orders.dropoff')}</Text>
+              <Text style={styles.locationName}>{customerName}</Text>
+              <Text style={styles.locationAddress}>{deliveryAddr}</Text>
+              <View style={styles.distanceRow}>
+                <Navigation size={14} color={Colors.textSecondary} />
+                <Text style={styles.distanceText}>{formatDistance(deliveryDistance)} {t('available_orders.from_pickup')}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Order Info Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('available_orders.order_info')}</Text>
+          <View style={styles.infoRow}>
+            <View style={styles.infoItem}>
+              <Package size={20} color={Colors.textSecondary} />
+              <Text style={styles.infoLabel}>{t('available_orders.items')}</Text>
+              <Text style={styles.infoValue}>{order.itemCount}</Text>
+            </View>
+            {order.tipAmount && order.tipAmount > 0 && (
+              <View style={styles.infoItem}>
+                <DollarSign size={20} color={Colors.success} />
+                <Text style={styles.infoLabel}>{t('available_orders.tip')}</Text>
+                <Text style={[styles.infoValue, { color: Colors.success }]}>
+                  {formatCurrency(order.tipAmount)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Footer with Slide to Accept */}
+      <View style={styles.footer}>
+        {isAccepting ? (
+          <View style={styles.acceptingContainer}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.acceptingText}>{t('available_orders.accepting')}</Text>
+          </View>
+        ) : (
+          <SlideButton
+            title={t('available_orders.slide_to_accept')}
+            onComplete={handleAcceptOrder}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notFoundText: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    marginBottom: 16,
+  },
+  backLink: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  backLinkText: {
+    fontSize: 16,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingBottom: 20,
+    backgroundColor: Colors.surface,
+    zIndex: 10,
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  newBadge: {
+    backgroundColor: Colors.success + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  newBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.success,
+  },
+  scrollContent: {
+    paddingBottom: 120,
+  },
+  mapContainer: {
+    height: 250,
+    width: '100%',
+    backgroundColor: '#E2E8F0',
+  },
+  earningsCard: {
+    backgroundColor: Colors.surface,
+    margin: 16,
+    marginBottom: 8,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: Colors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  earningsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  earningStat: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  earningValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  earningLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  divider: {
+    width: 1,
+    height: 40,
+    backgroundColor: Colors.border,
+    marginHorizontal: 16,
+  },
+  card: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: Colors.text,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 16,
+  },
+  locationSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  locationHeader: {
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  locationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  locationBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  locationBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.surface,
+  },
+  locationContent: {
+    flex: 1,
+  },
+  locationLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  distanceText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  routeLine: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginVertical: 16,
+    paddingLeft: 60,
+  },
+  routeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.border,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: 24,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.surface,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  acceptingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 16,
+  },
+  acceptingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+});

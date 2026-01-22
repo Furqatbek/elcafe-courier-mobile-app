@@ -99,14 +99,9 @@ export default function AvailableOrdersScreen() {
     }
   }, [isOnline]);
 
-  const handleAcceptOrder = async (orderId: number) => {
-    try {
-      await api.orders.acceptOrder(orderId);
-      toast.success(t('available_orders.order_accepted'));
-      router.push(`/order/${orderId}`);
-    } catch (error: any) {
-      toast.error(error.message || t('available_orders.accept_error'));
-    }
+  const handleViewOrderDetails = (orderId: number) => {
+    // Navigate to available order detail screen to see info before accepting
+    router.push(`/available-order/${orderId}`);
   };
 
   const formatCurrency = (amount: number) => {
@@ -120,77 +115,89 @@ export default function AvailableOrdersScreen() {
     return `${km.toFixed(1)} km`;
   };
 
-  const renderOrderItem = ({ item }: { item: AvailableOrder }) => (
-    <TouchableOpacity
-      style={styles.orderCard}
-      onPress={() => handleAcceptOrder(item.orderId)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.orderHeader}>
-        <View style={styles.orderNumberContainer}>
-          <Text style={styles.orderNumber}>{item.orderNumber}</Text>
-          <View style={styles.itemCountBadge}>
-            <Package size={12} color={Colors.textSecondary} />
-            <Text style={styles.itemCount}>{item.itemCount} items</Text>
-          </View>
-        </View>
-        <View style={styles.earningsContainer}>
-          <DollarSign size={16} color={Colors.success} />
-          <Text style={styles.earnings}>{formatCurrency(item.estimatedEarnings)}</Text>
-        </View>
-      </View>
+  const renderOrderItem = ({ item }: { item: AvailableOrder }) => {
+    // Support both flat (new backend) and nested (legacy) structures
+    const restaurantName = item.restaurantName ?? item.restaurant?.name ?? '-';
+    const restaurantAddress = item.restaurantAddress ?? item.restaurant?.address ?? '-';
+    const restaurantDistance = item.restaurantDistance ?? item.restaurant?.distance ?? 0;
+    const deliveryAddr = item.deliveryAddress ?? item.deliveryAddress?.fullAddress ?? '-';
+    const deliveryDistance = item.deliveryDistance ?? item.deliveryAddress?.distance ?? 0;
+    const orderNumber = item.externalOrderNo ?? item.orderNumber ?? '-';
+    const earnings = item.deliveryFee ?? item.estimatedEarnings ?? 0;
+    const totalDistance = item.estimatedDistance ?? (restaurantDistance + deliveryDistance);
 
-      <View style={styles.locationSection}>
-        {/* Pickup */}
-        <View style={styles.locationRow}>
-          <View style={[styles.locationDot, { backgroundColor: Colors.primary }]} />
-          <View style={styles.locationInfo}>
-            <Text style={styles.locationLabel}>{t('available_orders.pickup')}</Text>
-            <Text style={styles.locationName}>{item.restaurant.name}</Text>
-            <Text style={styles.locationAddress} numberOfLines={1}>
-              {item.restaurant.address}
-            </Text>
+    return (
+      <TouchableOpacity
+        style={styles.orderCard}
+        onPress={() => handleViewOrderDetails(item.orderId)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.orderHeader}>
+          <View style={styles.orderNumberContainer}>
+            <Text style={styles.orderNumber}>{orderNumber}</Text>
+            <View style={styles.itemCountBadge}>
+              <Package size={12} color={Colors.textSecondary} />
+              <Text style={styles.itemCount}>{item.itemCount} {t('orders.items', 'items')}</Text>
+            </View>
           </View>
-          <View style={styles.distanceBadge}>
-            <Text style={styles.distanceText}>
-              {formatDistance(item.restaurant.distance || 0)}
-            </Text>
+          <View style={styles.earningsContainer}>
+            <DollarSign size={16} color={Colors.success} />
+            <Text style={styles.earnings}>{formatCurrency(earnings)}</Text>
           </View>
         </View>
 
-        <View style={styles.locationLine} />
+        <View style={styles.locationSection}>
+          {/* Pickup */}
+          <View style={styles.locationRow}>
+            <View style={[styles.locationDot, { backgroundColor: Colors.primary }]} />
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationLabel}>{t('available_orders.pickup')}</Text>
+              <Text style={styles.locationName}>{restaurantName}</Text>
+              <Text style={styles.locationAddress} numberOfLines={1}>
+                {restaurantAddress}
+              </Text>
+            </View>
+            <View style={styles.distanceBadge}>
+              <Text style={styles.distanceText}>
+                {formatDistance(restaurantDistance)}
+              </Text>
+            </View>
+          </View>
 
-        {/* Dropoff */}
-        <View style={styles.locationRow}>
-          <View style={[styles.locationDot, { backgroundColor: Colors.accent }]} />
-          <View style={styles.locationInfo}>
-            <Text style={styles.locationLabel}>{t('available_orders.dropoff')}</Text>
-            <Text style={styles.locationAddress} numberOfLines={2}>
-              {item.deliveryAddress.fullAddress}
+          <View style={styles.locationLine} />
+
+          {/* Dropoff */}
+          <View style={styles.locationRow}>
+            <View style={[styles.locationDot, { backgroundColor: Colors.accent }]} />
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationLabel}>{t('available_orders.dropoff')}</Text>
+              <Text style={styles.locationAddress} numberOfLines={2}>
+                {deliveryAddr}
+              </Text>
+            </View>
+            <View style={styles.distanceBadge}>
+              <Text style={styles.distanceText}>
+                {formatDistance(deliveryDistance)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.orderFooter}>
+          <View style={styles.totalDistance}>
+            <Navigation size={14} color={Colors.textSecondary} />
+            <Text style={styles.totalDistanceText}>
+              {t('available_orders.total_distance')}: {formatDistance(totalDistance)}
             </Text>
           </View>
-          <View style={styles.distanceBadge}>
-            <Text style={styles.distanceText}>
-              {formatDistance(item.deliveryAddress.distance || 0)}
-            </Text>
+          <View style={styles.viewDetailsButton}>
+            <Text style={styles.viewDetailsText}>{t('available_orders.view_details')}</Text>
+            <ChevronRight size={18} color={Colors.primary} />
           </View>
         </View>
-      </View>
-
-      <View style={styles.orderFooter}>
-        <View style={styles.totalDistance}>
-          <Navigation size={14} color={Colors.textSecondary} />
-          <Text style={styles.totalDistanceText}>
-            {t('available_orders.total_distance')}: {formatDistance(item.estimatedDistance)}
-          </Text>
-        </View>
-        <View style={styles.acceptButton}>
-          <Text style={styles.acceptButtonText}>{t('available_orders.accept')}</Text>
-          <ChevronRight size={18} color={Colors.surface} />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (!isOnline) {
     return (
@@ -430,5 +437,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.surface,
+  },
+  viewDetailsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary + '15',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 4,
+  },
+  viewDetailsText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 });

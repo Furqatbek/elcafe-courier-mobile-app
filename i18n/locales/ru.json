@@ -21,7 +21,9 @@
     "status_cancelled": "ОТМЕНЁН",
     "today": "Сегодня",
     "this_week": "Эта неделя",
-    "month": "Месяц"
+    "month": "Месяц",
+    "min": "мин",
+    "hour": "ч"
   },
   "login": {
     "app_subtitle": "Доставляйте быстрее, зарабатывайте больше.",
@@ -487,11 +489,36 @@
     "earnings": "Заработок",
     "distance": "Расстояние",
     "accept": "Принять",
+    "view_details": "Подробнее",
     "accepting": "Принятие...",
     "order_accepted": "Заказ принят!",
     "accept_failed": "Не удалось принять заказ. Попробуйте еще раз.",
     "items": "{{count}} товаров",
-    "estimated_time": "~{{time}} мин"
+    "estimated_time": "~{{time}} мин",
+    "new_order": "Новый",
+    "estimated_earnings": "Прибл. заработок",
+    "route_details": "Детали маршрута",
+    "total_distance": "Всего",
+    "from_you": "от вас",
+    "from_pickup": "от точки забора",
+    "order_info": "Информация о заказе",
+    "tip": "Чаевые",
+    "slide_to_accept": "Проведите для принятия",
+    "fetch_error": "Не удалось загрузить заказы",
+    "location_permission_required": "Требуется разрешение на определение местоположения"
+  },
+  "navigation": {
+    "heading_to_pickup": "Едем к ресторану",
+    "heading_to_dropoff": "Едем к клиенту",
+    "slide_picked_up": "Проведите после забора",
+    "slide_start_delivery": "Проведите для начала доставки",
+    "slide_delivered": "Проведите после доставки",
+    "accepted": "Принят",
+    "picked_up": "Забран",
+    "delivered": "Доставлен",
+    "delivery_completed": "Доставка завершена!",
+    "order_cancelled": "Заказ отменен",
+    "back_to_orders": "К заказам"
   },
   "report_issue": {
     "title": "Сообщить о проблеме",
