@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Settings as SettingsIcon, Globe, Smartphone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -13,6 +13,36 @@ const TAB_ROUTES = [
   { name: 'settings', path: '/(tabs)/settings' },
 ];
 
+// MenuItem component moved outside to prevent recreation on each render
+const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, loading }: any) => {
+  const isDisabled = loading === true || (!onPress && !rightElement);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.menuItem,
+        isDisabled && styles.menuItemDisabled,
+        pressed && !isDisabled && styles.menuItemPressed,
+      ]}
+      onPress={onPress}
+      disabled={isDisabled}
+    >
+      <View style={[styles.iconContainer, danger && styles.dangerIconContainer]}>
+        {loading ? (
+          <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.primary} />
+        ) : (
+          <Icon size={20} color={danger ? Colors.danger : Colors.primary} />
+        )}
+      </View>
+      <View style={styles.menuInfo}>
+        <Text style={[styles.menuTitle, danger && styles.dangerText]}>{title}</Text>
+        {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
+      </View>
+      {rightElement ? rightElement : <ChevronRight size={20} color={Colors.textLight} />}
+    </Pressable>
+  );
+};
+
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
@@ -22,32 +52,6 @@ export default function SettingsScreen() {
 
   const navigateToLanguage = () => {
     router.push('/language');
-  };
-
-  const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, loading }: any) => {
-    const isDisabled = loading === true || (!onPress && !rightElement);
-
-    return (
-      <TouchableOpacity
-        style={[styles.menuItem, isDisabled && styles.menuItemDisabled]}
-        onPress={onPress}
-        activeOpacity={0.7}
-        disabled={isDisabled}
-      >
-        <View style={[styles.iconContainer, danger && styles.dangerIconContainer]}>
-          {loading ? (
-            <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.primary} />
-          ) : (
-            <Icon size={20} color={danger ? Colors.danger : Colors.primary} />
-          )}
-        </View>
-        <View style={styles.menuInfo}>
-          <Text style={[styles.menuTitle, danger && styles.dangerText]}>{title}</Text>
-          {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
-        </View>
-        {rightElement ? rightElement : <ChevronRight size={20} color={Colors.textLight} />}
-      </TouchableOpacity>
-    );
   };
 
   const handleLogout = () => {
@@ -295,6 +299,10 @@ const styles = StyleSheet.create({
   },
   menuItemDisabled: {
     opacity: 0.5,
+  },
+  menuItemPressed: {
+    backgroundColor: Colors.background,
+    opacity: 0.8,
   },
   iconContainer: {
     width: 36,
