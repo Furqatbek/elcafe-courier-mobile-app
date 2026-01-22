@@ -5,7 +5,7 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 
 export type OrderStatus = 'pending' | 'pickup' | 'delivery' | 'completed';
-export type CourierStatus = 'offline' | 'online' | 'busy';
+export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
 export interface User {
@@ -548,7 +548,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     return null;
   }, [authenticatedFetch]);
 
-  // Update courier status (online/offline/busy)
+  // Update courier status (OFFLINE/AVAILABLE/BUSY/ON_BREAK)
   const updateCourierStatus = useCallback(async (status: CourierStatus) => {
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_STATUS, {
@@ -559,7 +559,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       const data = await response.json();
       if (data.success) {
         setCourierProfile(prev => prev ? { ...prev, status } : null);
-        setIsOnline(status === 'online');
+        setIsOnline(status === 'AVAILABLE' || status === 'BUSY');
       }
     } catch (error) {
       console.error('Failed to update courier status:', error);
@@ -608,10 +608,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [updateLocationOnServer]);
 
   const toggleOnline = async () => {
-    const newStatus: CourierStatus = isOnline ? 'offline' : 'online';
+    const newStatus: CourierStatus = isOnline ? 'OFFLINE' : 'AVAILABLE';
     await updateCourierStatus(newStatus);
 
-    if (newStatus === 'online') {
+    if (newStatus === 'AVAILABLE') {
       await startLocationTracking();
     } else {
       await stopLocationTracking();
