@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package } from 'lucide-react-native';
+import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { DEFAULTS } from '@/constants/config';
-import { useCourier, OrderStatus, Order } from '@/context/CourierContext';
+import { DEFAULTS, ISSUE_TYPES } from '@/constants/config';
+import { useCourier, OrderStatus, Order, IssueType } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
 import { StatusBadge } from '@/components/StatusBadge';
 import OrderMap from '@/components/OrderMap';
@@ -15,12 +15,16 @@ export default function OrderDetailScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { orders, orderHistory, updateOrderStatus, fetchOrderDetails } = useCourier();
+  const { orders, orderHistory, updateOrderStatus, completeOrder, reportOrderIssue, fetchOrderDetails } = useCourier();
   const orderId = Number(id);
   const [order, setOrder] = useState<Order | null | undefined>(
     orders.find(o => o.orderId === orderId) || orderHistory.find(o => o.orderId === orderId)
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [selectedIssueType, setSelectedIssueType] = useState<IssueType | null>(null);
+  const [issueDescription, setIssueDescription] = useState('');
+  const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
 
   useEffect(() => {
     // First check local state
@@ -62,7 +66,7 @@ export default function OrderDetailScreen() {
     return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
-  const handleSlideComplete = () => {
+  const handleSlideComplete = async () => {
     let nextStatus: OrderStatus | null = null;
 
     if (order.status === 'ACCEPTED') nextStatus = 'PICKED_UP';
@@ -70,17 +74,57 @@ export default function OrderDetailScreen() {
     else if (order.status === 'DELIVERING') nextStatus = 'DELIVERED';
 
     if (nextStatus) {
-      updateOrderStatus(order.orderId, nextStatus);
+      try {
+        if (nextStatus === 'DELIVERED') {
+          // Use completeOrder for final delivery (supports photo/notes)
+          const result = await completeOrder(order.orderId);
+          if (result) {
+            Alert.alert(
+              t('order_detail.delivery_complete'),
+              t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
+              [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
+            );
+          }
+        } else {
+          await updateOrderStatus(order.orderId, nextStatus);
 
-      if (nextStatus === 'PICKED_UP') {
-        router.push(`/map-navigation/${order.orderId}`);
-      }
-
-      if (nextStatus === 'DELIVERED') {
-        // Navigate to rating screen after completing delivery
-        router.replace(`/order-rating/${order.orderId}`);
+          if (nextStatus === 'PICKED_UP') {
+            router.push(`/map-navigation/${order.orderId}`);
+          }
+        }
+      } catch (error) {
+        Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
       }
     }
+  };
+
+  const handleReportIssue = async () => {
+    if (!selectedIssueType || !issueDescription.trim()) {
+      Alert.alert(t('common.error'), t('order_detail.issue_fields_required'));
+      return;
+    }
+
+    setIsSubmittingIssue(true);
+    try {
+      await reportOrderIssue(order.orderId, selectedIssueType, issueDescription);
+      setShowIssueModal(false);
+      setSelectedIssueType(null);
+      setIssueDescription('');
+      Alert.alert(t('common.success'), t('order_detail.issue_reported'));
+    } catch (error) {
+      Alert.alert(t('common.error'), t('order_detail.issue_report_failed'));
+    } finally {
+      setIsSubmittingIssue(false);
+    }
+  };
+
+  const issueTypeLabels: Record<IssueType, string> = {
+    CUSTOMER_UNAVAILABLE: t('order_detail.issue_customer_unavailable'),
+    WRONG_ADDRESS: t('order_detail.issue_wrong_address'),
+    RESTAURANT_DELAY: t('order_detail.issue_restaurant_delay'),
+    ACCIDENT: t('order_detail.issue_accident'),
+    VEHICLE_ISSUE: t('order_detail.issue_vehicle'),
+    OTHER: t('order_detail.issue_other'),
   };
 
   const getButtonTitle = () => {
@@ -198,12 +242,92 @@ export default function OrderDetailScreen() {
 
         {/* Contact Actions */}
         {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
-          <View style={styles.contactRow}>
-            {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCallCustomer)}
-            {renderContactButton(<MessageSquare size={20} color="white" />, t('order_detail.chat'), Colors.secondary, handleChat)}
-          </View>
+          <>
+            <View style={styles.contactRow}>
+              {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCallCustomer)}
+              {renderContactButton(<MessageSquare size={20} color="white" />, t('order_detail.chat'), Colors.secondary, handleChat)}
+            </View>
+            <View style={styles.reportIssueContainer}>
+              <TouchableOpacity
+                style={styles.reportIssueButton}
+                onPress={() => setShowIssueModal(true)}
+              >
+                <AlertTriangle size={18} color={Colors.danger} />
+                <Text style={styles.reportIssueText}>{t('order_detail.report_issue')}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
       </ScrollView>
+
+      {/* Issue Report Modal */}
+      <Modal
+        visible={showIssueModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowIssueModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('order_detail.report_issue')}</Text>
+              <TouchableOpacity onPress={() => setShowIssueModal(false)}>
+                <X size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalLabel}>{t('order_detail.issue_type')}</Text>
+            <View style={styles.issueTypesGrid}>
+              {(Object.keys(ISSUE_TYPES) as IssueType[]).map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.issueTypeButton,
+                    selectedIssueType === type && styles.issueTypeButtonActive,
+                  ]}
+                  onPress={() => setSelectedIssueType(type)}
+                >
+                  <Text
+                    style={[
+                      styles.issueTypeText,
+                      selectedIssueType === type && styles.issueTypeTextActive,
+                    ]}
+                  >
+                    {issueTypeLabels[type]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>{t('order_detail.issue_description')}</Text>
+            <TextInput
+              style={styles.issueInput}
+              placeholder={t('order_detail.issue_description_placeholder')}
+              placeholderTextColor={Colors.textLight}
+              value={issueDescription}
+              onChangeText={setIssueDescription}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.submitIssueButton,
+                (!selectedIssueType || !issueDescription.trim() || isSubmittingIssue) && styles.submitIssueButtonDisabled,
+              ]}
+              onPress={handleReportIssue}
+              disabled={!selectedIssueType || !issueDescription.trim() || isSubmittingIssue}
+            >
+              {isSubmittingIssue ? (
+                <ActivityIndicator color={Colors.surface} size="small" />
+              ) : (
+                <Text style={styles.submitIssueText}>{t('order_detail.submit_issue')}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Footer Action */}
       {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
@@ -437,5 +561,107 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
     elevation: 10,
+  },
+  reportIssueContainer: {
+    paddingHorizontal: 16,
+    marginTop: 12,
+  },
+  reportIssueButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.danger + '40',
+    backgroundColor: Colors.danger + '10',
+    gap: 8,
+  },
+  reportIssueText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.danger,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  issueTypesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  issueTypeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  issueTypeButtonActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '15',
+  },
+  issueTypeText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+  },
+  issueTypeTextActive: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  issueInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    color: Colors.text,
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  submitIssueButton: {
+    backgroundColor: Colors.danger,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  submitIssueButtonDisabled: {
+    backgroundColor: Colors.border,
+  },
+  submitIssueText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.surface,
   },
 });

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
@@ -7,6 +7,9 @@ import * as Location from 'expo-location';
 export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'PICKED_UP' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
+
+// Re-export IssueType from config for convenience
+export type { IssueType } from '@/constants/config';
 
 export interface User {
   id: number;
@@ -1000,8 +1003,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           method = 'PUT';
           break;
         case 'DELIVERING':
-          // On the way to customer
-          endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
+          // Start transit to customer - PUT
+          endpoint = API_ENDPOINTS.ORDERS.TRANSIT(orderId);
           method = 'PUT';
           break;
         case 'DELIVERED':
@@ -1032,6 +1035,76 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       await fetchOrders();
     }
   };
+
+  // Complete order with optional photo and notes
+  const completeOrder = useCallback(async (
+    orderId: number | string,
+    data?: { deliveryPhoto?: string; deliveryNotes?: string }
+  ): Promise<{ orderId: number; status: string; earnings: number; message: string } | null> => {
+    // Optimistically update local state
+    setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: 'DELIVERED' as OrderStatus } : o));
+
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.COMPLETE(orderId), {
+        method: 'POST',
+        body: data ? JSON.stringify(data) : undefined,
+      });
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Refresh stats after successful completion
+        await fetchStats();
+
+        // Check if there are more active orders
+        const remainingActive = orders.filter(o =>
+          o.orderId !== orderId && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
+        );
+        if (remainingActive.length === 0) {
+          setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
+        }
+
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Failed to complete order');
+      }
+    } catch (error) {
+      console.error('Failed to complete order:', error);
+      // Revert optimistic update on error
+      await fetchOrders();
+      throw error;
+    }
+  }, [authenticatedFetch, fetchStats, fetchOrders, orders]);
+
+  // Report an issue with an order
+  const reportOrderIssue = useCallback(async (
+    orderId: number | string,
+    issueType: IssueType,
+    description: string,
+    photos?: string[]
+  ): Promise<{ message: string } | null> => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.ISSUE(orderId), {
+        method: 'POST',
+        body: JSON.stringify({
+          issueType,
+          description,
+          photos,
+        }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // Refresh orders to get updated status
+        await fetchOrders();
+        return result.data;
+      } else {
+        throw new Error(result.message || 'Failed to report issue');
+      }
+    } catch (error) {
+      console.error('Failed to report issue:', error);
+      throw error;
+    }
+  }, [authenticatedFetch, fetchOrders]);
 
   // Check if user is authenticated (for navigation)
   const isAuthenticated = useMemo(() => !!user && !!accessToken, [user, accessToken]);
@@ -1066,6 +1139,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     activeOrders,
     completedOrders,
     updateOrderStatus,
+    completeOrder,
+    reportOrderIssue,
 
     // Order history
     orderHistory,
