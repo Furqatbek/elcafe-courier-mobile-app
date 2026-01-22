@@ -21,9 +21,16 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
     router.push(`/order/${order.orderId}`);
   };
 
-  const formatCurrency = (amount: number) => {
-    return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
+  const formatCurrency = (amount: number | undefined) => {
+    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
+
+  // Support both nested and flat data structures from backend
+  const restaurantName = order.restaurant?.name ?? (order as any).restaurantName ?? '-';
+  const restaurantAddress = order.restaurant?.address ?? (order as any).restaurantAddress ?? '-';
+  const deliveryAddress = order.deliveryAddress?.fullAddress ?? (order as any).deliveryAddress ?? '-';
+  const itemCount = order.items?.length ?? (order as any).itemCount ?? 0;
+  const totalAmount = order.totalAmount ?? ((order as any).deliveryFee ?? 0) + ((order as any).tipAmount ?? 0);
 
   return (
     <TouchableOpacity
@@ -33,9 +40,9 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.orderNumber}>{order.orderNumber}</Text>
+          <Text style={styles.orderNumber}>{order.orderNumber ?? (order as any).externalOrderNo}</Text>
           <Text style={styles.restaurantName} numberOfLines={1}>
-            {order.restaurant.name}
+            {restaurantName}
           </Text>
         </View>
         <StatusBadge status={order.status} />
@@ -44,7 +51,7 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
       <View style={styles.row}>
         <MapPin size={16} color={Colors.textLight} />
         <Text style={styles.address} numberOfLines={1}>
-          {order.restaurant.address}
+          {restaurantAddress}
         </Text>
       </View>
 
@@ -53,7 +60,7 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
       <View style={styles.row}>
         <MapPin size={16} color={Colors.primary} />
         <Text style={styles.address} numberOfLines={1}>
-          {order.deliveryAddress.fullAddress}
+          {deliveryAddress}
         </Text>
       </View>
 
@@ -61,16 +68,16 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
 
       <View style={styles.footer}>
         <View style={styles.infoItem}>
-          <Text style={styles.amountText}>{formatCurrency(order.totalAmount)}</Text>
+          <Text style={styles.amountText}>{formatCurrency(totalAmount)}</Text>
         </View>
         <View style={styles.infoItem}>
           <Package size={14} color={Colors.textLight} />
-          <Text style={styles.infoText}>{order.items.length} {t('orders.items', 'items')}</Text>
+          <Text style={styles.infoText}>{itemCount} {t('orders.items', 'items')}</Text>
         </View>
         <View style={styles.infoItem}>
           <CreditCard size={14} color={order.isPaid ? Colors.success : Colors.accent} />
           <Text style={[styles.paymentText, { color: order.isPaid ? Colors.success : Colors.accent }]}>
-            {order.isPaid ? t('order_detail.paid', 'Paid') : order.paymentMethod}
+            {order.isPaid ? t('order_detail.paid', 'Paid') : (order.paymentMethod ?? 'CASH')}
           </Text>
         </View>
       </View>
