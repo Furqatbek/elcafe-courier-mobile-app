@@ -24,27 +24,31 @@ export default function SettingsScreen() {
     router.push('/language');
   };
 
-  const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, loading }: any) => (
-    <TouchableOpacity
-      style={styles.menuItem}
-      onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
-      disabled={!onPress && !rightElement || loading}
-    >
-      <View style={[styles.iconContainer, danger && styles.dangerIconContainer]}>
-        {loading ? (
-          <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.primary} />
-        ) : (
-          <Icon size={20} color={danger ? Colors.danger : Colors.primary} />
-        )}
-      </View>
-      <View style={styles.menuInfo}>
-        <Text style={[styles.menuTitle, danger && styles.dangerText]}>{title}</Text>
-        {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
-      </View>
-      {rightElement ? rightElement : <ChevronRight size={20} color={Colors.textLight} />}
-    </TouchableOpacity>
-  );
+  const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, loading }: any) => {
+    const isDisabled = loading === true || (!onPress && !rightElement);
+
+    return (
+      <TouchableOpacity
+        style={[styles.menuItem, isDisabled && styles.menuItemDisabled]}
+        onPress={onPress}
+        activeOpacity={0.7}
+        disabled={isDisabled}
+      >
+        <View style={[styles.iconContainer, danger && styles.dangerIconContainer]}>
+          {loading ? (
+            <ActivityIndicator size="small" color={danger ? Colors.danger : Colors.primary} />
+          ) : (
+            <Icon size={20} color={danger ? Colors.danger : Colors.primary} />
+          )}
+        </View>
+        <View style={styles.menuInfo}>
+          <Text style={[styles.menuTitle, danger && styles.dangerText]}>{title}</Text>
+          {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
+        </View>
+        {rightElement ? rightElement : <ChevronRight size={20} color={Colors.textLight} />}
+      </TouchableOpacity>
+    );
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -288,6 +292,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.background,
+  },
+  menuItemDisabled: {
+    opacity: 0.5,
   },
   iconContainer: {
     width: 36,
