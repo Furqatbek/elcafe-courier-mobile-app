@@ -44,51 +44,119 @@ export default function OrdersScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
   const [showNewOrderBanner, setShowNewOrderBanner] = useState(false);
+  const [bannerOrder, setBannerOrder] = useState<AvailableOrder | null>(null);
   const bannerAnim = useRef(new Animated.Value(-100)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const previousOrderIdsRef = useRef<Set<number>>(new Set());
+  const isInitialLoadRef = useRef(true);
 
-  // Show notification when new order arrives
+  // Detect new orders from API fetches
   useEffect(() => {
-    if (newOrderOffer && isOnline) {
-      // Vibrate device
-      Vibration.vibrate([0, 200, 100, 200]);
+    if (!isOnline || availableOrders.length === 0) {
+      // Reset tracking when going offline or no orders
+      if (!isOnline) {
+        previousOrderIdsRef.current = new Set();
+        isInitialLoadRef.current = true;
+      }
+      return;
+    }
 
-      // Show banner
-      setShowNewOrderBanner(true);
-      Animated.spring(bannerAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 50,
-        friction: 8,
-      }).start();
+    const currentOrderIds = new Set(availableOrders.map(o => o.orderId));
 
-      // Pulse animation for the banner
-      const pulseAnimation = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.05,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      pulseAnimation.start();
+    // Skip notification on initial load
+    if (isInitialLoadRef.current) {
+      previousOrderIdsRef.current = currentOrderIds;
+      isInitialLoadRef.current = false;
+      return;
+    }
 
-      // Auto-hide after 10 seconds
-      const timer = setTimeout(() => {
-        hideBanner();
-        pulseAnimation.stop();
-      }, 10000);
+    // Find new orders (in current but not in previous)
+    const newOrders = availableOrders.filter(
+      order => !previousOrderIdsRef.current.has(order.orderId)
+    );
 
-      return () => {
-        clearTimeout(timer);
-        pulseAnimation.stop();
+    // Show notification for the first new order
+    if (newOrders.length > 0 && !showNewOrderBanner) {
+      const newestOrder = newOrders[0];
+      showOrderNotification(newestOrder);
+    }
+
+    // Update previous order IDs
+    previousOrderIdsRef.current = currentOrderIds;
+  }, [availableOrders, isOnline]);
+
+  // Show notification for an order (from API or WebSocket)
+  const showOrderNotification = (order: AvailableOrder) => {
+    // Vibrate device
+    Vibration.vibrate([0, 200, 100, 200]);
+
+    // Set the order for the banner
+    setBannerOrder(order);
+    setShowNewOrderBanner(true);
+
+    // Animate banner in
+    Animated.spring(bannerAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 8,
+    }).start();
+
+    // Pulse animation for the banner
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseAnimation.start();
+
+    // Auto-hide after 10 seconds
+    const timer = setTimeout(() => {
+      hideBanner();
+      pulseAnimation.stop();
+    }, 10000);
+
+    return () => {
+      clearTimeout(timer);
+      pulseAnimation.stop();
+    };
+  };
+
+  // Show notification when new order arrives via WebSocket
+  useEffect(() => {
+    if (newOrderOffer && isOnline && !showNewOrderBanner) {
+      // Convert WebSocket notification to AvailableOrder format for display
+      const wsOrder: AvailableOrder = {
+        orderId: newOrderOffer.orderId,
+        externalOrderNo: newOrderOffer.orderNumber,
+        restaurantId: 0,
+        restaurantName: newOrderOffer.restaurant?.name || '',
+        restaurantAddress: '',
+        restaurantLat: 0,
+        restaurantLng: 0,
+        deliveryAddress: '',
+        deliveryLat: 0,
+        deliveryLng: 0,
+        customerName: '',
+        customerPhone: '',
+        status: 'READY',
+        deliveryFee: newOrderOffer.estimatedEarnings,
+        tipAmount: 0,
+        total: newOrderOffer.estimatedEarnings,
+        itemCount: 0,
+        createdAt: new Date().toISOString(),
+        pickupDistance: newOrderOffer.restaurant?.distance,
       };
+      showOrderNotification(wsOrder);
     }
   }, [newOrderOffer]);
 
@@ -99,14 +167,16 @@ export default function OrdersScreen() {
       useNativeDriver: true,
     }).start(() => {
       setShowNewOrderBanner(false);
+      setBannerOrder(null);
       clearNewOrderOffer();
     });
   };
 
   const handleNewOrderPress = () => {
-    if (newOrderOffer) {
+    if (bannerOrder) {
+      const orderId = bannerOrder.orderId;
       hideBanner();
-      router.push(`/available-order/${newOrderOffer.orderId}`);
+      router.push(`/available-order/${orderId}`);
     }
   };
 
@@ -184,7 +254,7 @@ export default function OrdersScreen() {
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="orders">
       <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* New Order Notification Banner */}
-      {showNewOrderBanner && newOrderOffer && (
+      {showNewOrderBanner && bannerOrder && (
         <Animated.View
           style={[
             styles.newOrderBanner,
@@ -207,7 +277,7 @@ export default function OrdersScreen() {
             <View style={styles.newOrderTextContainer}>
               <Text style={styles.newOrderTitle}>{t('orders.new_order_available')}</Text>
               <Text style={styles.newOrderSubtitle} numberOfLines={1}>
-                {newOrderOffer.restaurant?.name || t('orders.tap_to_view')}
+                {bannerOrder.restaurantName || t('orders.tap_to_view')}
               </Text>
             </View>
             <View style={styles.newOrderAction}>
