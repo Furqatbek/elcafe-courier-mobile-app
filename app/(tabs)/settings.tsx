@@ -181,22 +181,37 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.section, styles.logoutSection]}>
-        <MenuItem
-          icon={LogOut}
-          title={t('settings.log_out')}
-          subtitle={t('settings.logout_subtitle')}
-          danger
+        <Pressable
+          style={({ pressed }) => [
+            styles.logoutButton,
+            pressed && styles.logoutButtonPressed,
+          ]}
           onPress={handleLogout}
-          loading={isLoggingOut}
-        />
-        <MenuItem
-          icon={Smartphone}
-          title={t('settings.logout_all')}
-          subtitle={t('settings.logout_all_subtitle')}
-          danger
+          disabled={isLoggingOut}
+        >
+          <LogOut size={20} color={Colors.danger} />
+          <View style={styles.logoutButtonText}>
+            <Text style={styles.logoutButtonTitle}>{t('settings.log_out')}</Text>
+            <Text style={styles.logoutButtonSubtitle}>{t('settings.logout_subtitle')}</Text>
+          </View>
+          {isLoggingOut && <ActivityIndicator size="small" color={Colors.danger} />}
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.logoutButton,
+            pressed && styles.logoutButtonPressed,
+          ]}
           onPress={handleLogoutAllDevices}
-          loading={isLoggingOut}
-        />
+          disabled={isLoggingOut}
+        >
+          <Smartphone size={20} color={Colors.danger} />
+          <View style={styles.logoutButtonText}>
+            <Text style={styles.logoutButtonTitle}>{t('settings.logout_all')}</Text>
+            <Text style={styles.logoutButtonSubtitle}>{t('settings.logout_all_subtitle')}</Text>
+          </View>
+          {isLoggingOut && <ActivityIndicator size="small" color={Colors.danger} />}
+        </Pressable>
       </View>
       
       <Text style={styles.version}>{t('settings.version', { version: '1.0.0' })}</Text>
@@ -334,6 +349,31 @@ const styles = StyleSheet.create({
   },
   logoutSection: {
     marginTop: 8,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.background,
+    gap: 12,
+  },
+  logoutButtonPressed: {
+    backgroundColor: '#FEE2E2',
+    opacity: 0.9,
+  },
+  logoutButtonText: {
+    flex: 1,
+  },
+  logoutButtonTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.danger,
+  },
+  logoutButtonSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   version: {
     textAlign: 'center',
