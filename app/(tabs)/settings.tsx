@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Settings as SettingsIcon, Globe, Smartphone } from 'lucide-react-native';
+import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Globe, Smartphone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { useCourier } from '@/context/CourierContext';
@@ -173,9 +173,9 @@ export default function SettingsScreen() {
           subtitle={i18n.language === 'ru' ? 'Русский' : i18n.language === 'uz' ? "O'zbek" : 'English'}
           onPress={navigateToLanguage}
         />
-        <MenuItem 
-          icon={Bell} 
-          title={t('settings.notifications')} 
+        <MenuItem
+          icon={Bell}
+          title={t('settings.notifications')}
           rightElement={
             <Switch
               value={notificationsEnabled}
@@ -184,10 +184,6 @@ export default function SettingsScreen() {
               thumbColor={'#FFFFFF'}
             />
           }
-        />
-        <MenuItem 
-          icon={SettingsIcon} 
-          title={t('settings.app_settings')} 
         />
       </View>
 
