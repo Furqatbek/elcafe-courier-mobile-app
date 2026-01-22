@@ -389,27 +389,89 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
 
       if (data.success) {
-        // Backend returns user fields directly in data, not nested in data.user
-        const nameParts = (data.data.fullName || '').split(' ');
-        const user: User = {
-          id: data.data.userId,
-          email: data.data.email,
-          firstName: nameParts[0] || '',
-          lastName: nameParts.slice(1).join(' ') || '',
-          role: Array.isArray(data.data.roles) ? data.data.roles[0] || 'COURIER' : 'COURIER',
-          active: true,
-          emailVerified: true,
-          createdAt: new Date().toISOString(),
-        };
+        // Save tokens first
+        const accessToken = data.data.accessToken;
+        const refreshToken = data.data.refreshToken;
 
-        setAccessToken(data.data.accessToken);
-        setRefreshToken(data.data.refreshToken);
-        setUser(user);
+        setAccessToken(accessToken);
+        setRefreshToken(refreshToken);
+
+        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, accessToken);
+        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+
+        // Fetch courier profile using the new token
+        try {
+          const profileResponse = await fetch(`${BASE_URL}${API_ENDPOINTS.COURIER.ME}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          });
+
+          const profileData = await profileResponse.json();
+
+          if (profileData.success && profileData.data) {
+            // Use courier profile data to construct user
+            const profile = profileData.data;
+            const nameParts = (profile.userName || '').split(' ');
+
+            const user: User = {
+              id: profile.userId,
+              email: profile.email || data.data.email,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' ') || '',
+              role: 'COURIER',
+              phone: profile.phone,
+              vehicleType: profile.vehicleType,
+              vehiclePlate: profile.vehicleNumber,
+              active: profile.verified,
+              emailVerified: true,
+              createdAt: profile.verifiedAt || new Date().toISOString(),
+            };
+
+            setUser(user);
+            setCourierProfile(profile);
+
+            await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(user));
+            await AsyncStorage.setItem('courier_profile', JSON.stringify(profile));
+          } else {
+            // Fallback: use login response data if courier profile fails
+            const nameParts = (data.data.fullName || '').split(' ');
+            const user: User = {
+              id: data.data.userId,
+              email: data.data.email,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' ') || '',
+              role: Array.isArray(data.data.roles) ? data.data.roles[0] || 'COURIER' : 'COURIER',
+              active: true,
+              emailVerified: true,
+              createdAt: new Date().toISOString(),
+            };
+
+            setUser(user);
+            await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(user));
+          }
+        } catch (profileError) {
+          console.error('Failed to fetch courier profile:', profileError);
+          // Fallback: use login response data
+          const nameParts = (data.data.fullName || '').split(' ');
+          const user: User = {
+            id: data.data.userId,
+            email: data.data.email,
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' ') || '',
+            role: Array.isArray(data.data.roles) ? data.data.roles[0] || 'COURIER' : 'COURIER',
+            active: true,
+            emailVerified: true,
+            createdAt: new Date().toISOString(),
+          };
+
+          setUser(user);
+          await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(user));
+        }
+
         hasLoadedInitialData.current = false; // Reset so data loads
-
-        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(user));
       } else {
         throw new Error(data.message || 'Login failed');
       }
