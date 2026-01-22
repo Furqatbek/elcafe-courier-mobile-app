@@ -403,7 +403,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       const data = await response.json();
 
       if (data.success && data.data) {
-        setEarnings(data.data);
+        // Ensure breakdown is always an array to prevent undefined errors
+        setEarnings({
+          ...DEFAULT_EARNINGS,
+          ...data.data,
+          breakdown: data.data.breakdown || [],
+        });
         setEarningsPeriod(period);
 
         // Also update legacy stats for backward compatibility
