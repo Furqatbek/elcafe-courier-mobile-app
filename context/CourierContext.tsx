@@ -379,7 +379,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       });
 
       const text = await response.text();
-      let data: LoginResponse;
+      let data: any;
 
       try {
         data = JSON.parse(text);
@@ -389,14 +389,27 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
 
       if (data.success) {
+        // Backend returns user fields directly in data, not nested in data.user
+        const nameParts = (data.data.fullName || '').split(' ');
+        const user: User = {
+          id: data.data.userId,
+          email: data.data.email,
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          role: Array.isArray(data.data.roles) ? data.data.roles[0] || 'COURIER' : 'COURIER',
+          active: true,
+          emailVerified: true,
+          createdAt: new Date().toISOString(),
+        };
+
         setAccessToken(data.data.accessToken);
         setRefreshToken(data.data.refreshToken);
-        setUser(data.data.user);
+        setUser(user);
         hasLoadedInitialData.current = false; // Reset so data loads
 
         await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
         await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
+        await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(user));
       } else {
         throw new Error(data.message || 'Login failed');
       }
