@@ -2,11 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Navigation as NavigationIcon, RefreshCw, Clock, MapPin, Phone, Store, User } from 'lucide-react-native';
+import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
-import { useCourier, OrderStatus } from '@/context/CourierContext';
+import { useCourier } from '@/context/CourierContext';
 import OrderMap from '@/components/OrderMap';
 import { SlideButton } from '@/components/SlideButton';
 import { RouteInfo } from '@/lib/routing';
@@ -16,14 +16,14 @@ export default function MapNavigationScreen() {
   const { t } = useTranslation();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
   const router = useRouter();
-  const { orders, updateOrderStatus, completeOrder, refreshOrders } = useCourier();
+  const { orders, completeOrder, refreshOrders } = useCourier();
   const insets = useSafeAreaInsets();
 
   const numericOrderId = Number(orderId);
   const [order, setOrder] = useState(orders.find(o => o.orderId === numericOrderId));
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
-  const [recalculateTrigger, setRecalculateTrigger] = useState(0);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
 
   // Keep order in sync with context
   useEffect(() => {
@@ -44,77 +44,22 @@ export default function MapNavigationScreen() {
     setRouteInfo(info);
   }, []);
 
-  const handleRecalculate = useCallback(() => {
-    setRecalculateTrigger(prev => prev + 1);
+  const handleLocationUpdate = useCallback((location: Location.LocationObject) => {
+    setCurrentLocation(location);
   }, []);
-
-  // Get next status based on current status
-  const getNextStatus = (): OrderStatus | null => {
-    if (!order) return null;
-    switch (order.status) {
-      case 'ACCEPTED': return 'PICKED_UP';
-      case 'PICKED_UP': return 'DELIVERING';
-      case 'DELIVERING': return 'DELIVERED';
-      default: return null;
-    }
-  };
-
-  // Get slide button title based on current status
-  const getSlideTitle = (): string => {
-    if (!order) return '';
-    switch (order.status) {
-      case 'ACCEPTED': return t('navigation.slide_picked_up');
-      case 'PICKED_UP': return t('navigation.slide_start_delivery');
-      case 'DELIVERING': return t('navigation.slide_delivered');
-      default: return t('order_detail.order_completed');
-    }
-  };
-
-  // Get current destination info
-  const getDestinationInfo = () => {
-    if (!order) return { label: '', address: '', name: '', phone: '' };
-
-    const isGoingToRestaurant = order.status === 'ACCEPTED';
-
-    return {
-      label: isGoingToRestaurant ? t('navigation.heading_to_pickup') : t('navigation.heading_to_dropoff'),
-      address: isGoingToRestaurant
-        ? (order.restaurantAddress ?? '-')
-        : (order.deliveryAddress ?? '-'),
-      name: isGoingToRestaurant
-        ? (order.restaurantName ?? '-')
-        : (order.customerName ?? '-'),
-      phone: order.customerPhone ?? null,
-      icon: isGoingToRestaurant ? Store : User,
-      color: isGoingToRestaurant ? Colors.primary : Colors.accent,
-    };
-  };
 
   const handleSlideComplete = async () => {
     if (!order || isUpdatingStatus) return;
 
-    const nextStatus = getNextStatus();
-    if (!nextStatus) return;
-
     setIsUpdatingStatus(true);
     try {
-      if (nextStatus === 'DELIVERED') {
-        // Complete the order
-        const result = await completeOrder(order.orderId);
-        if (result) {
-          Alert.alert(
-            t('order_detail.delivery_complete'),
-            t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
-            [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
-          );
-        }
-      } else {
-        // Update to next status
-        await updateOrderStatus(order.orderId, nextStatus);
-        // Recalculate route for new destination
-        if (nextStatus === 'PICKED_UP') {
-          handleRecalculate();
-        }
+      const result = await completeOrder(order.orderId);
+      if (result) {
+        Alert.alert(
+          t('order_detail.delivery_complete'),
+          t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
+          [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
+        );
       }
     } catch (error) {
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
@@ -123,10 +68,9 @@ export default function MapNavigationScreen() {
     }
   };
 
-  const handleCall = () => {
-    const dest = getDestinationInfo();
-    if (dest.phone) {
-      Linking.openURL(`tel:${dest.phone}`);
+  const handleCallCustomer = () => {
+    if (order?.customerPhone) {
+      Linking.openURL(`tel:${order.customerPhone}`);
     } else {
       Alert.alert(t('order_detail.call'), t('order_detail.no_phone'));
     }
@@ -135,13 +79,11 @@ export default function MapNavigationScreen() {
   const handleOpenExternalNav = () => {
     if (!order) return;
 
-    const isGoingToRestaurant = order.status === 'ACCEPTED';
-    const lat = isGoingToRestaurant ? order.restaurantLat : order.deliveryLat;
-    const lng = isGoingToRestaurant ? order.restaurantLng : order.deliveryLng;
+    const lat = order.deliveryLat;
+    const lng = order.deliveryLng;
 
     if (!lat || !lng) return;
 
-    const scheme = Platform.select({ ios: 'maps:', android: 'geo:' });
     const url = Platform.select({
       ios: `maps:?daddr=${lat},${lng}`,
       android: `geo:${lat},${lng}?q=${lat},${lng}`,
@@ -149,7 +91,6 @@ export default function MapNavigationScreen() {
 
     if (url) {
       Linking.openURL(url).catch(() => {
-        // Fallback to Google Maps
         Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
       });
     }
@@ -177,7 +118,7 @@ export default function MapNavigationScreen() {
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.header, { top: insets.top + 10 }]}>
-           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft color={Colors.text} size={24} />
           </TouchableOpacity>
         </View>
@@ -208,24 +149,22 @@ export default function MapNavigationScreen() {
     );
   }
 
-  const destination = getDestinationInfo();
-  const DestIcon = destination.icon;
-
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Map takes full screen */}
+      {/* Full screen map with real-time location */}
       <View style={styles.mapContainer}>
         <OrderMap
           order={order}
           navigationMode={true}
+          showUserLocation={true}
           onRouteUpdate={handleRouteUpdate}
-          recalculateTrigger={recalculateTrigger}
+          onLocationUpdate={handleLocationUpdate}
         />
       </View>
 
-      {/* Floating Header */}
+      {/* Floating back button */}
       <View style={[styles.header, { top: insets.top + 10 }]}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -233,25 +172,11 @@ export default function MapNavigationScreen() {
         >
           <ArrowLeft color={Colors.text} size={24} />
         </TouchableOpacity>
-
-        <View style={[styles.statusBadge, { backgroundColor: destination.color + '20' }]}>
-          <DestIcon size={16} color={destination.color} />
-          <Text style={[styles.statusText, { color: destination.color }]}>
-            {destination.label}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={handleRecalculate}
-          style={styles.actionButton}
-        >
-          <RefreshCw color={Colors.text} size={24} />
-        </TouchableOpacity>
       </View>
 
       {/* Route Info Banner */}
       {routeInfo && (
-        <View style={[styles.routeBanner, { top: insets.top + 70 }]}>
+        <View style={[styles.routeBanner, { top: insets.top + 10 }]}>
           <View style={styles.routeBannerItem}>
             <Clock size={18} color={Colors.primary} />
             <Text style={styles.routeBannerValue}>{formatDuration(routeInfo.duration)}</Text>
@@ -264,52 +189,31 @@ export default function MapNavigationScreen() {
         </View>
       )}
 
-      {/* Bottom Info Card */}
+      {/* Bottom card with delivery info and slide button */}
       <View style={[styles.bottomCard, { paddingBottom: insets.bottom + 20 }]}>
-        {/* Destination Info */}
-        <View style={styles.destinationSection}>
-          <View style={[styles.destinationIcon, { backgroundColor: destination.color + '15' }]}>
-            <DestIcon size={24} color={destination.color} />
-          </View>
-          <View style={styles.destinationContent}>
-            <Text style={styles.destinationName}>{destination.name}</Text>
-            <Text style={styles.destinationAddress} numberOfLines={2}>{destination.address}</Text>
+        {/* Delivery Address */}
+        <View style={styles.deliveryInfo}>
+          <View style={styles.deliveryContent}>
+            <Text style={styles.deliveryLabel}>{t('navigation.delivering_to')}</Text>
+            <Text style={styles.customerName}>{order.customerName ?? '-'}</Text>
+            <Text style={styles.deliveryAddress} numberOfLines={2}>
+              {order.deliveryAddress ?? '-'}
+            </Text>
           </View>
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.smallActionButton} onPress={handleCall}>
-              <Phone size={20} color={Colors.primary} />
+            <TouchableOpacity style={styles.actionButton} onPress={handleCallCustomer}>
+              <Phone size={22} color={Colors.primary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.smallActionButton} onPress={handleOpenExternalNav}>
-              <NavigationIcon size={20} color={Colors.primary} />
+            <TouchableOpacity style={styles.actionButton} onPress={handleOpenExternalNav}>
+              <NavigationIcon size={22} color={Colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Order Progress Indicator */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressStep}>
-            <View style={[styles.progressDot, styles.progressDotCompleted]} />
-            <Text style={styles.progressLabel}>{t('navigation.accepted')}</Text>
-          </View>
-          <View style={[styles.progressLine, order.status !== 'ACCEPTED' && styles.progressLineCompleted]} />
-          <View style={styles.progressStep}>
-            <View style={[
-              styles.progressDot,
-              (order.status === 'PICKED_UP' || order.status === 'DELIVERING') && styles.progressDotCompleted
-            ]} />
-            <Text style={styles.progressLabel}>{t('navigation.picked_up')}</Text>
-          </View>
-          <View style={[styles.progressLine, order.status === 'DELIVERING' && styles.progressLineCompleted]} />
-          <View style={styles.progressStep}>
-            <View style={styles.progressDot} />
-            <Text style={styles.progressLabel}>{t('navigation.delivered')}</Text>
-          </View>
-        </View>
-
-        {/* Slide Button */}
+        {/* Slide to deliver button */}
         <View style={styles.slideContainer}>
           <SlideButton
-            title={getSlideTitle()}
+            title={t('navigation.slide_delivered')}
             onComplete={handleSlideComplete}
             disabled={isUpdatingStatus}
           />
@@ -356,79 +260,44 @@ const styles = StyleSheet.create({
   header: {
     position: 'absolute',
     left: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     zIndex: 10,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  actionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '700',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
   },
   routeBanner: {
     position: 'absolute',
-    left: 20,
     right: 20,
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
     zIndex: 9,
   },
   routeBannerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   routeBannerValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.text,
   },
@@ -436,7 +305,7 @@ const styles = StyleSheet.create({
     width: 1,
     height: 20,
     backgroundColor: Colors.border,
-    marginHorizontal: 24,
+    marginHorizontal: 12,
   },
   bottomCard: {
     position: 'absolute',
@@ -444,92 +313,56 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 12,
   },
-  destinationSection: {
+  deliveryInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
+    alignItems: 'flex-start',
+    marginBottom: 24,
   },
-  destinationIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  destinationContent: {
+  deliveryContent: {
     flex: 1,
   },
-  destinationName: {
-    fontSize: 18,
+  deliveryLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  customerName: {
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.text,
     marginBottom: 4,
   },
-  destinationAddress: {
-    fontSize: 14,
+  deliveryAddress: {
+    fontSize: 15,
     color: Colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginLeft: 16,
   },
-  smallActionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  actionButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: Colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    paddingVertical: 12,
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-  },
-  progressStep: {
-    alignItems: 'center',
-  },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.border,
-    marginBottom: 6,
-  },
-  progressDotCompleted: {
-    backgroundColor: Colors.success,
-  },
-  progressLine: {
-    width: 40,
-    height: 2,
-    backgroundColor: Colors.border,
-    marginHorizontal: 8,
-    marginBottom: 20,
-  },
-  progressLineCompleted: {
-    backgroundColor: Colors.success,
-  },
-  progressLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
   slideContainer: {
-    marginTop: 4,
+    marginTop: 8,
   },
 });

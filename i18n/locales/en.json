@@ -500,6 +500,7 @@
   "navigation": {
     "heading_to_pickup": "Heading to Pickup",
     "heading_to_dropoff": "Heading to Drop-off",
+    "delivering_to": "Delivering to",
     "slide_picked_up": "Slide when Picked Up",
     "slide_start_delivery": "Slide to Start Delivery",
     "slide_delivered": "Slide when Delivered",

@@ -513,6 +513,7 @@
   "navigation": {
     "heading_to_pickup": "Restoranga yo'l olmoqda",
     "heading_to_dropoff": "Mijozga yo'l olmoqda",
+    "delivering_to": "Yetkazish manzili",
     "slide_picked_up": "Olingandan keyin suring",
     "slide_start_delivery": "Yetkazishni boshlash uchun suring",
     "slide_delivered": "Yetkazilgandan keyin suring",
