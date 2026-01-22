@@ -46,9 +46,23 @@ const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { user, logout, logoutAllDevices } = useCourier();
+  const { user, courierProfile, logout, logoutAllDevices } = useCourier();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Get display name from courierProfile or user
+  const displayName = courierProfile?.userName ||
+    (user ? `${user.firstName} ${user.lastName}` : '-');
+
+  // Get initials for avatar
+  const nameParts = displayName.split(' ');
+  const initials = nameParts.length >= 2
+    ? `${nameParts[0]?.[0] || ''}${nameParts[1]?.[0] || ''}`
+    : displayName.substring(0, 2);
+
+  // Get phone and rating from courierProfile
+  const phone = courierProfile?.phone || user?.phone || '-';
+  const rating = courierProfile?.averageRating ?? courierProfile?.rating ?? 0;
 
   const navigateToLanguage = () => {
     router.push('/language');
@@ -121,16 +135,15 @@ export default function SettingsScreen() {
 
       <View style={styles.profileSection}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>{user?.firstName?.[0] || 'J'}{user?.lastName?.[0] || 'D'}</Text>
+          <Text style={styles.avatarText}>{initials.toUpperCase()}</Text>
         </View>
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{user ? `${user.firstName} ${user.lastName}` : 'John Doe'}</Text>
-          <Text style={styles.profilePhone}>+1 (555) 123-4567</Text>
+          <Text style={styles.profileName}>{displayName}</Text>
+          <Text style={styles.profilePhone}>{phone}</Text>
           <View style={styles.ratingContainer}>
-            <Text style={styles.ratingText}>⭐ 4.9 {t('settings.rating')}</Text>
+            <Text style={styles.ratingText}>⭐ {rating.toFixed(1)} {t('settings.rating')}</Text>
           </View>
         </View>
-
       </View>
 
       <Text style={styles.sectionHeader}>{t('settings.account')}</Text>
