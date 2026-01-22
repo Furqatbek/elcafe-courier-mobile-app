@@ -132,7 +132,7 @@ export default function NotificationsScreen() {
           </View>
         ) : notifications.length === 0 ? (
           <EmptyState
-            icon={<Bell size={48} color={Colors.textLight} />}
+            icon={Bell}
             title={t('notifications.empty_title')}
             message={t('notifications.empty_message')}
           />
