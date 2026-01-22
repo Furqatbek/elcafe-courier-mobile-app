@@ -1,6 +1,7 @@
 const Colors = {
   primary: '#059669', // Emerald 600
   primaryDark: '#047857', // Emerald 700
+  primaryLight: '#D1FAE5', // Emerald 100
   secondary: '#1E293B', // Slate 800
   accent: '#F59E0B', // Amber 500
   danger: '#EF4444', // Red 500

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { useCourier } from '@/context/CourierContext';
+import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
 import { OrderCard } from '@/components/OrderCard';
+import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 
 const TAB_ROUTES = [
@@ -19,15 +20,44 @@ export default function OrdersScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { activeOrders, completedOrders, isOnline, toggleOnline } = useCourier();
-  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+  const {
+    activeOrders,
+    completedOrders,
+    availableOrders,
+    isLoadingAvailableOrders,
+    fetchAvailableOrders,
+    acceptOrder,
+    isOnline,
+    toggleOnline,
+    currentLocation,
+    user,
+  } = useCourier();
+  const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const orders = activeTab === 'active' ? activeOrders : completedOrders;
+  // Refresh available orders when tab changes to available
+  useEffect(() => {
+    if (activeTab === 'available' && isOnline) {
+      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+    }
+  }, [activeTab, isOnline]);
 
-  const TabButton = ({ title, tab }: { title: string, tab: 'active' | 'history' }) => (
-    <TouchableOpacity 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+    setIsRefreshing(false);
+  };
+
+  const handleAcceptOrder = async (orderId: number) => {
+    await acceptOrder(orderId);
+    // Switch to active tab after accepting
+    setActiveTab('active');
+  };
+
+  const TabButton = ({ title, tab, count }: { title: string, tab: 'available' | 'active' | 'history', count?: number }) => (
+    <TouchableOpacity
       style={[
-        styles.tabButton, 
+        styles.tabButton,
         activeTab === tab && styles.tabButtonActive
       ]}
       onPress={() => setActiveTab(tab)}
@@ -37,8 +67,17 @@ export default function OrdersScreen() {
         activeTab === tab && styles.tabTextActive
       ]}>
         {title}
+        {count !== undefined && count > 0 && ` (${count})`}
       </Text>
     </TouchableOpacity>
+  );
+
+  const renderAvailableOrder = ({ item }: { item: AvailableOrder }) => (
+    <AvailableOrderCard order={item} onAccept={handleAcceptOrder} />
+  );
+
+  const renderActiveOrder = ({ item }: { item: Order }) => (
+    <OrderCard order={item} />
   );
 
   return (
@@ -46,7 +85,7 @@ export default function OrdersScreen() {
       <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>{t('orders.good_morning', { name: 'John' })}</Text>
+          <Text style={styles.greeting}>{t('orders.good_morning', { name: user?.firstName || '' })}</Text>
           <Text style={styles.statusText}>
             {t('orders.you_are_online')} <Text style={{ color: isOnline ? Colors.online : Colors.offline, fontWeight: '700' }}>
               {isOnline ? t('orders.online') : t('orders.offline')}
@@ -73,26 +112,77 @@ export default function OrdersScreen() {
 
       <View style={styles.tabsContainer}>
         <View style={styles.tabsWrapper}>
-          <TabButton title={t('orders.active_orders', { count: activeOrders.length })} tab="active" />
-          <TabButton title={t('orders.history')} tab="history" />
+          <TabButton title={t('orders.available', 'Available')} tab="available" count={availableOrders.length} />
+          <TabButton title={t('orders.active', 'Active')} tab="active" count={activeOrders.length} />
+          <TabButton title={t('orders.history', 'History')} tab="history" />
         </View>
       </View>
 
-      <FlatList
-        data={orders}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <OrderCard order={item} />}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              {activeTab === 'active' 
-                ? t('orders.no_active_orders')
-                : t('orders.no_history')}
-            </Text>
-          </View>
-        }
-      />
+      {activeTab === 'available' && (
+        <FlatList
+          data={availableOrders}
+          keyExtractor={(item) => item.orderId.toString()}
+          renderItem={renderAvailableOrder}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              {isLoadingAvailableOrders ? (
+                <ActivityIndicator size="large" color={Colors.primary} />
+              ) : !isOnline ? (
+                <>
+                  <Text style={styles.emptyStateText}>
+                    {t('orders.go_online_to_see_orders', 'Go online to see available orders')}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.emptyStateText}>
+                  {t('orders.no_available_orders', 'No orders available nearby. Pull down to refresh.')}
+                </Text>
+              )}
+            </View>
+          }
+        />
+      )}
+
+      {activeTab === 'active' && (
+        <FlatList
+          data={activeOrders}
+          keyExtractor={(item) => item.id}
+          renderItem={renderActiveOrder}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                {t('orders.no_active_orders', 'No active orders')}
+              </Text>
+            </View>
+          }
+        />
+      )}
+
+      {activeTab === 'history' && (
+        <FlatList
+          data={completedOrders}
+          keyExtractor={(item) => item.id}
+          renderItem={renderActiveOrder}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                {t('orders.no_history', 'No delivery history')}
+              </Text>
+            </View>
+          }
+        />
+      )}
       </View>
     </WithSwipeGesture>
   );

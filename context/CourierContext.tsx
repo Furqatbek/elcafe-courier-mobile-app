@@ -125,6 +125,30 @@ export interface DriverStats {
   rating: number;
 }
 
+// Available order from GET /couriers/me/available-orders
+export interface AvailableOrder {
+  orderId: number;
+  orderNumber: string;
+  restaurant: {
+    id: number;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    distance: number;
+  };
+  deliveryAddress: {
+    fullAddress: string;
+    latitude: number;
+    longitude: number;
+    distance: number;
+  };
+  estimatedDistance: number;
+  estimatedEarnings: number;
+  itemCount: number;
+  createdAt: string;
+}
+
 const DEFAULT_STATS: DriverStats = {
   todayEarnings: 0,
   weekEarnings: 0,
@@ -145,6 +169,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{latitude: number; longitude: number} | null>(null);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
+  const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
+  const [isLoadingAvailableOrders, setIsLoadingAvailableOrders] = useState(false);
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
@@ -266,6 +292,34 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
+  // Fetch available orders nearby
+  const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
+    setIsLoadingAvailableOrders(true);
+    try {
+      // Build query params
+      const params = new URLSearchParams();
+      if (lat !== undefined) params.append('lat', lat.toString());
+      if (lng !== undefined) params.append('lng', lng.toString());
+      if (radiusKm !== undefined) params.append('radiusKm', radiusKm.toString());
+
+      const queryString = params.toString();
+      const endpoint = queryString
+        ? `${API_ENDPOINTS.COURIER.AVAILABLE_ORDERS}?${queryString}`
+        : API_ENDPOINTS.COURIER.AVAILABLE_ORDERS;
+
+      const response = await authenticatedFetch(endpoint);
+      const data = await response.json();
+
+      if (data.success && Array.isArray(data.data)) {
+        setAvailableOrders(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch available orders:', error);
+    } finally {
+      setIsLoadingAvailableOrders(false);
+    }
+  }, [authenticatedFetch]);
+
   // Refresh all data
   const refreshData = useCallback(async () => {
     if (!user) return;
@@ -273,8 +327,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     await Promise.all([
       fetchOrders(),
       fetchStats(),
+      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude),
     ]);
-  }, [user, fetchOrders, fetchStats]);
+  }, [user, fetchOrders, fetchStats, fetchAvailableOrders, currentLocation]);
 
   // Stop location tracking
   const stopLocationTracking = useCallback(async () => {
@@ -355,9 +410,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         clearInterval(refreshIntervalRef.current);
       }
 
+      // Fetch available orders immediately when going online
+      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+
       // Set up new interval
       refreshIntervalRef.current = setInterval(() => {
         fetchOrders();
+        fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
       }, ORDER_CONFIG.REFRESH_INTERVAL);
 
       return () => {
@@ -366,7 +425,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
       };
     }
-  }, [isOnline, user, fetchOrders]);
+  }, [isOnline, user, fetchOrders, fetchAvailableOrders, currentLocation]);
 
   const login = async (email: string, password: string): Promise<void> => {
     try {
@@ -647,6 +706,30 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'completed'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'completed'), [orders]);
 
+  // Accept an available order
+  const acceptOrder = useCallback(async (orderId: number | string) => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.ACCEPT(orderId), {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Remove from available orders
+        setAvailableOrders(prev => prev.filter(o => o.orderId !== orderId));
+        // Refresh active orders to include the newly accepted order
+        await fetchOrders();
+        return data.data;
+      } else {
+        throw new Error(data.message || 'Failed to accept order');
+      }
+    } catch (error) {
+      console.error('Failed to accept order:', error);
+      throw error;
+    }
+  }, [authenticatedFetch, fetchOrders]);
+
   const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     // Optimistically update local state
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
@@ -722,6 +805,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     activeOrders,
     completedOrders,
     updateOrderStatus,
+
+    // Available orders (nearby orders to accept)
+    availableOrders,
+    isLoadingAvailableOrders,
+    fetchAvailableOrders,
+    acceptOrder,
 
     // Stats
     stats,
