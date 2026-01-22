@@ -62,9 +62,21 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const formatCurrency = (amount: number) => {
-    return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
+  const formatCurrency = (amount: number | undefined) => {
+    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
+
+  // Support both flat (new backend) and nested (old interface) field names
+  const restaurantName = order.restaurantName ?? order.restaurant?.name ?? '-';
+  const restaurantAddress = order.restaurantAddress ?? order.restaurant?.address ?? '-';
+  const restaurantPhone = order.customerPhone ?? order.restaurant?.phone ?? null; // backend uses customerPhone for contact
+  const customerName = order.customerName ?? order.customer?.name ?? '-';
+  const customerPhone = order.customerPhone ?? order.customer?.phone ?? null;
+  const deliveryAddr = order.deliveryAddress ?? order.deliveryAddress?.fullAddress ?? '-';
+  const deliveryInstructions = order.deliveryInstructions ?? order.deliveryAddress?.instructions ?? null;
+  const orderNumber = order.externalOrderNo ?? order.orderNumber ?? '-';
+  const itemCount = order.itemCount ?? order.items?.length ?? 0;
+  const totalAmount = order.total ?? order.totalAmount ?? ((order.deliveryFee ?? 0) + (order.tipAmount ?? 0));
 
   const handleSlideComplete = async () => {
     let nextStatus: OrderStatus | null = null;
@@ -137,18 +149,16 @@ export default function OrderDetailScreen() {
   };
 
   const handleCallCustomer = () => {
-    const phoneNumber = order.customer.phone;
-    if (phoneNumber) {
-      Linking.openURL(`tel:${phoneNumber}`);
+    if (customerPhone) {
+      Linking.openURL(`tel:${customerPhone}`);
     } else {
       Alert.alert(t('order_detail.call'), t('order_detail.no_phone', 'Phone number not available'));
     }
   };
 
   const handleCallRestaurant = () => {
-    const phoneNumber = order.restaurant.phone;
-    if (phoneNumber) {
-      Linking.openURL(`tel:${phoneNumber}`);
+    if (restaurantPhone) {
+      Linking.openURL(`tel:${restaurantPhone}`);
     }
   };
 
@@ -174,7 +184,7 @@ export default function OrderDetailScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft color={Colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{order.orderNumber}</Text>
+        <Text style={styles.headerTitle}>{orderNumber}</Text>
         <StatusBadge status={order.status} />
       </View>
 
@@ -186,7 +196,7 @@ export default function OrderDetailScreen() {
           <View style={styles.paymentBadge}>
             <CreditCard size={14} color={order.isPaid ? Colors.success : Colors.accent} />
             <Text style={[styles.paymentText, { color: order.isPaid ? Colors.success : Colors.accent }]}>
-              {order.isPaid ? t('order_detail.paid') : order.paymentMethod}
+              {order.isPaid ? t('order_detail.paid') : (order.paymentMethod ?? 'CASH')}
             </Text>
           </View>
         </View>
@@ -198,10 +208,10 @@ export default function OrderDetailScreen() {
               <View style={[styles.timelineDot, { backgroundColor: Colors.primary }]} />
               <View style={styles.timelineContent}>
                 <Text style={styles.locationLabel}>{t('order_detail.pickup_label')}</Text>
-                <Text style={styles.locationName}>{order.restaurant.name}</Text>
-                <Text style={styles.locationAddress}>{order.restaurant.address}</Text>
-                {order.restaurant.phone && (
-                  <Text style={styles.phoneText}>{order.restaurant.phone}</Text>
+                <Text style={styles.locationName}>{restaurantName}</Text>
+                <Text style={styles.locationAddress}>{restaurantAddress}</Text>
+                {restaurantPhone && (
+                  <Text style={styles.phoneText}>{restaurantPhone}</Text>
                 )}
               </View>
             </TouchableOpacity>
@@ -212,10 +222,10 @@ export default function OrderDetailScreen() {
               <View style={[styles.timelineDot, { backgroundColor: Colors.accent }]} />
               <View style={styles.timelineContent}>
                 <Text style={styles.locationLabel}>{t('order_detail.dropoff_label')}</Text>
-                <Text style={styles.locationName}>{order.customer.name}</Text>
-                <Text style={styles.locationAddress}>{order.deliveryAddress.fullAddress}</Text>
-                {order.deliveryAddress.instructions && (
-                  <Text style={styles.instructionsText}>{order.deliveryAddress.instructions}</Text>
+                <Text style={styles.locationName}>{customerName}</Text>
+                <Text style={styles.locationAddress}>{deliveryAddr}</Text>
+                {deliveryInstructions && (
+                  <Text style={styles.instructionsText}>{deliveryInstructions}</Text>
                 )}
               </View>
             </View>
@@ -227,15 +237,17 @@ export default function OrderDetailScreen() {
             <View style={styles.itemsSection}>
               <View style={styles.itemsHeader}>
                 <Package size={16} color={Colors.textLight} />
-                <Text style={styles.infoLabel}>{t('order_detail.order_items')} ({order.items.length})</Text>
+                <Text style={styles.infoLabel}>{t('order_detail.order_items')} ({itemCount})</Text>
               </View>
-              {order.items.map((item, index) => (
+              {order.items?.map((item, index) => (
                 <Text key={index} style={styles.infoValue}>• {item.quantity}x {item.name}</Text>
-              ))}
+              )) ?? (
+                <Text style={styles.infoValue}>{itemCount} {t('orders.items', 'items')}</Text>
+              )}
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={styles.infoLabel}>{t('order_detail.est_earnings')}</Text>
-              <Text style={styles.earningsValue}>{formatCurrency(order.totalAmount)}</Text>
+              <Text style={styles.earningsValue}>{formatCurrency(totalAmount)}</Text>
             </View>
           </View>
         </View>

@@ -117,31 +117,33 @@ export interface OrderItem {
 
 export interface Order {
   orderId: number;
-  orderNumber: string;
+  externalOrderNo: string;
   status: OrderStatus;
-  restaurant: {
-    id: number;
-    name: string;
-    address: string;
-    phone: string;
-    latitude: number;
-    longitude: number;
-  };
-  customer: {
-    name: string;
-    phone: string;
-  };
-  deliveryAddress: {
-    fullAddress: string;
-    latitude: number;
-    longitude: number;
-    instructions?: string;
-  };
-  items: OrderItem[];
-  paymentMethod: 'CASH' | 'CARD';
-  isPaid: boolean;
-  totalAmount: number;
-  createdAt?: string;
+  restaurantId: number;
+  restaurantName: string;
+  restaurantAddress: string;
+  restaurantLat: number;
+  restaurantLng: number;
+  deliveryAddress: string;
+  deliveryLat: number;
+  deliveryLng: number;
+  customerName: string;
+  customerPhone: string;
+  deliveryInstructions?: string;
+  deliveryFee: number;
+  tipAmount: number;
+  total: number;
+  itemCount: number;
+  createdAt: string;
+  readyAt?: string;
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  // Legacy fields for backward compatibility
+  orderNumber?: string;
+  items?: OrderItem[];
+  paymentMethod?: 'CASH' | 'CARD';
+  isPaid?: boolean;
+  totalAmount?: number;
 }
 
 export interface DriverStats {
