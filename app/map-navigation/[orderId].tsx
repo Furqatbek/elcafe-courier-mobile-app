@@ -19,14 +19,15 @@ export default function MapNavigationScreen() {
   const { orders } = useCourier();
   const insets = useSafeAreaInsets();
   
-  const [order, setOrder] = useState(orders.find(o => o.id === orderId));
+  const numericOrderId = Number(orderId);
+  const [order, setOrder] = useState(orders.find(o => o.orderId === numericOrderId));
   const [isNavigating, setIsNavigating] = useState(false);
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [recalculateTrigger, setRecalculateTrigger] = useState(0);
 
   useEffect(() => {
-    setOrder(orders.find(o => o.id === orderId));
-  }, [orders, orderId]);
+    setOrder(orders.find(o => o.orderId === numericOrderId));
+  }, [orders, numericOrderId]);
 
   if (!order) {
     return (
@@ -61,7 +62,7 @@ export default function MapNavigationScreen() {
 
   const handleStartNavigation = async () => {
     try {
-      await trpcClient.courier.startNavigation.mutate({ orderId: order.id });
+      await trpcClient.courier.startNavigation.mutate({ orderId: order.orderId });
       setIsNavigating(true);
       // Recalculate route to ensure we have the latest
       setRecalculateTrigger(prev => prev + 1);
@@ -72,7 +73,7 @@ export default function MapNavigationScreen() {
 
   const handleArrived = async () => {
     try {
-      await trpcClient.courier.arrived.mutate({ orderId: order.id });
+      await trpcClient.courier.arrived.mutate({ orderId: order.orderId });
       setIsNavigating(false);
       Alert.alert(t('common.success'), t('order_detail.delivery_completed'), [
         { text: t('common.ok'), onPress: () => router.push('/(tabs)/orders') }
@@ -178,10 +179,10 @@ export default function MapNavigationScreen() {
         
         <View style={styles.addressContainer}>
             <Text style={styles.addressLabel}>
-              {order.status === 'pickup' ? t('order_detail.pickup_label') : t('order_detail.dropoff_label')}
+              {order.status === 'PICKED_UP' ? t('order_detail.dropoff_label') : t('order_detail.pickup_label')}
             </Text>
             <Text style={styles.addressText} numberOfLines={2}>
-              {order.status === 'pickup' ? order.restaurantAddress : order.customerAddress}
+              {order.status === 'PICKED_UP' ? order.deliveryAddress : order.restaurantAddress}
             </Text>
         </View>
 

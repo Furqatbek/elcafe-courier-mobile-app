@@ -17,16 +17,24 @@ interface OrderMapProps {
 export default function OrderMap({ order, navigationMode = false }: OrderMapProps) {
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>([]);
 
-  // Derive pickup and dropoff locations from the new Order structure
+  // Support both flat (new backend) and nested (old interface) field names
+  const restaurantLat = order.restaurantLat ?? order.restaurant?.latitude ?? 0;
+  const restaurantLng = order.restaurantLng ?? order.restaurant?.longitude ?? 0;
+  const deliveryLat = order.deliveryLat ?? order.deliveryAddress?.latitude ?? 0;
+  const deliveryLng = order.deliveryLng ?? order.deliveryAddress?.longitude ?? 0;
+  const restaurantName = order.restaurantName ?? order.restaurant?.name ?? 'Restaurant';
+  const customerName = order.customerName ?? order.customer?.name ?? 'Customer';
+
+  // Derive pickup and dropoff locations
   const pickupLocation = useMemo(() => ({
-    latitude: order.restaurant.latitude,
-    longitude: order.restaurant.longitude,
-  }), [order.restaurant.latitude, order.restaurant.longitude]);
+    latitude: restaurantLat,
+    longitude: restaurantLng,
+  }), [restaurantLat, restaurantLng]);
 
   const dropoffLocation = useMemo(() => ({
-    latitude: order.deliveryAddress.latitude,
-    longitude: order.deliveryAddress.longitude,
-  }), [order.deliveryAddress.latitude, order.deliveryAddress.longitude]);
+    latitude: deliveryLat,
+    longitude: deliveryLng,
+  }), [deliveryLat, deliveryLng]);
 
   useEffect(() => {
     let mounted = true;
@@ -97,11 +105,11 @@ export default function OrderMap({ order, navigationMode = false }: OrderMapProp
             iconAnchor: [6, 6]
           });
 
-          L.marker(pickup).addTo(map)
-            .bindPopup("<b>Pickup</b><br>${order.restaurant.name.replace(/'/g, "\\'")}");
+          L.marker(pickup, { icon: pickupIcon }).addTo(map)
+            .bindPopup("<b>Pickup</b><br>${restaurantName.replace(/'/g, "\\'")}");
 
-          L.marker(dropoff).addTo(map)
-            .bindPopup("<b>Dropoff</b><br>${order.customer.name.replace(/'/g, "\\'")}");
+          L.marker(dropoff, { icon: dropoffIcon }).addTo(map)
+            .bindPopup("<b>Dropoff</b><br>${customerName.replace(/'/g, "\\'")}");
 
           // Route Polyline
           const polyline = L.polyline(route, { 

@@ -726,7 +726,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       // Update the order in the orders list
       setOrders((prev) =>
         prev.map((order) =>
-          order.id === statusUpdate.orderId
+          order.orderId === statusUpdate.orderId
             ? { ...order, status: statusUpdate.status as OrderStatus }
             : order
         )
@@ -879,7 +879,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       // Subscribe to status updates for all active orders
       orders.forEach((order) => {
         if (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') {
-          subscribeToOrderStatusUpdates(order.id);
+          subscribeToOrderStatusUpdates(order.orderId);
         }
       });
     }
