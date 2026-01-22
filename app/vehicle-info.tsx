@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Car, FileText, Tag, Box, CreditCard, Edit2 } from 'lucide-react-native';
@@ -9,7 +9,23 @@ import { useCourier } from '@/context/CourierContext';
 export default function VehicleInfoScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useCourier();
+  const { courierProfile, fetchCourierProfile } = useCourier();
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  // Refresh profile data when screen loads
+  useEffect(() => {
+    const loadProfile = async () => {
+      setIsLoading(true);
+      try {
+        await fetchCourierProfile();
+      } catch (error) {
+        console.error('Failed to fetch courier profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadProfile();
+  }, [fetchCourierProfile]);
 
   const InfoItem = ({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) => (
     <View style={styles.item}>
@@ -18,10 +34,21 @@ export default function VehicleInfoScreen() {
       </View>
       <View style={styles.infoContent}>
         <Text style={styles.label}>{label}</Text>
-        <Text style={styles.value}>{value}</Text>
+        <Text style={styles.value}>{value || '-'}</Text>
       </View>
     </View>
   );
+
+  if (isLoading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t('vehicle_info.title') }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </>
+    );
+  }
 
   return (
     <>
@@ -40,38 +67,24 @@ export default function VehicleInfoScreen() {
       />
       <ScrollView style={styles.container}>
         <View style={styles.section}>
-          <InfoItem 
-            icon={Car} 
-            label={t('vehicle_info.vehicle_type')} 
-            value={user?.vehicleType || t('vehicle_info.sedan')} 
+          <InfoItem
+            icon={Car}
+            label={t('vehicle_info.vehicle_type')}
+            value={courierProfile?.vehicleType || '-'}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={Tag} 
-            label={t('vehicle_info.vehicle_brand')} 
-            value={user?.vehicleBrand || t('vehicle_info.toyota')} 
+
+          <InfoItem
+            icon={CreditCard}
+            label={t('vehicle_info.vehicle_plate')}
+            value={courierProfile?.vehicleNumber || '-'}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={Box} 
-            label={t('vehicle_info.vehicle_model')} 
-            value={user?.vehicleModel || t('vehicle_info.camry')} 
-          />
-          <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={CreditCard} 
-            label={t('vehicle_info.vehicle_plate')} 
-            value={user?.vehiclePlate || 'ABC-123'} 
-          />
-          <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={FileText} 
-            label={t('vehicle_info.license_number')} 
-            value={user?.licenseNumber || 'DL-123456789'} 
+
+          <InfoItem
+            icon={FileText}
+            label={t('vehicle_info.license_number')}
+            value={courierProfile?.licenseNumber || '-'}
           />
         </View>
       </ScrollView>
@@ -84,6 +97,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
     padding: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
   },
   editButton: {
     padding: 8,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { User, Mail, Phone, Hash, Briefcase, UserCircle, Edit2 } from 'lucide-react-native';
@@ -9,7 +9,28 @@ import { useCourier } from '@/context/CourierContext';
 export default function PersonalInfoScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useCourier();
+  const { user, courierProfile, fetchCourierProfile } = useCourier();
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  // Refresh profile data when screen loads
+  useEffect(() => {
+    const loadProfile = async () => {
+      setIsLoading(true);
+      try {
+        await fetchCourierProfile();
+      } catch (error) {
+        console.error('Failed to fetch courier profile:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadProfile();
+  }, [fetchCourierProfile]);
+
+  // Parse userName into first/last name if available
+  const nameParts = (courierProfile?.userName || '').split(' ');
+  const firstName = courierProfile?.firstName || nameParts[0] || user?.firstName || '-';
+  const lastName = courierProfile?.lastName || nameParts.slice(1).join(' ') || user?.lastName || '-';
 
   const InfoItem = ({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) => (
     <View style={styles.item}>
@@ -18,10 +39,21 @@ export default function PersonalInfoScreen() {
       </View>
       <View style={styles.infoContent}>
         <Text style={styles.label}>{label}</Text>
-        <Text style={styles.value}>{value}</Text>
+        <Text style={styles.value}>{value || '-'}</Text>
       </View>
     </View>
   );
+
+  if (isLoading) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t('personal_info.title') }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </>
+    );
+  }
 
   return (
     <>
@@ -41,45 +73,45 @@ export default function PersonalInfoScreen() {
       <ScrollView style={styles.container}>
         <Text style={styles.sectionTitle}>{t('personal_info.personal_details')}</Text>
         <View style={styles.section}>
-          <InfoItem 
-            icon={Hash} 
-            label={t('personal_info.id')} 
-            value={user?.id || '-'} 
+          <InfoItem
+            icon={Hash}
+            label={t('personal_info.id')}
+            value={courierProfile?.id || user?.id || '-'}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={User} 
-            label={t('personal_info.first_name')} 
-            value={user?.firstName || 'John'} 
+
+          <InfoItem
+            icon={User}
+            label={t('personal_info.first_name')}
+            value={firstName}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={UserCircle} 
-            label={t('personal_info.last_name')} 
-            value={user?.lastName || 'Doe'} 
+
+          <InfoItem
+            icon={UserCircle}
+            label={t('personal_info.last_name')}
+            value={lastName}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={Phone} 
-            label={t('personal_info.phone')} 
-            value={user?.phone || "+1 (555) 123-4567"} 
+
+          <InfoItem
+            icon={Phone}
+            label={t('personal_info.phone')}
+            value={courierProfile?.phone || user?.phone || '-'}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={Mail} 
-            label={t('personal_info.email')} 
-            value={user?.email || 'john.doe@example.com'} 
+
+          <InfoItem
+            icon={Mail}
+            label={t('personal_info.email')}
+            value={courierProfile?.email || user?.email || '-'}
           />
           <View style={styles.separator} />
-          
-          <InfoItem 
-            icon={Briefcase} 
-            label={t('personal_info.courier_type')} 
-            value={user?.role === 'courier' ? t('personal_info.standard_courier') : (user?.role || t('personal_info.standard_courier'))} 
+
+          <InfoItem
+            icon={Briefcase}
+            label={t('personal_info.courier_type')}
+            value={t('personal_info.standard_courier')}
           />
         </View>
       </ScrollView>
@@ -93,6 +125,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     padding: 20,
     paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
   },
   editButton: {
     padding: 8,
