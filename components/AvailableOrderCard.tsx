@@ -24,7 +24,8 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
     return `${(km ?? 0).toFixed(1)} km`;
   };
 
-  const formatTime = (dateString: string) => {
+  const formatTime = (dateString: string | undefined) => {
+    if (!dateString) return '';
     const date = new Date(dateString);
     const now = new Date();
     const diffMinutes = Math.floor((now.getTime() - date.getTime()) / 60000);
@@ -48,18 +49,21 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
     }
   };
 
+  // Calculate estimated earnings from delivery fee + tip
+  const estimatedEarnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.orderInfo}>
-          <Text style={styles.orderNumber}>{order.orderNumber}</Text>
+          <Text style={styles.orderNumber}>{order.externalOrderNo}</Text>
           <View style={styles.timeBadge}>
             <Clock size={12} color={Colors.textLight} />
             <Text style={styles.timeText}>{formatTime(order.createdAt)}</Text>
           </View>
         </View>
         <View style={styles.earningsBadge}>
-          <Text style={styles.earningsText}>{formatCurrency(order.estimatedEarnings)}</Text>
+          <Text style={styles.earningsText}>{formatCurrency(estimatedEarnings)}</Text>
         </View>
       </View>
 
@@ -68,9 +72,11 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
           <View style={[styles.locationDot, { backgroundColor: Colors.primary }]} />
           <View style={styles.locationContent}>
             <Text style={styles.locationLabel}>{t('orders.pickup', 'Pickup')}</Text>
-            <Text style={styles.locationName} numberOfLines={1}>{order.restaurant.name}</Text>
-            <Text style={styles.locationAddress} numberOfLines={1}>{order.restaurant.address}</Text>
-            <Text style={styles.distanceText}>{formatDistance(order.restaurant.distance)} {t('orders.away', 'away')}</Text>
+            <Text style={styles.locationName} numberOfLines={1}>{order.restaurantName}</Text>
+            <Text style={styles.locationAddress} numberOfLines={1}>{order.restaurantAddress}</Text>
+            {order.pickupDistance !== undefined && (
+              <Text style={styles.distanceText}>{formatDistance(order.pickupDistance)} {t('orders.away', 'away')}</Text>
+            )}
           </View>
         </View>
 
@@ -80,7 +86,7 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
           <View style={[styles.locationDot, { backgroundColor: Colors.danger }]} />
           <View style={styles.locationContent}>
             <Text style={styles.locationLabel}>{t('orders.delivery', 'Delivery')}</Text>
-            <Text style={styles.locationAddress} numberOfLines={2}>{order.deliveryAddress.fullAddress}</Text>
+            <Text style={styles.locationAddress} numberOfLines={2}>{order.deliveryAddress}</Text>
           </View>
         </View>
       </View>
@@ -89,13 +95,15 @@ export function AvailableOrderCard({ order, onAccept }: AvailableOrderCardProps)
 
       <View style={styles.footer}>
         <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Navigation size={14} color={Colors.textLight} />
-            <Text style={styles.statText}>{formatDistance(order.estimatedDistance)}</Text>
-          </View>
+          {order.estimatedDistance !== undefined && (
+            <View style={styles.stat}>
+              <Navigation size={14} color={Colors.textLight} />
+              <Text style={styles.statText}>{formatDistance(order.estimatedDistance)}</Text>
+            </View>
+          )}
           <View style={styles.stat}>
             <Package size={14} color={Colors.textLight} />
-            <Text style={styles.statText}>{order.itemCount} {t('orders.items', 'items')}</Text>
+            <Text style={styles.statText}>{order.itemCount ?? 0} {t('orders.items', 'items')}</Text>
           </View>
         </View>
 

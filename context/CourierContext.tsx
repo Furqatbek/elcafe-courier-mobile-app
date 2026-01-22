@@ -155,25 +155,28 @@ export interface DriverStats {
 // Available order from GET /couriers/me/available-orders
 export interface AvailableOrder {
   orderId: number;
-  orderNumber: string;
-  restaurant: {
-    id: number;
-    name: string;
-    address: string;
-    latitude: number;
-    longitude: number;
-    distance: number;
-  };
-  deliveryAddress: {
-    fullAddress: string;
-    latitude: number;
-    longitude: number;
-    distance: number;
-  };
-  estimatedDistance: number;
-  estimatedEarnings: number;
+  externalOrderNo: string;
+  restaurantId: number;
+  restaurantName: string;
+  restaurantAddress: string;
+  restaurantLat: number;
+  restaurantLng: number;
+  deliveryAddress: string;
+  deliveryLat: number;
+  deliveryLng: number;
+  customerName: string;
+  customerPhone: string;
+  deliveryInstructions?: string;
+  status: string;
+  deliveryFee: number;
+  tipAmount: number;
+  total: number;
   itemCount: number;
   createdAt: string;
+  readyAt?: string;
+  // Calculated fields (optional, computed on frontend)
+  estimatedDistance?: number;
+  pickupDistance?: number;
 }
 
 // Earnings period type
@@ -664,27 +667,28 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           return prev;
         }
         // Create an AvailableOrder from the notification
+        // Note: WebSocket notifications have limited data, full data is fetched from API
         const newOrder: AvailableOrder = {
           orderId: notification.orderId,
-          orderNumber: notification.orderNumber,
-          restaurant: {
-            id: 0, // Will be fetched when viewing details
-            name: notification.restaurant.name,
-            address: '', // Will be fetched when viewing details
-            latitude: 0,
-            longitude: 0,
-            distance: notification.restaurant.distance,
-          },
-          deliveryAddress: {
-            fullAddress: '', // Will be fetched when viewing details
-            latitude: 0,
-            longitude: 0,
-            distance: notification.deliveryDistance,
-          },
-          estimatedEarnings: notification.estimatedEarnings,
-          estimatedDistance: notification.deliveryDistance,
-          itemCount: 0, // Will be fetched when viewing details
+          externalOrderNo: notification.orderNumber,
+          restaurantId: 0,
+          restaurantName: notification.restaurant.name,
+          restaurantAddress: '',
+          restaurantLat: 0,
+          restaurantLng: 0,
+          deliveryAddress: '',
+          deliveryLat: 0,
+          deliveryLng: 0,
+          customerName: '',
+          customerPhone: '',
+          status: 'READY',
+          deliveryFee: notification.estimatedEarnings,
+          tipAmount: 0,
+          total: notification.estimatedEarnings,
+          itemCount: 0,
           createdAt: new Date().toISOString(),
+          pickupDistance: notification.restaurant.distance,
+          estimatedDistance: notification.deliveryDistance,
         };
         return [newOrder, ...prev];
       });
