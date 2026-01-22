@@ -190,10 +190,7 @@ export default function AvailableOrdersScreen() {
               {t('available_orders.total_distance')}: {formatDistance(totalDistance)}
             </Text>
           </View>
-          <View style={styles.viewDetailsButton}>
-            <Text style={styles.viewDetailsText}>{t('available_orders.view_details')}</Text>
-            <ChevronRight size={18} color={Colors.primary} />
-          </View>
+          <ChevronRight size={24} color={Colors.textLight} />
         </View>
       </TouchableOpacity>
     );
@@ -423,33 +420,5 @@ const styles = StyleSheet.create({
   totalDistanceText: {
     fontSize: 13,
     color: Colors.textSecondary,
-  },
-  acceptButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 4,
-  },
-  acceptButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.surface,
-  },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.primary + '15',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    gap: 4,
-  },
-  viewDetailsText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
   },
 });
