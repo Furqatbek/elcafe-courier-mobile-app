@@ -1,9 +1,10 @@
-import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, CreditCard, TrendingUp, Calendar } from 'lucide-react-native';
+import { DollarSign, Clock, TrendingUp, Package, Gift } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useCourier } from '@/context/CourierContext';
+import { DEFAULTS } from '@/constants/config';
+import { useCourier, EarningsPeriod } from '@/context/CourierContext';
 import { Button } from '@/components/Button';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 
@@ -15,9 +16,50 @@ const TAB_ROUTES = [
 
 export default function FinanceScreen() {
   const { t } = useTranslation();
-  const { stats } = useCourier();
+  const { earnings, earningsPeriod, isLoadingEarnings, fetchEarnings } = useCourier();
+  const [selectedPeriod, setSelectedPeriod] = useState<EarningsPeriod>(earningsPeriod);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const StatCard = ({ title, value, icon: Icon, subtext }: any) => (
+  useEffect(() => {
+    fetchEarnings(selectedPeriod);
+  }, [selectedPeriod]);
+
+  const handlePeriodChange = (period: EarningsPeriod) => {
+    setSelectedPeriod(period);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchEarnings(selectedPeriod);
+    setIsRefreshing(false);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const PeriodButton = ({ period, label }: { period: EarningsPeriod; label: string }) => (
+    <TouchableOpacity
+      style={[styles.periodButton, selectedPeriod === period && styles.periodButtonActive]}
+      onPress={() => handlePeriodChange(period)}
+    >
+      <Text style={[styles.periodButtonText, selectedPeriod === period && styles.periodButtonTextActive]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const StatCard = ({ title, value, icon: Icon, isAmount = true }: {
+    title: string;
+    value: number;
+    icon: any;
+    isAmount?: boolean;
+  }) => (
     <View style={styles.statCard}>
       <View style={styles.statHeader}>
         <View style={styles.iconContainer}>
@@ -25,76 +67,127 @@ export default function FinanceScreen() {
         </View>
         <Text style={styles.statTitle}>{title}</Text>
       </View>
-      <Text style={styles.statValue}>${value.toFixed(2)}</Text>
-      {subtext && <Text style={styles.statSubtext}>{subtext}</Text>}
+      <Text style={styles.statValue}>
+        {isAmount ? formatCurrency(value) : value.toString()}
+      </Text>
     </View>
   );
 
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="finance">
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t('finance.title')}</Text>
-        <Text style={styles.subtitle}>{t('finance.subtitle')}</Text>
-      </View>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>{t('finance.title')}</Text>
+          <Text style={styles.subtitle}>{t('finance.subtitle')}</Text>
+        </View>
 
-      <View style={styles.balanceCard}>
-        <Text style={styles.balanceLabel}>{t('finance.total_balance')}</Text>
-        <Text style={styles.balanceValue}>${stats.monthEarnings.toFixed(2)}</Text>
-        <Button 
-          title={t('finance.withdraw_funds')} 
-          variant="secondary"
-          style={styles.withdrawButton}
-          onPress={() => {}}
-        />
-      </View>
+        {/* Period Selector */}
+        <View style={styles.periodSelector}>
+          <PeriodButton period="TODAY" label={t('common.today')} />
+          <PeriodButton period="THIS_WEEK" label={t('common.this_week')} />
+          <PeriodButton period="THIS_MONTH" label={t('common.month')} />
+        </View>
 
-      <Text style={styles.sectionTitle}>{t('finance.overview')}</Text>
-      
-      <View style={styles.statsGrid}>
-        <StatCard 
-          title={t('common.today')} 
-          value={stats.todayEarnings} 
-          icon={DollarSign}
-          subtext={t('finance.vs_yesterday')}
-        />
-        <StatCard 
-          title={t('common.this_week')} 
-          value={stats.weekEarnings} 
-          icon={Calendar}
-        />
-      </View>
-      
-      <View style={styles.statsGrid}>
-        <StatCard 
-          title={t('finance.total_deliveries')} 
-          value={stats.completedOrders} 
-          icon={TrendingUp}
-          // Using value as number here but treating as string in component for simplicity, in real app type check
-        />
-        <StatCard 
-          title={t('finance.bonuses')} 
-          value={45.00} 
-          icon={CreditCard}
-        />
-      </View>
+        {/* Balance Card */}
+        <View style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>{t('finance.total_earnings')}</Text>
+          {isLoadingEarnings ? (
+            <ActivityIndicator size="large" color={Colors.surface} style={{ marginVertical: 20 }} />
+          ) : (
+            <Text style={styles.balanceValue}>{formatCurrency(earnings.totalEarnings)}</Text>
+          )}
+          <Button
+            title={t('finance.withdraw_funds')}
+            variant="secondary"
+            style={styles.withdrawButton}
+            onPress={() => {}}
+          />
+        </View>
 
-      <Text style={styles.sectionTitle}>{t('finance.recent_transactions')}</Text>
-      
-      <View style={styles.transactionsList}>
-        {[1, 2, 3].map((_, i) => (
-          <TouchableOpacity key={i} style={styles.transactionItem}>
-            <View style={styles.transactionIcon}>
-              <DollarSign size={20} color={Colors.success} />
+        {/* Stats Overview */}
+        <Text style={styles.sectionTitle}>{t('finance.overview')}</Text>
+
+        <View style={styles.statsGrid}>
+          <StatCard
+            title={t('finance.delivery_fees')}
+            value={earnings.deliveryFees}
+            icon={DollarSign}
+          />
+          <StatCard
+            title={t('finance.tips')}
+            value={earnings.tips}
+            icon={Gift}
+          />
+        </View>
+
+        <View style={styles.statsGrid}>
+          <StatCard
+            title={t('finance.total_deliveries')}
+            value={earnings.totalDeliveries}
+            icon={Package}
+            isAmount={false}
+          />
+          <StatCard
+            title={t('finance.avg_per_delivery')}
+            value={earnings.avgPerDelivery}
+            icon={TrendingUp}
+          />
+        </View>
+
+        <View style={styles.statsGrid}>
+          <StatCard
+            title={t('finance.online_hours')}
+            value={earnings.onlineHours}
+            icon={Clock}
+            isAmount={false}
+          />
+        </View>
+
+        {/* Earnings Breakdown */}
+        {earnings.breakdown.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>{t('finance.breakdown')}</Text>
+            <View style={styles.breakdownList}>
+              {earnings.breakdown.map((item, index) => (
+                <View
+                  key={item.date}
+                  style={[
+                    styles.breakdownItem,
+                    index === earnings.breakdown.length - 1 && styles.breakdownItemLast
+                  ]}
+                >
+                  <View style={styles.breakdownLeft}>
+                    <Text style={styles.breakdownDate}>{formatDate(item.date)}</Text>
+                    <Text style={styles.breakdownDeliveries}>
+                      {item.deliveries} {t('finance.deliveries')}
+                    </Text>
+                  </View>
+                  <Text style={styles.breakdownAmount}>
+                    {formatCurrency(item.earnings)}
+                  </Text>
+                </View>
+              ))}
             </View>
-            <View style={styles.transactionInfo}>
-              <Text style={styles.transactionTitle}>{t('finance.weekly_payout')}</Text>
-              <Text style={styles.transactionDate}>Nov {23 - i}, 2025</Text>
-            </View>
-            <Text style={styles.transactionAmount}>+$320.00</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          </>
+        )}
+
+        {/* Empty State for Breakdown */}
+        {!isLoadingEarnings && earnings.breakdown.length === 0 && (
+          <View style={styles.emptyBreakdown}>
+            <Text style={styles.emptyText}>{t('finance.no_earnings_period')}</Text>
+          </View>
+        )}
       </ScrollView>
     </WithSwipeGesture>
   );
@@ -110,7 +203,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
     marginTop: 20,
   },
   title: {
@@ -122,11 +215,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textSecondary,
   },
+  periodSelector: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  periodButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  periodButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  periodButtonTextActive: {
+    color: Colors.surface,
+  },
   balanceCard: {
     backgroundColor: Colors.primary,
     borderRadius: 24,
     padding: 24,
-    marginBottom: 32,
+    marginBottom: 24,
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
@@ -141,7 +258,7 @@ const styles = StyleSheet.create({
   },
   balanceValue: {
     color: Colors.surface,
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: '800',
     marginBottom: 24,
   },
@@ -186,57 +303,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statTitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.textSecondary,
     fontWeight: '600',
+    flex: 1,
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: Colors.secondary,
   },
-  statSubtext: {
-    fontSize: 12,
-    color: Colors.success,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  transactionsList: {
+  breakdownList: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 8,
   },
-  transactionItem: {
+  breakdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.background,
   },
-  transactionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#D1FAE5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+  breakdownItemLast: {
+    borderBottomWidth: 0,
   },
-  transactionInfo: {
+  breakdownLeft: {
     flex: 1,
   },
-  transactionTitle: {
+  breakdownDate: {
     fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
+    marginBottom: 2,
   },
-  transactionDate: {
+  breakdownDeliveries: {
     fontSize: 13,
     color: Colors.textSecondary,
   },
-  transactionAmount: {
+  breakdownAmount: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.success,
+  },
+  emptyBreakdown: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textLight,
+    textAlign: 'center',
   },
 });

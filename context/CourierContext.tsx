@@ -156,6 +156,39 @@ export interface AvailableOrder {
   createdAt: string;
 }
 
+// Earnings period type
+export type EarningsPeriod = 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH' | 'CUSTOM';
+
+// Earnings breakdown item
+export interface EarningsBreakdownItem {
+  date: string;
+  earnings: number;
+  deliveries: number;
+}
+
+// Earnings summary from GET /couriers/me/earnings
+export interface EarningsSummary {
+  period: EarningsPeriod;
+  totalEarnings: number;
+  deliveryFees: number;
+  tips: number;
+  totalDeliveries: number;
+  avgPerDelivery: number;
+  onlineHours: number;
+  breakdown: EarningsBreakdownItem[];
+}
+
+const DEFAULT_EARNINGS: EarningsSummary = {
+  period: 'THIS_WEEK',
+  totalEarnings: 0,
+  deliveryFees: 0,
+  tips: 0,
+  totalDeliveries: 0,
+  avgPerDelivery: 0,
+  onlineHours: 0,
+  breakdown: [],
+};
+
 const DEFAULT_STATS: DriverStats = {
   todayEarnings: 0,
   weekEarnings: 0,
@@ -178,6 +211,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [isLocationTracking, setIsLocationTracking] = useState(false);
   const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
   const [isLoadingAvailableOrders, setIsLoadingAvailableOrders] = useState(false);
+  const [earnings, setEarnings] = useState<EarningsSummary>(DEFAULT_EARNINGS);
+  const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
+  const [earningsPeriod, setEarningsPeriod] = useState<EarningsPeriod>('THIS_WEEK');
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
@@ -285,19 +321,50 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
-  // Fetch stats from API
-  const fetchStats = useCallback(async () => {
+  // Fetch earnings from API with period support
+  const fetchEarnings = useCallback(async (
+    period: EarningsPeriod = 'THIS_WEEK',
+    startDate?: string,
+    endDate?: string
+  ) => {
+    setIsLoadingEarnings(true);
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.EARNINGS);
+      // Build query params
+      const params = new URLSearchParams();
+      params.append('period', period);
+      if (period === 'CUSTOM' && startDate) params.append('startDate', startDate);
+      if (period === 'CUSTOM' && endDate) params.append('endDate', endDate);
+
+      const queryString = params.toString();
+      const endpoint = `${API_ENDPOINTS.COURIER.EARNINGS}?${queryString}`;
+
+      const response = await authenticatedFetch(endpoint);
       const data = await response.json();
 
       if (data.success && data.data) {
-        setStats(data.data);
+        setEarnings(data.data);
+        setEarningsPeriod(period);
+
+        // Also update legacy stats for backward compatibility
+        setStats(prev => ({
+          ...prev,
+          todayEarnings: period === 'TODAY' ? data.data.totalEarnings : prev.todayEarnings,
+          weekEarnings: period === 'THIS_WEEK' ? data.data.totalEarnings : prev.weekEarnings,
+          monthEarnings: period === 'THIS_MONTH' ? data.data.totalEarnings : prev.monthEarnings,
+          completedOrders: data.data.totalDeliveries,
+        }));
       }
     } catch (error) {
-      console.error('Failed to fetch stats:', error);
+      console.error('Failed to fetch earnings:', error);
+    } finally {
+      setIsLoadingEarnings(false);
     }
   }, [authenticatedFetch]);
+
+  // Legacy alias for backward compatibility
+  const fetchStats = useCallback(async () => {
+    await fetchEarnings('THIS_WEEK');
+  }, [fetchEarnings]);
 
   // Fetch available orders nearby
   const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
@@ -832,8 +899,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     fetchAvailableOrders,
     acceptOrder,
 
-    // Stats
+    // Stats (legacy)
     stats,
+
+    // Earnings
+    earnings,
+    earningsPeriod,
+    isLoadingEarnings,
+    fetchEarnings,
 
     // Data refresh
     refreshData,
