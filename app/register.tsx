@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Box, Lock, Mail, User, Phone } from 'lucide-react-native';
+import { Lock, Mail, User, Phone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
+import { BASE_URL, API_ENDPOINTS } from '@/constants/config';
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
@@ -35,17 +36,36 @@ export default function RegisterScreen() {
     
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      Alert.alert(
-        t('common.success'), 
-        t('register.registration_success'),
-        [
-          {
-            text: t('common.ok'),
-            onPress: () => router.replace('/login'),
-          }
-        ]
-      );
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REGISTER}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          phone,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        Alert.alert(
+          t('common.success'),
+          t('register.registration_success'),
+          [
+            {
+              text: t('common.ok'),
+              onPress: () => router.replace('/login'),
+            }
+          ]
+        );
+      } else {
+        throw new Error(data.message || t('register.registration_failed'));
+      }
     } catch (error: any) {
       Alert.alert(t('common.error_title'), error.message || t('register.registration_failed'));
     } finally {
@@ -66,10 +86,12 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.header}>
-              <View style={styles.logoContainer}>
-                <Box size={40} color={Colors.primary} />
-              </View>
-              <Text style={styles.appName}>Courier<Text style={styles.appNameHighlight}>Pro</Text></Text>
+              <Image
+                source={require('@/assets/images/logo.png')}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+              <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
               <Text style={styles.subtitle}>{t('register.create_account_subtitle')}</Text>
             </View>
 
@@ -191,19 +213,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logo: {
+    width: 100,
+    height: 100,
     marginBottom: 24,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
   },
   appName: {
     fontSize: 32,

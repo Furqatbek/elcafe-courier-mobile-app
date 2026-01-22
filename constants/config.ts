@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   // Authentication endpoints
   AUTH: {
     LOGIN: '/api/v1/auth/login',
+    REGISTER: '/api/v1/auth/register',
     REFRESH: '/api/v1/auth/refresh',
     ME: '/api/v1/auth/me',
     PHONE_REQUEST_OTP: '/api/v1/auth/phone/request-otp',
