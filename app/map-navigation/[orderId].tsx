@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone, Store, User } from 'lucide-react-native';
+import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone, Store, User, ExternalLink } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
@@ -23,6 +23,7 @@ export default function MapNavigationScreen() {
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [recalculateTrigger, setRecalculateTrigger] = useState(0);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [hasOpenedNavigation, setHasOpenedNavigation] = useState(false);
 
   // Keep order in sync with context
   useEffect(() => {
@@ -39,16 +40,35 @@ export default function MapNavigationScreen() {
     }
   }, []);
 
+  // Determine current destination based on order status
+  const isGoingToPickup = order?.status === 'ACCEPTED';
+
+  // Auto-open navigation when screen loads or status changes
+  useEffect(() => {
+    if (order && !hasOpenedNavigation) {
+      // Small delay to let the screen render first
+      const timer = setTimeout(() => {
+        openExternalNavigation();
+        setHasOpenedNavigation(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [order?.orderId]);
+
+  // Open navigation when status changes to PICKED_UP
+  useEffect(() => {
+    if (order?.status === 'PICKED_UP') {
+      setHasOpenedNavigation(false); // Reset to trigger navigation to customer
+    }
+  }, [order?.status]);
+
   const handleRouteUpdate = useCallback((info: RouteInfo) => {
     setRouteInfo(info);
   }, []);
 
-  // Determine current destination based on order status
-  const isGoingToPickup = order?.status === 'ACCEPTED';
-
   // Get destination info based on current status
   const getDestinationInfo = () => {
-    if (!order) return { label: '', address: '', name: '', phone: '' };
+    if (!order) return { label: '', address: '', name: '', phone: '', lat: 0, lng: 0 };
 
     if (isGoingToPickup) {
       return {
@@ -58,6 +78,8 @@ export default function MapNavigationScreen() {
         phone: null,
         icon: Store,
         color: Colors.primary,
+        lat: order.restaurantLat,
+        lng: order.restaurantLng,
       };
     } else {
       return {
@@ -67,8 +89,59 @@ export default function MapNavigationScreen() {
         phone: order.customerPhone ?? null,
         icon: User,
         color: Colors.accent,
+        lat: order.deliveryLat,
+        lng: order.deliveryLng,
       };
     }
+  };
+
+  // Open external navigation app (Google Maps, Apple Maps, Waze)
+  const openExternalNavigation = () => {
+    const dest = getDestinationInfo();
+    if (!dest.lat || !dest.lng) return;
+
+    const lat = dest.lat;
+    const lng = dest.lng;
+    const label = encodeURIComponent(dest.name);
+
+    // Try to open navigation apps in order of preference
+    const navigationUrls = Platform.select({
+      ios: [
+        `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`, // Google Maps
+        `waze://?ll=${lat},${lng}&navigate=yes`, // Waze
+        `maps://?daddr=${lat},${lng}`, // Apple Maps
+      ],
+      android: [
+        `google.navigation:q=${lat},${lng}`, // Google Maps Navigation
+        `waze://?ll=${lat},${lng}&navigate=yes`, // Waze
+        `geo:${lat},${lng}?q=${lat},${lng}(${label})`, // Generic geo intent
+      ],
+      default: [
+        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+      ],
+    }) || [];
+
+    // Try each URL until one works
+    const tryOpenUrl = async (urls: string[], index: number = 0) => {
+      if (index >= urls.length) {
+        // Fallback to web Google Maps
+        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
+        return;
+      }
+
+      try {
+        const supported = await Linking.canOpenURL(urls[index]);
+        if (supported) {
+          await Linking.openURL(urls[index]);
+        } else {
+          tryOpenUrl(urls, index + 1);
+        }
+      } catch {
+        tryOpenUrl(urls, index + 1);
+      }
+    };
+
+    tryOpenUrl(navigationUrls);
   };
 
   // Handle pickup confirmation
@@ -80,6 +153,7 @@ export default function MapNavigationScreen() {
       await updateOrderStatus(order.orderId, 'PICKED_UP');
       // Trigger route recalculation for new destination
       setRecalculateTrigger(prev => prev + 1);
+      setHasOpenedNavigation(false); // Will trigger auto-open to customer
     } catch (error) {
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
     } finally {
@@ -114,26 +188,6 @@ export default function MapNavigationScreen() {
       Linking.openURL(`tel:${dest.phone}`);
     } else {
       Alert.alert(t('order_detail.call'), t('order_detail.no_phone'));
-    }
-  };
-
-  const handleOpenExternalNav = () => {
-    if (!order) return;
-
-    const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;
-    const lng = isGoingToPickup ? order.restaurantLng : order.deliveryLng;
-
-    if (!lat || !lng) return;
-
-    const url = Platform.select({
-      ios: `maps:?daddr=${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${lat},${lng}`,
-    });
-
-    if (url) {
-      Linking.openURL(url).catch(() => {
-        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
-      });
     }
   };
 
@@ -197,7 +251,7 @@ export default function MapNavigationScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Full screen map with real-time navigation */}
+      {/* Map preview in background */}
       <View style={styles.mapContainer}>
         <OrderMap
           order={order}
@@ -259,16 +313,24 @@ export default function MapNavigationScreen() {
               {destination.address}
             </Text>
           </View>
-          <View style={styles.actionButtons}>
-            {destination.phone && (
-              <TouchableOpacity style={styles.actionButton} onPress={handleCall}>
-                <Phone size={22} color={destination.color} />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.actionButton} onPress={handleOpenExternalNav}>
-              <NavigationIcon size={22} color={destination.color} />
+        </View>
+
+        {/* Action buttons row */}
+        <View style={styles.actionRow}>
+          {destination.phone && (
+            <TouchableOpacity style={styles.actionButtonSmall} onPress={handleCall}>
+              <Phone size={20} color={Colors.text} />
+              <Text style={styles.actionButtonText}>{t('order_detail.call')}</Text>
             </TouchableOpacity>
-          </View>
+          )}
+          <TouchableOpacity
+            style={[styles.actionButtonLarge, { backgroundColor: destination.color }]}
+            onPress={openExternalNavigation}
+          >
+            <NavigationIcon size={22} color={Colors.surface} />
+            <Text style={styles.actionButtonLargeText}>{t('navigation.open_navigator')}</Text>
+            <ExternalLink size={16} color={Colors.surface} />
+          </TouchableOpacity>
         </View>
 
         {/* Progress indicator */}
@@ -443,7 +505,7 @@ const styles = StyleSheet.create({
   destinationInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   destinationIcon: {
     width: 52,
@@ -475,24 +537,46 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     lineHeight: 20,
   },
-  actionButtons: {
+  actionRow: {
     flexDirection: 'row',
     gap: 12,
-    marginLeft: 8,
+    marginBottom: 16,
   },
-  actionButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
+  actionButtonSmall: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.background,
+    borderRadius: 14,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  actionButtonLarge: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+  },
+  actionButtonLargeText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.surface,
   },
   progressContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
     paddingVertical: 12,
     backgroundColor: Colors.background,
     borderRadius: 12,
