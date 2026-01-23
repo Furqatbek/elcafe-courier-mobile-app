@@ -217,13 +217,13 @@ export default function MapNavigationScreen() {
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.header, { top: insets.top + 10 }]}>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)/orders')} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft color={Colors.text} size={24} />
           </TouchableOpacity>
         </View>
         <View style={styles.centered}>
           <Text style={styles.notFoundText}>{t('order_detail.not_found')}</Text>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)/orders')} style={styles.backLink}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
             <Text style={styles.backLinkText}>{t('common.back')}</Text>
           </TouchableOpacity>
         </View>
@@ -240,7 +240,7 @@ export default function MapNavigationScreen() {
           <Text style={styles.completedText}>
             {order.status === 'DELIVERED' ? t('navigation.delivery_completed') : t('navigation.order_cancelled')}
           </Text>
-          <TouchableOpacity onPress={() => router.replace('/(tabs)/orders')} style={styles.backLink}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
             <Text style={styles.backLinkText}>{t('navigation.back_to_orders')}</Text>
           </TouchableOpacity>
         </View>
@@ -269,7 +269,7 @@ export default function MapNavigationScreen() {
       {/* Floating back button */}
       <View style={[styles.headerLeft, { top: insets.top + 10 }]}>
         <TouchableOpacity
-          onPress={() => router.replace('/(tabs)/orders')}
+          onPress={() => router.back()}
           style={styles.backButton}
         >
           <ArrowLeft color={Colors.text} size={24} />
