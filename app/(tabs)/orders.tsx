@@ -154,26 +154,28 @@ export default function OrdersScreen() {
     if (newOrderOffer && isOnline && !showNewOrderBanner) {
       console.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
       // Convert WebSocket notification to AvailableOrder format for display
+      // WebSocket now sends flat structure matching AvailableOrder
       const wsOrder: AvailableOrder = {
         orderId: newOrderOffer.orderId,
-        externalOrderNo: newOrderOffer.orderNumber,
-        restaurantId: 0,
-        restaurantName: newOrderOffer.restaurant?.name || '',
-        restaurantAddress: '',
-        restaurantLat: 0,
-        restaurantLng: 0,
-        deliveryAddress: '',
-        deliveryLat: 0,
-        deliveryLng: 0,
+        externalOrderNo: newOrderOffer.externalOrderNo,
+        restaurantId: newOrderOffer.restaurantId,
+        restaurantName: newOrderOffer.restaurantName || 'Restaurant',
+        restaurantAddress: newOrderOffer.restaurantAddress || '',
+        restaurantLat: newOrderOffer.restaurantLat || 0,
+        restaurantLng: newOrderOffer.restaurantLng || 0,
+        deliveryAddress: newOrderOffer.deliveryAddress || '',
+        deliveryLat: newOrderOffer.deliveryLat || 0,
+        deliveryLng: newOrderOffer.deliveryLng || 0,
         customerName: '',
         customerPhone: '',
         status: 'READY',
-        deliveryFee: newOrderOffer.estimatedEarnings,
-        tipAmount: 0,
-        total: newOrderOffer.estimatedEarnings,
-        itemCount: 0,
-        createdAt: new Date().toISOString(),
-        pickupDistance: newOrderOffer.restaurant?.distance,
+        deliveryFee: newOrderOffer.deliveryFee || 0,
+        tipAmount: newOrderOffer.tipAmount || 0,
+        total: newOrderOffer.total || newOrderOffer.deliveryFee || 0,
+        itemCount: newOrderOffer.itemCount || 0,
+        createdAt: newOrderOffer.createdAt || new Date().toISOString(),
+        pickupDistance: newOrderOffer.restaurantDistance,
+        estimatedDistance: newOrderOffer.deliveryDistance,
       };
       triggerNotification(wsOrder);
     }

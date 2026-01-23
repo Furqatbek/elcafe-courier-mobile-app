@@ -3,17 +3,26 @@ import { Platform } from 'react-native';
 import { WEBSOCKET_CONFIG } from '@/constants/config';
 
 // WebSocket message types
+// Matches the flat structure sent by the backend
 export interface NewOrderNotification {
-  type: 'NEW_ORDER';
   orderId: number;
-  orderNumber: string;
-  restaurant: {
-    name: string;
-    distance: number;
-  };
-  deliveryDistance: number;
-  estimatedEarnings: number;
-  expiresAt: string;
+  externalOrderNo?: string;
+  restaurantId: number;
+  restaurantName?: string;
+  restaurantAddress?: string;
+  restaurantLat?: number;
+  restaurantLng?: number;
+  restaurantDistance?: number;
+  deliveryAddress?: string;
+  deliveryLat?: number;
+  deliveryLng?: number;
+  deliveryDistance?: number;
+  deliveryFee?: number;
+  tipAmount?: number;
+  total?: number;
+  itemCount: number;
+  createdAt?: string;
+  expiresAt?: string;
 }
 
 export interface OrderStatusUpdate {

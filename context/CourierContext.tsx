@@ -669,27 +669,27 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           return prev;
         }
         // Create an AvailableOrder from the notification
-        // Note: WebSocket notifications have limited data, full data is fetched from API
+        // WebSocket now sends flat structure matching AvailableOrder
         const newOrder: AvailableOrder = {
           orderId: notification.orderId,
-          externalOrderNo: notification.orderNumber,
-          restaurantId: 0,
-          restaurantName: notification.restaurant.name,
-          restaurantAddress: '',
-          restaurantLat: 0,
-          restaurantLng: 0,
-          deliveryAddress: '',
-          deliveryLat: 0,
-          deliveryLng: 0,
+          externalOrderNo: notification.externalOrderNo,
+          restaurantId: notification.restaurantId,
+          restaurantName: notification.restaurantName || 'Restaurant',
+          restaurantAddress: notification.restaurantAddress || '',
+          restaurantLat: notification.restaurantLat || 0,
+          restaurantLng: notification.restaurantLng || 0,
+          deliveryAddress: notification.deliveryAddress || '',
+          deliveryLat: notification.deliveryLat || 0,
+          deliveryLng: notification.deliveryLng || 0,
           customerName: '',
           customerPhone: '',
           status: 'READY',
-          deliveryFee: notification.estimatedEarnings,
-          tipAmount: 0,
-          total: notification.estimatedEarnings,
-          itemCount: 0,
-          createdAt: new Date().toISOString(),
-          pickupDistance: notification.restaurant.distance,
+          deliveryFee: notification.deliveryFee || 0,
+          tipAmount: notification.tipAmount || 0,
+          total: notification.total || notification.deliveryFee || 0,
+          itemCount: notification.itemCount || 0,
+          createdAt: notification.createdAt || new Date().toISOString(),
+          pickupDistance: notification.restaurantDistance,
           estimatedDistance: notification.deliveryDistance,
         };
         return [newOrder, ...prev];
