@@ -613,7 +613,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Stop location tracking
   const stopLocationTracking = useCallback(async () => {
     if (locationSubscriptionRef.current) {
-      locationSubscriptionRef.current.remove();
+      try {
+        if (typeof locationSubscriptionRef.current.remove === 'function') {
+          locationSubscriptionRef.current.remove();
+        }
+      } catch (e) {
+        // Ignore errors on web when cleaning up location subscription
+        console.log('[CourierContext] Location cleanup error (expected on web):', e);
+      }
       locationSubscriptionRef.current = null;
     }
     setIsLocationTracking(false);
@@ -1158,7 +1165,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     // Stop any existing subscription
     if (locationSubscriptionRef.current) {
-      locationSubscriptionRef.current.remove();
+      try {
+        if (typeof locationSubscriptionRef.current.remove === 'function') {
+          locationSubscriptionRef.current.remove();
+        }
+      } catch (e) {
+        // Ignore errors on web when cleaning up location subscription
+        console.log('[CourierContext] Location cleanup error (expected on web):', e);
+      }
+      locationSubscriptionRef.current = null;
     }
 
     // Determine update interval based on whether courier has active orders

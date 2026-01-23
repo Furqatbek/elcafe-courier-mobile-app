@@ -47,7 +47,7 @@ export default function OrderMap({
   }), [deliveryLat, deliveryLng]);
 
   // Determine destination based on order status in navigation mode
-  const isGoingToPickup = order.status === 'ACCEPTED';
+  const isGoingToPickup = order.status === 'ACCEPTED' || order.status === 'READY';
   const destination = isGoingToPickup ? pickupLocation : dropoffLocation;
 
   // Get user location
@@ -103,8 +103,17 @@ export default function OrderMap({
 
     return () => {
       mounted = false;
+      // On web, the remove() method may not exist or work properly
       if (locationSubscription.current) {
-        locationSubscription.current.remove();
+        try {
+          if (typeof locationSubscription.current.remove === 'function') {
+            locationSubscription.current.remove();
+          }
+        } catch (e) {
+          // Ignore errors on web when cleaning up location subscription
+          console.log('[OrderMap] Location cleanup error (expected on web):', e);
+        }
+        locationSubscription.current = null;
       }
     };
   }, [showUserLocation]);
