@@ -18,7 +18,14 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
   const { t } = useTranslation();
 
   const handlePress = () => {
-    router.push(`/order/${order.orderId}`);
+    // For active orders (in progress), navigate directly to map-navigation
+    const activeStatuses = ['ACCEPTED', 'PICKED_UP', 'DELIVERING'];
+    if (activeStatuses.includes(order.status)) {
+      router.push(`/map-navigation/${order.orderId}`);
+    } else {
+      // For completed/cancelled orders, go to order detail
+      router.push(`/order/${order.orderId}`);
+    }
   };
 
   const formatCurrency = (amount: number | undefined) => {
