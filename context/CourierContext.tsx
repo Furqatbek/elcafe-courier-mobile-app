@@ -1211,13 +1211,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       });
 
       const data = await response.json();
+      console.log('[CourierContext] acceptOrder response:', data);
 
       if (data.success && data.data) {
         // Remove from available orders
         setAvailableOrders(prev => prev.filter(o => o.orderId !== orderId));
 
         // Add accepted order to active orders
-        const acceptedOrder: Order = data.data;
+        // Ensure status is 'ACCEPTED' - this is critical for navigation to work correctly
+        const acceptedOrder: Order = {
+          ...data.data,
+          status: 'ACCEPTED' as OrderStatus, // Force ACCEPTED status regardless of API response
+        };
+        console.log('[CourierContext] Adding accepted order with status:', acceptedOrder.status);
         setOrders(prev => [acceptedOrder, ...prev]);
 
         // Update courier status to BUSY since they have an active order
