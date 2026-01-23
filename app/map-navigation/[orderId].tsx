@@ -319,7 +319,7 @@ export default function MapNavigationScreen() {
       </View>
 
       {/* Status badge */}
-      <View style={[styles.headerCenter, { top: insets.top + 10 }]}>
+      <View style={[styles.headerCenter, { top: insets.top + 10 }]} pointerEvents="box-none">
         <View style={[styles.statusBadge, { backgroundColor: destination.color + '20' }]}>
           <DestIcon size={16} color={destination.color} />
           <Text style={[styles.statusText, { color: destination.color }]}>
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
   headerLeft: {
     position: 'absolute',
     left: 20,
-    zIndex: 10,
+    zIndex: 20,
   },
   headerCenter: {
     position: 'absolute',
