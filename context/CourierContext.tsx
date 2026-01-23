@@ -660,7 +660,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     // Subscribe to new orders
     const unsubNewOrders = websocketService.subscribeToNewOrders((notification) => {
-      console.log('[CourierContext] New order received:', notification);
+      console.log('[CourierContext] *** NEW CODE v3 *** New order received:', notification);
+      console.log('[CourierContext] Using flat structure - restaurantName:', notification.restaurantName);
       setNewOrderOffer(notification);
       // Also add to available orders list
       setAvailableOrders((prev) => {
