@@ -1240,11 +1240,18 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   const updateOrderStatus = async (orderId: number | string, status: OrderStatus) => {
-    console.log('[CourierContext] updateOrderStatus called:', { orderId, status });
+    const numericOrderId = Number(orderId);
+    console.log('[CourierContext] updateOrderStatus called:', { orderId, numericOrderId, status });
 
     // Optimistically update local state
     setOrders(prev => {
-      const updated = prev.map(o => o.orderId === orderId ? { ...o, status } : o);
+      const updated = prev.map(o => {
+        const matches = Number(o.orderId) === numericOrderId;
+        if (matches) {
+          console.log('[CourierContext] Found matching order, updating status from', o.status, 'to', status);
+        }
+        return matches ? { ...o, status } : o;
+      });
       console.log('[CourierContext] Orders updated locally, new statuses:', updated.map(o => ({ id: o.orderId, status: o.status })));
       return updated;
     });
@@ -1305,11 +1312,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     orderId: number | string,
     data?: { deliveryPhoto?: string; deliveryNotes?: string }
   ): Promise<{ orderId: number; status: string; earnings: number; message: string } | null> => {
-    console.log('[CourierContext] completeOrder called with orderId:', orderId);
+    const numericOrderId = Number(orderId);
+    console.log('[CourierContext] completeOrder called with orderId:', orderId, 'numericOrderId:', numericOrderId);
     console.log('[CourierContext] Endpoint:', API_ENDPOINTS.ORDERS.COMPLETE(orderId));
 
     // Optimistically update local state
-    setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: 'DELIVERED' as OrderStatus } : o));
+    setOrders(prev => prev.map(o => Number(o.orderId) === numericOrderId ? { ...o, status: 'DELIVERED' as OrderStatus } : o));
 
     try {
       console.log('[CourierContext] Making API call to complete order...');

@@ -27,14 +27,20 @@ export default function MapNavigationScreen() {
 
   // Keep order in sync with context
   useEffect(() => {
-    const updatedOrder = orders.find(o => o.orderId === numericOrderId);
+    const updatedOrder = orders.find(o => Number(o.orderId) === numericOrderId);
     console.log('[MapNavigation] Syncing order from context:', {
       orderId: numericOrderId,
+      ordersCount: orders.length,
+      orderIds: orders.map(o => o.orderId),
       found: !!updatedOrder,
       status: updatedOrder?.status,
       previousStatus: order?.status
     });
-    if (updatedOrder) {
+    if (updatedOrder && updatedOrder.status !== order?.status) {
+      console.log('[MapNavigation] Status changed! Updating local order state');
+      setOrder(updatedOrder);
+    } else if (updatedOrder && !order) {
+      console.log('[MapNavigation] Initial order set');
       setOrder(updatedOrder);
     }
   }, [orders, numericOrderId]);
@@ -375,14 +381,14 @@ export default function MapNavigationScreen() {
         <View style={styles.slideContainer}>
           {isGoingToPickup ? (
             <SlideButton
-              key="pickup-button"
+              key={`pickup-${order.status}-${order.orderId}`}
               title={t('navigation.slide_picked_up')}
               onComplete={handlePickupComplete}
               isLoading={isUpdatingStatus}
             />
           ) : (
             <SlideButton
-              key="delivery-button"
+              key={`delivery-${order.status}-${order.orderId}`}
               title={t('navigation.slide_delivered')}
               onComplete={handleDeliveryComplete}
               isLoading={isUpdatingStatus}
