@@ -6,6 +6,7 @@ import {
   Animated,
   PanResponder,
   Platform,
+  Pressable,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react-native';
@@ -58,6 +59,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
     if (completedRef.current || loadingRef.current) return;
 
     const maxDrag = getMaxDrag();
+    console.log('[SlideButton] triggerCompletion dx:', dx, 'maxDrag:', maxDrag, 'threshold:', maxDrag * SWIPE_THRESHOLD);
 
     if (dx > maxDrag * SWIPE_THRESHOLD) {
       console.log('[SlideButton] Swipe threshold reached, triggering completion');
@@ -77,6 +79,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
         onCompleteRef.current();
       });
     } else {
+      console.log('[SlideButton] Below threshold, resetting');
       Animated.spring(translateX, {
         toValue: 0,
         useNativeDriver: Platform.OS !== 'web',
@@ -85,7 +88,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
     }
   };
 
-  // Web mouse event handlers
+  // Web mouse event handlers - attached to window
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
@@ -107,6 +110,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
 
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
+      console.log('[SlideButton] Mouse up, currentDx:', currentDxRef.current);
       isDraggingRef.current = false;
       triggerCompletion(currentDxRef.current);
       currentDxRef.current = 0;
@@ -119,19 +123,23 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []); // Empty deps - uses refs for all mutable values
+  }, []);
 
-  const handleWebMouseDown = (e: any) => {
+  // Web-specific: handle press start on the thumb
+  const handlePressIn = (e: any) => {
+    if (Platform.OS !== 'web') return;
     if (completedRef.current || loadingRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
+
+    console.log('[SlideButton] Press in detected');
     isDraggingRef.current = true;
-    startXRef.current = e.clientX;
+    // Get clientX from the native event
+    const clientX = e.nativeEvent?.pageX || e.nativeEvent?.clientX || 0;
+    startXRef.current = clientX;
     currentDxRef.current = 0;
     translateX.setValue(0);
   };
 
-  // Native PanResponder
+  // Native PanResponder (for iOS/Android)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -191,7 +199,6 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
   const thumbStyle = [
     styles.thumb,
     { transform: [{ translateX }] },
-    Platform.OS === 'web' && { cursor: completed || isLoading ? 'not-allowed' : 'grab' },
   ];
 
   return (
@@ -205,13 +212,30 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       <View style={styles.track}>
         <Text style={styles.title}>{isLoading ? t('common.loading') : title}</Text>
       </View>
-      <Animated.View
-        style={thumbStyle as any}
-        onMouseDown={Platform.OS === 'web' ? handleWebMouseDown : undefined}
-        {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
-      >
-        <ChevronRight color={Colors.primary} size={24} />
-      </Animated.View>
+      {Platform.OS === 'web' ? (
+        <Pressable
+          onPressIn={handlePressIn}
+          disabled={completed || isLoading}
+          style={{ position: 'absolute', left: BUTTON_PADDING }}
+        >
+          <Animated.View
+            style={[
+              styles.thumbInner,
+              { transform: [{ translateX }] },
+              { cursor: completed || isLoading ? 'not-allowed' : 'grab' },
+            ] as any}
+          >
+            <ChevronRight color={Colors.primary} size={24} />
+          </Animated.View>
+        </Pressable>
+      ) : (
+        <Animated.View
+          style={thumbStyle}
+          {...panResponder.panHandlers}
+        >
+          <ChevronRight color={Colors.primary} size={24} />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -249,6 +273,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'absolute',
     left: BUTTON_PADDING,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  thumbInner: {
+    zIndex: 2,
+    width: BUTTON_HEIGHT - BUTTON_PADDING * 2,
+    height: BUTTON_HEIGHT - BUTTON_PADDING * 2,
+    borderRadius: (BUTTON_HEIGHT - BUTTON_PADDING * 2) / 2,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
