@@ -79,34 +79,27 @@ export default function OrderDetailScreen() {
   const totalAmount = order.total ?? order.totalAmount ?? ((order.deliveryFee ?? 0) + (order.tipAmount ?? 0));
 
   const handleSlideComplete = async () => {
-    let nextStatus: OrderStatus | null = null;
-
-    if (order.status === 'ACCEPTED') nextStatus = 'PICKED_UP';
-    else if (order.status === 'PICKED_UP') nextStatus = 'DELIVERING';
-    else if (order.status === 'DELIVERING') nextStatus = 'DELIVERED';
-
-    if (nextStatus) {
-      try {
-        if (nextStatus === 'DELIVERED') {
-          // Use completeOrder for final delivery (supports photo/notes)
-          const result = await completeOrder(order.orderId);
-          if (result) {
-            Alert.alert(
-              t('order_detail.delivery_complete'),
-              t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
-              [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
-            );
-          }
-        } else {
-          await updateOrderStatus(order.orderId, nextStatus);
-
-          if (nextStatus === 'PICKED_UP') {
-            router.push(`/map-navigation/${order.orderId}`);
-          }
+    try {
+      if (order.status === 'ACCEPTED' || order.status === 'READY') {
+        // Pickup: transition ACCEPTED/READY → PICKED_UP → IN_TRANSIT
+        await updateOrderStatus(order.orderId, 'PICKED_UP');
+        await updateOrderStatus(order.orderId, 'IN_TRANSIT');
+        // Navigate to map for delivery
+        router.push(`/map-navigation/${order.orderId}`);
+      } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING') {
+        // Complete delivery
+        const result = await completeOrder(order.orderId);
+        if (result) {
+          Alert.alert(
+            t('order_detail.delivery_complete'),
+            t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
+            [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
+          );
         }
-      } catch (error) {
-        Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
       }
+    } catch (error) {
+      console.error('[OrderDetail] Error in handleSlideComplete:', error);
+      Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
     }
   };
 
@@ -141,10 +134,15 @@ export default function OrderDetailScreen() {
 
   const getButtonTitle = () => {
     switch (order.status) {
-      case 'ACCEPTED': return t('order_detail.slide_pickup');
-      case 'PICKED_UP': return t('order_detail.slide_delivery');
-      case 'DELIVERING': return t('order_detail.slide_delivery');
-      default: return t('order_detail.order_completed');
+      case 'ACCEPTED':
+      case 'READY':
+        return t('order_detail.slide_pickup');
+      case 'PICKED_UP':
+      case 'IN_TRANSIT':
+      case 'DELIVERING':
+        return t('order_detail.slide_delivery');
+      default:
+        return t('order_detail.order_completed');
     }
   };
 

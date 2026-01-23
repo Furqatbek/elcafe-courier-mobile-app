@@ -15,10 +15,13 @@ export function StatusBadge({ status }: StatusBadgeProps) {
     switch (status) {
       case 'PENDING':
         return { bg: '#FEF3C7', text: '#D97706' }; // Amber
+      case 'READY':
+        return { bg: '#FEF9C3', text: '#CA8A04' }; // Yellow
       case 'ACCEPTED':
         return { bg: '#DBEAFE', text: '#2563EB' }; // Blue
       case 'PICKED_UP':
         return { bg: '#E0F2FE', text: '#0284C7' }; // Sky
+      case 'IN_TRANSIT':
       case 'DELIVERING':
         return { bg: '#FEE2E2', text: '#DC2626' }; // Red (urgent)
       case 'DELIVERED':
@@ -35,8 +38,10 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   const getStatusText = () => {
     switch (status) {
       case 'PENDING': return t('common.status_pending', 'PENDING');
+      case 'READY': return t('common.status_ready', 'READY');
       case 'ACCEPTED': return t('common.status_accepted', 'ACCEPTED');
       case 'PICKED_UP': return t('common.status_picked_up', 'PICKED UP');
+      case 'IN_TRANSIT': return t('common.status_in_transit', 'IN TRANSIT');
       case 'DELIVERING': return t('common.status_delivering', 'DELIVERING');
       case 'DELIVERED': return t('common.status_delivered', 'DELIVERED');
       case 'CANCELLED': return t('common.status_cancelled', 'CANCELLED');

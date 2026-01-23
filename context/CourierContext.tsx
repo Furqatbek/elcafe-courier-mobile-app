@@ -5,7 +5,7 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import websocketService, { NewOrderNotification, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
 
-export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'PICKED_UP' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
+export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -1267,8 +1267,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
           method = 'PUT';
           break;
+        case 'IN_TRANSIT':
         case 'DELIVERING':
-          // Start transit to customer - PUT
+          // Start transit to customer - PUT (support both status names)
           endpoint = API_ENDPOINTS.ORDERS.TRANSIT(orderId);
           method = 'PUT';
           break;

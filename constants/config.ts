@@ -64,11 +64,15 @@ export const COURIER_STATUS = {
 export type CourierStatusType = typeof COURIER_STATUS[keyof typeof COURIER_STATUS];
 
 // Order Status Values
+// Backend API uses: READY → PICKED_UP → IN_TRANSIT → DELIVERED
+// App adds: PENDING, ACCEPTED for internal tracking
 export const ORDER_STATUS = {
   PENDING: 'PENDING',
+  READY: 'READY',
   ACCEPTED: 'ACCEPTED',
   PICKED_UP: 'PICKED_UP',
   IN_TRANSIT: 'IN_TRANSIT',
+  DELIVERING: 'DELIVERING', // Alias for IN_TRANSIT for backwards compatibility
   DELIVERED: 'DELIVERED',
   CANCELLED: 'CANCELLED',
 } as const;

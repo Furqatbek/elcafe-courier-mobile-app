@@ -53,7 +53,8 @@ export default function MapNavigationScreen() {
   }, []);
 
   // Determine current destination based on order status
-  const isGoingToPickup = order?.status === 'ACCEPTED';
+  // Going to pickup if status is ACCEPTED or READY
+  const isGoingToPickup = order?.status === 'ACCEPTED' || order?.status === 'READY';
 
   // Auto-open navigation when screen loads or status changes
   useEffect(() => {
@@ -68,10 +69,10 @@ export default function MapNavigationScreen() {
     }
   }, [order?.orderId, hasOpenedNavigation, order?.status]);
 
-  // Reset navigation flag when status changes to PICKED_UP (to trigger new navigation)
+  // Reset navigation flag when status changes to IN_TRANSIT (to trigger new navigation to customer)
   useEffect(() => {
-    if (order?.status === 'PICKED_UP') {
-      console.log('[MapNavigation] Status changed to PICKED_UP, resetting navigation flag');
+    if (order?.status === 'IN_TRANSIT' || order?.status === 'PICKED_UP') {
+      console.log('[MapNavigation] Status changed to', order?.status, ', resetting navigation flag');
       setHasOpenedNavigation(false); // Reset to trigger navigation to customer
     }
   }, [order?.status]);
@@ -177,12 +178,19 @@ export default function MapNavigationScreen() {
     console.log('[MapNavigation] Handling pickup complete for order:', order.orderId);
     setIsUpdatingStatus(true);
     try {
+      // Step 1: Mark as picked up
       await updateOrderStatus(order.orderId, 'PICKED_UP');
-      console.log('[MapNavigation] Status updated to PICKED_UP, triggering route recalculation');
+      console.log('[MapNavigation] Status updated to PICKED_UP');
+
+      // Step 2: Transition to IN_TRANSIT (start delivery)
+      await updateOrderStatus(order.orderId, 'IN_TRANSIT');
+      console.log('[MapNavigation] Status updated to IN_TRANSIT, triggering route recalculation');
+
       // Trigger route recalculation for new destination
       setRecalculateTrigger(prev => prev + 1);
       // Note: hasOpenedNavigation is reset by the useEffect watching order.status
     } catch (error) {
+      console.error('[MapNavigation] Error updating pickup status:', error);
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
     } finally {
       setIsUpdatingStatus(false);
