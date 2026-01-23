@@ -1240,8 +1240,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   const updateOrderStatus = async (orderId: number | string, status: OrderStatus) => {
+    console.log('[CourierContext] updateOrderStatus called:', { orderId, status });
+
     // Optimistically update local state
-    setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status } : o));
+    setOrders(prev => {
+      const updated = prev.map(o => o.orderId === orderId ? { ...o, status } : o);
+      console.log('[CourierContext] Orders updated locally, new statuses:', updated.map(o => ({ id: o.orderId, status: o.status })));
+      return updated;
+    });
 
     // Update on server
     try {
@@ -1266,8 +1272,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           break;
       }
 
+      console.log('[CourierContext] Calling API:', { endpoint, method });
+
       if (endpoint) {
-        await authenticatedFetch(endpoint, { method });
+        const response = await authenticatedFetch(endpoint, { method });
+        const result = await response.json();
+        console.log('[CourierContext] API response:', { status: response.status, result });
       }
 
       // Refresh stats and set status back to AVAILABLE after delivery completed
@@ -1281,8 +1291,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
         }
       }
+
+      console.log('[CourierContext] updateOrderStatus completed successfully');
     } catch (error) {
-      console.error('Failed to update order status on server:', error);
+      console.error('[CourierContext] Failed to update order status on server:', error);
       // Revert optimistic update on error
       await fetchOrders();
     }

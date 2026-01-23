@@ -28,6 +28,12 @@ export default function MapNavigationScreen() {
   // Keep order in sync with context
   useEffect(() => {
     const updatedOrder = orders.find(o => o.orderId === numericOrderId);
+    console.log('[MapNavigation] Syncing order from context:', {
+      orderId: numericOrderId,
+      found: !!updatedOrder,
+      status: updatedOrder?.status,
+      previousStatus: order?.status
+    });
     if (updatedOrder) {
       setOrder(updatedOrder);
     }
@@ -369,12 +375,14 @@ export default function MapNavigationScreen() {
         <View style={styles.slideContainer}>
           {isGoingToPickup ? (
             <SlideButton
+              key="pickup-button"
               title={t('navigation.slide_picked_up')}
               onComplete={handlePickupComplete}
               isLoading={isUpdatingStatus}
             />
           ) : (
             <SlideButton
+              key="delivery-button"
               title={t('navigation.slide_delivered')}
               onComplete={handleDeliveryComplete}
               isLoading={isUpdatingStatus}
