@@ -178,13 +178,9 @@ export default function MapNavigationScreen() {
     console.log('[MapNavigation] Handling pickup complete for order:', order.orderId);
     setIsUpdatingStatus(true);
     try {
-      // Step 1: Mark as picked up
+      // Mark as picked up - backend handles status transition
       await updateOrderStatus(order.orderId, 'PICKED_UP');
-      console.log('[MapNavigation] Status updated to PICKED_UP');
-
-      // Step 2: Transition to IN_TRANSIT (start delivery)
-      await updateOrderStatus(order.orderId, 'IN_TRANSIT');
-      console.log('[MapNavigation] Status updated to IN_TRANSIT, triggering route recalculation');
+      console.log('[MapNavigation] Status updated to PICKED_UP, triggering route recalculation');
 
       // Trigger route recalculation for new destination
       setRecalculateTrigger(prev => prev + 1);

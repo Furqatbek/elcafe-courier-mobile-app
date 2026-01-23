@@ -81,9 +81,8 @@ export default function OrderDetailScreen() {
   const handleSlideComplete = async () => {
     try {
       if (order.status === 'ACCEPTED' || order.status === 'READY') {
-        // Pickup: transition ACCEPTED/READY → PICKED_UP → IN_TRANSIT
+        // Pickup: transition to PICKED_UP - backend handles status
         await updateOrderStatus(order.orderId, 'PICKED_UP');
-        await updateOrderStatus(order.orderId, 'IN_TRANSIT');
         // Navigate to map for delivery
         router.push(`/map-navigation/${order.orderId}`);
       } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING') {
