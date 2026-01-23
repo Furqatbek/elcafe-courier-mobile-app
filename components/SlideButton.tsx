@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,8 +6,6 @@ import {
   Animated,
   PanResponder,
   Platform,
-  GestureResponderEvent,
-  PanResponderGestureState,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react-native';
@@ -28,16 +26,20 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
   const { t } = useTranslation();
   const [completed, setCompleted] = useState(false);
 
-  // Refs to hold mutable values for PanResponder closure
+  // Refs to hold mutable values
   const widthRef = useRef(0);
   const completedRef = useRef(false);
   const loadingRef = useRef(false);
-  const currentXRef = useRef(0);
-  const startXRef = useRef(0);
+  const onCompleteRef = useRef(onComplete);
+
+  // For web drag handling
   const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const currentDxRef = useRef(0);
 
   const translateX = useRef(new Animated.Value(0)).current;
 
+  // Keep refs in sync
   useEffect(() => {
     loadingRef.current = !!isLoading;
   }, [isLoading]);
@@ -46,19 +48,18 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
     completedRef.current = completed;
   }, [completed]);
 
-  // Calculate max drag distance
-  const getMaxDrag = useCallback(() => {
-    return widthRef.current - BUTTON_HEIGHT;
-  }, []);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
-  // Handle completion logic
-  const handleCompletion = useCallback((currentDx: number) => {
+  const getMaxDrag = () => widthRef.current - BUTTON_HEIGHT;
+
+  const triggerCompletion = (dx: number) => {
     if (completedRef.current || loadingRef.current) return;
 
     const maxDrag = getMaxDrag();
 
-    if (currentDx > maxDrag * SWIPE_THRESHOLD) {
-      // Success
+    if (dx > maxDrag * SWIPE_THRESHOLD) {
       console.log('[SlideButton] Swipe threshold reached, triggering completion');
       setCompleted(true);
       completedRef.current = true;
@@ -72,78 +73,65 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
         useNativeDriver: Platform.OS !== 'web',
         bounciness: 8,
       }).start(() => {
-        console.log('[SlideButton] Animation complete, calling onComplete callback');
-        onComplete();
+        console.log('[SlideButton] Animation complete, calling onComplete');
+        onCompleteRef.current();
       });
     } else {
-      // Reset
       Animated.spring(translateX, {
         toValue: 0,
         useNativeDriver: Platform.OS !== 'web',
         bounciness: 8,
       }).start();
     }
-    currentXRef.current = 0;
-  }, [getMaxDrag, onComplete, translateX]);
+  };
 
-  // Handle drag movement
-  const handleDragMove = useCallback((dx: number) => {
-    if (completedRef.current || loadingRef.current) return;
+  // Web mouse event handlers
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
 
-    const containerWidth = widthRef.current;
-    if (containerWidth === 0) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || completedRef.current || loadingRef.current) return;
 
-    const maxDrag = getMaxDrag();
+      const containerWidth = widthRef.current;
+      if (containerWidth === 0) return;
 
-    let newDx = dx;
-    // Clamp the value to ensure it stays within bounds
-    if (newDx < 0) newDx = 0;
-    if (newDx > maxDrag) newDx = maxDrag;
+      const maxDrag = containerWidth - BUTTON_HEIGHT;
+      let dx = e.clientX - startXRef.current;
 
-    currentXRef.current = newDx;
-    translateX.setValue(newDx);
-  }, [getMaxDrag, translateX]);
+      if (dx < 0) dx = 0;
+      if (dx > maxDrag) dx = maxDrag;
 
-  // Web-specific mouse event handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+      currentDxRef.current = dx;
+      translateX.setValue(dx);
+    };
+
+    const handleMouseUp = () => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      triggerCompletion(currentDxRef.current);
+      currentDxRef.current = 0;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []); // Empty deps - uses refs for all mutable values
+
+  const handleWebMouseDown = (e: any) => {
     if (completedRef.current || loadingRef.current) return;
     e.preventDefault();
+    e.stopPropagation();
     isDraggingRef.current = true;
     startXRef.current = e.clientX;
-    currentXRef.current = 0;
+    currentDxRef.current = 0;
     translateX.setValue(0);
-  }, [translateX]);
+  };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDraggingRef.current) return;
-    e.preventDefault();
-    const dx = e.clientX - startXRef.current;
-    handleDragMove(dx);
-  }, [handleDragMove]);
-
-  const handleMouseUp = useCallback((e: MouseEvent) => {
-    if (!isDraggingRef.current) return;
-    e.preventDefault();
-    isDraggingRef.current = false;
-    handleCompletion(currentXRef.current);
-  }, [handleCompletion]);
-
-  // Add/remove global mouse event listeners for web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const onMouseMove = (e: MouseEvent) => handleMouseMove(e);
-      const onMouseUp = (e: MouseEvent) => handleMouseUp(e);
-
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-
-      return () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-      };
-    }
-  }, [handleMouseMove, handleMouseUp]);
-
+  // Native PanResponder
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -151,33 +139,29 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         translateX.setValue(0);
-        currentXRef.current = 0;
       },
-      onPanResponderMove: (_: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+      onPanResponderMove: (_, gestureState) => {
         if (completedRef.current || loadingRef.current) return;
 
         const containerWidth = widthRef.current;
         if (containerWidth === 0) return;
 
         const maxDrag = containerWidth - BUTTON_HEIGHT;
-
         let newDx = gestureState.dx;
-        // Clamp the value to ensure it stays within bounds
+
         if (newDx < 0) newDx = 0;
         if (newDx > maxDrag) newDx = maxDrag;
 
-        currentXRef.current = newDx;
         translateX.setValue(newDx);
       },
-      onPanResponderRelease: (_: GestureResponderEvent, gestureState: PanResponderGestureState) => {
+      onPanResponderRelease: (_, gestureState) => {
         if (completedRef.current || loadingRef.current) return;
 
         const containerWidth = widthRef.current;
         const maxDrag = containerWidth - BUTTON_HEIGHT;
 
         if (gestureState.dx > maxDrag * SWIPE_THRESHOLD) {
-          // Success
-          console.log('[SlideButton] Swipe threshold reached, triggering completion');
+          console.log('[SlideButton] Swipe threshold reached');
           setCompleted(true);
           completedRef.current = true;
 
@@ -190,11 +174,10 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
             useNativeDriver: Platform.OS !== 'web',
             bounciness: 8,
           }).start(() => {
-            console.log('[SlideButton] Animation complete, calling onComplete callback');
-            onComplete();
+            console.log('[SlideButton] Calling onComplete');
+            onCompleteRef.current();
           });
         } else {
-          // Reset
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: Platform.OS !== 'web',
@@ -205,47 +188,30 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
     })
   ).current;
 
-  // Web-specific props for the thumb
-  const webThumbProps = Platform.OS === 'web' ? {
-    onMouseDown: handleMouseDown as any,
-    style: [
-      styles.thumb,
-      {
-        transform: [{ translateX }],
-        cursor: completed || isLoading ? 'not-allowed' : 'grab',
-      },
-    ] as any,
-  } : {};
+  const thumbStyle = [
+    styles.thumb,
+    { transform: [{ translateX }] },
+    Platform.OS === 'web' && { cursor: completed || isLoading ? 'not-allowed' : 'grab' },
+  ];
 
   return (
     <View
       style={styles.container}
       onLayout={(e) => {
         widthRef.current = e.nativeEvent.layout.width;
+        console.log('[SlideButton] Layout width:', e.nativeEvent.layout.width);
       }}
     >
       <View style={styles.track}>
         <Text style={styles.title}>{isLoading ? t('common.loading') : title}</Text>
       </View>
-      {Platform.OS === 'web' ? (
-        <Animated.View
-          {...webThumbProps}
-        >
-          <ChevronRight color={Colors.primary} size={24} />
-        </Animated.View>
-      ) : (
-        <Animated.View
-          style={[
-            styles.thumb,
-            {
-              transform: [{ translateX }],
-            },
-          ]}
-          {...panResponder.panHandlers}
-        >
-          <ChevronRight color={Colors.primary} size={24} />
-        </Animated.View>
-      )}
+      <Animated.View
+        style={thumbStyle as any}
+        onMouseDown={Platform.OS === 'web' ? handleWebMouseDown : undefined}
+        {...(Platform.OS !== 'web' ? panResponder.panHandlers : {})}
+      >
+        <ChevronRight color={Colors.primary} size={24} />
+      </Animated.View>
     </View>
   );
 }
