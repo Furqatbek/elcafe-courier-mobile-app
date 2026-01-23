@@ -660,41 +660,54 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     // Subscribe to new orders
     const unsubNewOrders = websocketService.subscribeToNewOrders((notification) => {
-      console.log('[CourierContext] *** NEW CODE v3 *** New order received:', notification);
-      console.log('[CourierContext] Using flat structure - restaurantName:', notification.restaurantName);
-      setNewOrderOffer(notification);
-      // Also add to available orders list
-      setAvailableOrders((prev) => {
-        // Check if order already exists
-        if (prev.some((o) => o.orderId === notification.orderId)) {
-          return prev;
-        }
-        // Create an AvailableOrder from the notification
-        // WebSocket now sends flat structure matching AvailableOrder
-        const newOrder: AvailableOrder = {
-          orderId: notification.orderId,
-          externalOrderNo: notification.externalOrderNo,
-          restaurantId: notification.restaurantId,
-          restaurantName: notification.restaurantName || 'Restaurant',
-          restaurantAddress: notification.restaurantAddress || '',
-          restaurantLat: notification.restaurantLat || 0,
-          restaurantLng: notification.restaurantLng || 0,
-          deliveryAddress: notification.deliveryAddress || '',
-          deliveryLat: notification.deliveryLat || 0,
-          deliveryLng: notification.deliveryLng || 0,
-          customerName: '',
-          customerPhone: '',
-          status: 'READY',
-          deliveryFee: notification.deliveryFee || 0,
-          tipAmount: notification.tipAmount || 0,
-          total: notification.total || notification.deliveryFee || 0,
-          itemCount: notification.itemCount || 0,
-          createdAt: notification.createdAt || new Date().toISOString(),
-          pickupDistance: notification.restaurantDistance,
-          estimatedDistance: notification.deliveryDistance,
-        };
-        return [newOrder, ...prev];
-      });
+      try {
+        console.log('[CourierContext] *** NEW CODE v4 *** New order received:', JSON.stringify(notification, null, 2));
+        console.log('[CourierContext] Keys in notification:', Object.keys(notification));
+        console.log('[CourierContext] restaurantName:', notification.restaurantName);
+        console.log('[CourierContext] Has restaurant object?:', 'restaurant' in notification, (notification as any).restaurant);
+
+        setNewOrderOffer(notification);
+        // Also add to available orders list
+        setAvailableOrders((prev) => {
+          try {
+            // Check if order already exists
+            if (prev.some((o) => o.orderId === notification.orderId)) {
+              return prev;
+            }
+            // Create an AvailableOrder from the notification
+            // WebSocket now sends flat structure matching AvailableOrder
+            const newOrder: AvailableOrder = {
+              orderId: notification.orderId,
+              externalOrderNo: notification.externalOrderNo,
+              restaurantId: notification.restaurantId,
+              restaurantName: notification.restaurantName || 'Restaurant',
+              restaurantAddress: notification.restaurantAddress || '',
+              restaurantLat: notification.restaurantLat || 0,
+              restaurantLng: notification.restaurantLng || 0,
+              deliveryAddress: notification.deliveryAddress || '',
+              deliveryLat: notification.deliveryLat || 0,
+              deliveryLng: notification.deliveryLng || 0,
+              customerName: '',
+              customerPhone: '',
+              status: 'READY',
+              deliveryFee: notification.deliveryFee || 0,
+              tipAmount: notification.tipAmount || 0,
+              total: notification.total || notification.deliveryFee || 0,
+              itemCount: notification.itemCount || 0,
+              createdAt: notification.createdAt || new Date().toISOString(),
+              pickupDistance: notification.restaurantDistance,
+              estimatedDistance: notification.deliveryDistance,
+            };
+            console.log('[CourierContext] Created newOrder:', JSON.stringify(newOrder, null, 2));
+            return [newOrder, ...prev];
+          } catch (innerError) {
+            console.error('[CourierContext] Error in setAvailableOrders callback:', innerError);
+            return prev;
+          }
+        });
+      } catch (error) {
+        console.error('[CourierContext] Error handling new order notification:', error);
+      }
     });
     wsUnsubscribeRefs.current.push(unsubNewOrders);
 

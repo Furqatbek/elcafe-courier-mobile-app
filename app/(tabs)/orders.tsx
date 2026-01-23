@@ -152,32 +152,39 @@ export default function OrdersScreen() {
   // Show notification when new order arrives via WebSocket
   useEffect(() => {
     if (newOrderOffer && isOnline && !showNewOrderBanner) {
-      console.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
-      // Convert WebSocket notification to AvailableOrder format for display
-      // WebSocket now sends flat structure matching AvailableOrder
-      const wsOrder: AvailableOrder = {
-        orderId: newOrderOffer.orderId,
-        externalOrderNo: newOrderOffer.externalOrderNo,
-        restaurantId: newOrderOffer.restaurantId,
-        restaurantName: newOrderOffer.restaurantName || 'Restaurant',
-        restaurantAddress: newOrderOffer.restaurantAddress || '',
-        restaurantLat: newOrderOffer.restaurantLat || 0,
-        restaurantLng: newOrderOffer.restaurantLng || 0,
-        deliveryAddress: newOrderOffer.deliveryAddress || '',
-        deliveryLat: newOrderOffer.deliveryLat || 0,
-        deliveryLng: newOrderOffer.deliveryLng || 0,
-        customerName: '',
-        customerPhone: '',
-        status: 'READY',
-        deliveryFee: newOrderOffer.deliveryFee || 0,
-        tipAmount: newOrderOffer.tipAmount || 0,
-        total: newOrderOffer.total || newOrderOffer.deliveryFee || 0,
-        itemCount: newOrderOffer.itemCount || 0,
-        createdAt: newOrderOffer.createdAt || new Date().toISOString(),
-        pickupDistance: newOrderOffer.restaurantDistance,
-        estimatedDistance: newOrderOffer.deliveryDistance,
-      };
-      triggerNotification(wsOrder);
+      try {
+        console.log('[Orders] *** v4 *** WebSocket new order notification:', newOrderOffer.orderId);
+        console.log('[Orders] newOrderOffer keys:', Object.keys(newOrderOffer));
+        console.log('[Orders] restaurantName:', newOrderOffer.restaurantName);
+        // Convert WebSocket notification to AvailableOrder format for display
+        // WebSocket now sends flat structure matching AvailableOrder
+        const wsOrder: AvailableOrder = {
+          orderId: newOrderOffer.orderId,
+          externalOrderNo: newOrderOffer.externalOrderNo,
+          restaurantId: newOrderOffer.restaurantId,
+          restaurantName: newOrderOffer.restaurantName || 'Restaurant',
+          restaurantAddress: newOrderOffer.restaurantAddress || '',
+          restaurantLat: newOrderOffer.restaurantLat || 0,
+          restaurantLng: newOrderOffer.restaurantLng || 0,
+          deliveryAddress: newOrderOffer.deliveryAddress || '',
+          deliveryLat: newOrderOffer.deliveryLat || 0,
+          deliveryLng: newOrderOffer.deliveryLng || 0,
+          customerName: '',
+          customerPhone: '',
+          status: 'READY',
+          deliveryFee: newOrderOffer.deliveryFee || 0,
+          tipAmount: newOrderOffer.tipAmount || 0,
+          total: newOrderOffer.total || newOrderOffer.deliveryFee || 0,
+          itemCount: newOrderOffer.itemCount || 0,
+          createdAt: newOrderOffer.createdAt || new Date().toISOString(),
+          pickupDistance: newOrderOffer.restaurantDistance,
+          estimatedDistance: newOrderOffer.deliveryDistance,
+        };
+        console.log('[Orders] wsOrder created successfully');
+        triggerNotification(wsOrder);
+      } catch (error) {
+        console.error('[Orders] Error processing newOrderOffer:', error);
+      }
     }
   }, [newOrderOffer, isOnline, showNewOrderBanner, triggerNotification]);
 
