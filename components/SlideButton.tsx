@@ -77,8 +77,9 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
         
         if (gestureState.dx > maxDrag * SWIPE_THRESHOLD) {
           // Success
+          console.log('[SlideButton] Swipe threshold reached, triggering completion');
           setCompleted(true);
-          
+
           if (Platform.OS !== 'web') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
@@ -88,6 +89,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
             useNativeDriver: Platform.OS !== 'web',
             bounciness: 8,
           }).start(() => {
+            console.log('[SlideButton] Animation complete, calling onComplete callback');
             onComplete();
           });
         } else {

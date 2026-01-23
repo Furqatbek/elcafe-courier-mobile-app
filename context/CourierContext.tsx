@@ -1293,17 +1293,25 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     orderId: number | string,
     data?: { deliveryPhoto?: string; deliveryNotes?: string }
   ): Promise<{ orderId: number; status: string; earnings: number; message: string } | null> => {
+    console.log('[CourierContext] completeOrder called with orderId:', orderId);
+    console.log('[CourierContext] Endpoint:', API_ENDPOINTS.ORDERS.COMPLETE(orderId));
+
     // Optimistically update local state
     setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: 'DELIVERED' as OrderStatus } : o));
 
     try {
+      console.log('[CourierContext] Making API call to complete order...');
       const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.COMPLETE(orderId), {
         method: 'POST',
         body: data ? JSON.stringify(data) : undefined,
       });
+      console.log('[CourierContext] API response status:', response.status);
+
       const result = await response.json();
+      console.log('[CourierContext] API response body:', JSON.stringify(result));
 
       if (result.success && result.data) {
+        console.log('[CourierContext] Order completed successfully, refreshing stats...');
         // Refresh stats after successful completion
         await fetchStats();
 
@@ -1317,10 +1325,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
         return result.data;
       } else {
+        console.error('[CourierContext] API returned error:', result.message);
         throw new Error(result.message || 'Failed to complete order');
       }
     } catch (error) {
-      console.error('Failed to complete order:', error);
+      console.error('[CourierContext] Failed to complete order:', error);
       // Revert optimistic update on error
       await fetchOrders();
       throw error;

@@ -167,11 +167,20 @@ export default function MapNavigationScreen() {
 
   // Handle delivery completion
   const handleDeliveryComplete = async () => {
-    if (!order || isUpdatingStatus) return;
+    console.log('[MapNavigation] handleDeliveryComplete called');
+    console.log('[MapNavigation] order:', order?.orderId, 'status:', order?.status);
+    console.log('[MapNavigation] isUpdatingStatus:', isUpdatingStatus);
+
+    if (!order || isUpdatingStatus) {
+      console.log('[MapNavigation] Early return - order:', !!order, 'isUpdatingStatus:', isUpdatingStatus);
+      return;
+    }
 
     setIsUpdatingStatus(true);
     try {
+      console.log('[MapNavigation] Calling completeOrder for orderId:', order.orderId);
       const result = await completeOrder(order.orderId);
+      console.log('[MapNavigation] completeOrder result:', result);
       if (result) {
         Alert.alert(
           t('order_detail.delivery_complete'),
@@ -180,6 +189,7 @@ export default function MapNavigationScreen() {
         );
       }
     } catch (error) {
+      console.error('[MapNavigation] handleDeliveryComplete error:', error);
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
     } finally {
       setIsUpdatingStatus(false);
@@ -361,13 +371,13 @@ export default function MapNavigationScreen() {
             <SlideButton
               title={t('navigation.slide_picked_up')}
               onComplete={handlePickupComplete}
-              disabled={isUpdatingStatus}
+              isLoading={isUpdatingStatus}
             />
           ) : (
             <SlideButton
               title={t('navigation.slide_delivered')}
               onComplete={handleDeliveryComplete}
-              disabled={isUpdatingStatus}
+              isLoading={isUpdatingStatus}
             />
           )}
         </View>
