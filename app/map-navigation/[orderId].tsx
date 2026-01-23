@@ -48,16 +48,18 @@ export default function MapNavigationScreen() {
     if (order && !hasOpenedNavigation) {
       // Small delay to let the screen render first
       const timer = setTimeout(() => {
+        console.log('[MapNavigation] Auto-opening navigation to:', isGoingToPickup ? 'pickup' : 'dropoff');
         openExternalNavigation();
         setHasOpenedNavigation(true);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [order?.orderId]);
+  }, [order?.orderId, hasOpenedNavigation, order?.status]);
 
-  // Open navigation when status changes to PICKED_UP
+  // Reset navigation flag when status changes to PICKED_UP (to trigger new navigation)
   useEffect(() => {
     if (order?.status === 'PICKED_UP') {
+      console.log('[MapNavigation] Status changed to PICKED_UP, resetting navigation flag');
       setHasOpenedNavigation(false); // Reset to trigger navigation to customer
     }
   }, [order?.status]);
@@ -148,12 +150,14 @@ export default function MapNavigationScreen() {
   const handlePickupComplete = async () => {
     if (!order || isUpdatingStatus) return;
 
+    console.log('[MapNavigation] Handling pickup complete for order:', order.orderId);
     setIsUpdatingStatus(true);
     try {
       await updateOrderStatus(order.orderId, 'PICKED_UP');
+      console.log('[MapNavigation] Status updated to PICKED_UP, triggering route recalculation');
       // Trigger route recalculation for new destination
       setRecalculateTrigger(prev => prev + 1);
-      setHasOpenedNavigation(false); // Will trigger auto-open to customer
+      // Note: hasOpenedNavigation is reset by the useEffect watching order.status
     } catch (error) {
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
     } finally {
