@@ -80,6 +80,18 @@ export default function MapNavigationScreen() {
     setRouteInfo(info);
   }, []);
 
+  // Handle back navigation with fallback
+  const handleBack = useCallback(() => {
+    console.log('[MapNavigation] Back button pressed');
+    // On web, router.back() might not work if there's no history
+    // Use replace to go to orders page as fallback
+    if (Platform.OS === 'web') {
+      router.replace('/(tabs)/orders');
+    } else {
+      router.back();
+    }
+  }, [router]);
+
   // Get destination info based on current status
   const getDestinationInfo = () => {
     if (!order) return { label: '', address: '', name: '', phone: '', lat: 0, lng: 0 };
@@ -239,13 +251,13 @@ export default function MapNavigationScreen() {
       <View style={styles.container}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.header, { top: insets.top + 10 }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
             <ArrowLeft color={Colors.text} size={24} />
           </TouchableOpacity>
         </View>
         <View style={styles.centered}>
           <Text style={styles.notFoundText}>{t('order_detail.not_found')}</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <TouchableOpacity onPress={handleBack} style={styles.backLink}>
             <Text style={styles.backLinkText}>{t('common.back')}</Text>
           </TouchableOpacity>
         </View>
@@ -262,7 +274,7 @@ export default function MapNavigationScreen() {
           <Text style={styles.completedText}>
             {order.status === 'DELIVERED' ? t('navigation.delivery_completed') : t('navigation.order_cancelled')}
           </Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backLink}>
+          <TouchableOpacity onPress={handleBack} style={styles.backLink}>
             <Text style={styles.backLinkText}>{t('navigation.back_to_orders')}</Text>
           </TouchableOpacity>
         </View>
@@ -291,7 +303,7 @@ export default function MapNavigationScreen() {
       {/* Floating back button */}
       <View style={[styles.headerLeft, { top: insets.top + 10 }]}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={handleBack}
           style={styles.backButton}
         >
           <ArrowLeft color={Colors.text} size={24} />
