@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView, Image } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Lock, Mail, User, Phone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { BASE_URL, API_ENDPOINTS } from '@/constants/config';
+import { Logo } from '@/components/Logo';
 
 export default function RegisterScreen() {
   const { t } = useTranslation();
@@ -86,11 +87,7 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.header}>
-              <Image
-                source={require('@/assets/images/logo.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+              <Logo size={80} />
               <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
               <Text style={styles.subtitle}>{t('register.create_account_subtitle')}</Text>
             </View>

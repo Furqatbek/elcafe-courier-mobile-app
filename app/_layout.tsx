@@ -9,6 +9,7 @@ import * as Notifications from 'expo-notifications';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 import { FingerSwipeEffect } from "@/components/FingerSwipeEffect";
 import { ToastProvider } from "@/components/Toast";
+import { Logo } from "@/components/Logo";
 import Colors from "@/constants/colors";
 
 import "@/i18n";
@@ -57,7 +58,10 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
   if (isSessionLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <Logo size={120} />
+        <View style={styles.loadingIndicator}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+        </View>
       </View>
     );
   }
@@ -154,5 +158,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.background,
+  },
+  loadingIndicator: {
+    marginTop: 24,
   },
 });

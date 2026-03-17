@@ -4,14 +4,14 @@
     "slug": "zbr-courier",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/icon.svg",
     "scheme": "zbr-courier",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/logo.png",
+      "image": "./assets/images/icon.svg",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#059669"
     },
     "ios": {
       "supportsTablet": false,
@@ -31,8 +31,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/icon.svg",
+        "backgroundColor": "#059669"
       },
       "package": "app.zbr.courier",
       "permissions": [
@@ -47,7 +47,7 @@
       ]
     },
     "web": {
-      "favicon": "./assets/images/logo.png",
+      "favicon": "./favicon.svg",
       "bundler": "metro",
       "output": "single",
       "name": "ZBR Courier"

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, Image } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Lock, Mail } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { useCourier } from '@/context/CourierContext';
+import { Logo } from '@/components/Logo';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -40,11 +41,7 @@ export default function LoginScreen() {
           style={styles.content}
         >
           <View style={styles.header}>
-            <Image
-              source={require('@/assets/images/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+            <Logo size={100} />
             <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
             <Text style={styles.subtitle}>{t('login.app_subtitle')}</Text>
           </View>
