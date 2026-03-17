@@ -70,21 +70,10 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
-      Animated.spring(translateX, {
-        toValue: maxDrag,
-        useNativeDriver: Platform.OS !== 'web',
-        bounciness: 8,
-      }).start(() => {
-        console.log('[SlideButton] Animation complete, calling onComplete');
-        onCompleteRef.current();
-      });
+      translateX.setValue(maxDrag);
+      onCompleteRef.current();
     } else {
-      console.log('[SlideButton] Below threshold, resetting');
-      Animated.spring(translateX, {
-        toValue: 0,
-        useNativeDriver: Platform.OS !== 'web',
-        bounciness: 8,
-      }).start();
+      translateX.setValue(0);
     }
   };
 
@@ -177,20 +166,10 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
 
-          Animated.spring(translateX, {
-            toValue: maxDrag,
-            useNativeDriver: Platform.OS !== 'web',
-            bounciness: 8,
-          }).start(() => {
-            console.log('[SlideButton] Calling onComplete');
-            onCompleteRef.current();
-          });
+          translateX.setValue(maxDrag);
+          onCompleteRef.current();
         } else {
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: Platform.OS !== 'web',
-            bounciness: 8,
-          }).start();
+          translateX.setValue(0);
         }
       },
     })
@@ -216,7 +195,8 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
         <Pressable
           onPressIn={handlePressIn}
           disabled={completed || isLoading}
-          style={{ position: 'absolute', left: BUTTON_PADDING }}
+          style={{ position: 'absolute', left: BUTTON_PADDING, opacity: 1 }}
+          android_disableSound
         >
           <Animated.View
             style={[
