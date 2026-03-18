@@ -7,7 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
-import { FingerSwipeEffect } from "@/components/FingerSwipeEffect";
+
 import { ToastProvider } from "@/components/Toast";
 import { Logo } from "@/components/Logo";
 import Colors from "@/constants/colors";
@@ -139,13 +139,11 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
-          <FingerSwipeEffect>
-            <CourierProvider>
-              <AuthNavigator>
-                <RootLayoutNav />
-              </AuthNavigator>
-            </CourierProvider>
-          </FingerSwipeEffect>
+          <CourierProvider>
+            <AuthNavigator>
+              <RootLayoutNav />
+            </AuthNavigator>
+          </CourierProvider>
         </ToastProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
