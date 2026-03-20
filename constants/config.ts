@@ -225,8 +225,10 @@ export const NAVIGATION_URLS = {
 
 // WebSocket Configuration (STOMP over SockJS)
 export const WEBSOCKET_CONFIG = {
-  // SockJS uses HTTP/HTTPS, it handles WebSocket upgrade internally
+  // Native WebSocket endpoint for mobile apps
   URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE_URL}/ws`,
+  // SockJS endpoint for web browsers (with fallbacks)
+  SOCKJS_URL: process.env.EXPO_PUBLIC_WS_SOCKJS_URL || `${BASE_URL}/ws-sockjs`,
   RECONNECT_INTERVAL: 5000,
   MAX_RECONNECT_ATTEMPTS: 10,
   HEARTBEAT_INCOMING: 10000,

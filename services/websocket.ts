@@ -73,16 +73,17 @@ class WebSocketService {
     this.accessToken = accessToken;
     this.isConnecting = true;
 
-    // Build WebSocket URL
-    let wsUrl = WEBSOCKET_CONFIG.URL;
+    // Build WebSocket URL based on platform
+    let wsUrl: string;
 
-    // For web, use SockJS endpoint
-    // For native, use native WebSocket
     if (Platform.OS === 'web') {
-      // SockJS will handle the connection
+      // Web: Use SockJS endpoint with HTTP/HTTPS (SockJS handles upgrade)
+      wsUrl = WEBSOCKET_CONFIG.SOCKJS_URL;
       wsUrl = wsUrl.replace('ws://', 'http://').replace('wss://', 'https://');
     } else {
-      // Native WebSocket - ensure ws:// or wss:// protocol
+      // Native (iOS/Android): Use native WebSocket endpoint
+      wsUrl = WEBSOCKET_CONFIG.URL;
+      // Ensure ws:// or wss:// protocol
       if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
         wsUrl = wsUrl.replace('http://', 'ws://').replace('https://', 'wss://');
       }
