@@ -239,7 +239,10 @@ export type NotificationType =
   | 'ORDER_CANCELLED'
   | 'PAYOUT_ISSUED'
   | 'VERIFICATION_APPROVED'
-  | 'RATING_RECEIVED';
+  | 'RATING_RECEIVED'
+  | 'NEW_DELIVERY_AVAILABLE'
+  | 'DELIVERY_COMPLETED'
+  | 'DELIVERY_CANCELLED';
 
 export interface Notification {
   id: number;
@@ -248,8 +251,16 @@ export interface Notification {
   message: string;
   read: boolean;
   createdAt: string;
+  priority?: 'HIGH' | 'NORMAL' | 'LOW';
+  category?: string;
+  icon?: string;
+  orderId?: number;
+  actionUrl?: string;
+  timeAgo?: string;
   data?: {
     orderId?: number;
+    orderNumber?: string;
+    restaurantName?: string;
     [key: string]: any;
   };
 }
@@ -525,10 +536,48 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.LIST);
       const data = await response.json();
 
-      if (data.success && Array.isArray(data.data)) {
-        setNotifications(data.data);
-        // Update unread count based on fetched notifications
-        const unread = data.data.filter((n: Notification) => !n.read).length;
+      // Handle paginated response: { notifications: [...], unreadCount, ... }
+      // or legacy response: { success: true, data: [...] }
+      let notificationsList: any[] = [];
+
+      if (data.notifications && Array.isArray(data.notifications)) {
+        // New paginated response format
+        notificationsList = data.notifications;
+        if (typeof data.unreadCount === 'number') {
+          setUnreadCount(data.unreadCount);
+        }
+      } else if (data.success && Array.isArray(data.data)) {
+        // Legacy response format
+        notificationsList = data.data;
+      }
+
+      // Transform backend fields to app format
+      const transformedNotifications: Notification[] = notificationsList.map((n: any) => ({
+        id: n.id,
+        type: n.notificationType || n.type || 'ORDER_ASSIGNED',
+        title: n.title,
+        message: n.message,
+        read: n.isRead ?? n.read ?? false,
+        createdAt: n.createdAt,
+        priority: n.priority,
+        category: n.category,
+        icon: n.icon,
+        orderId: n.orderId || n.relatedEntityId,
+        actionUrl: n.actionUrl,
+        timeAgo: n.timeAgo,
+        data: {
+          orderId: n.orderId || n.relatedEntityId,
+          orderNumber: n.metadata?.orderNumber,
+          restaurantName: n.metadata?.restaurantName,
+          ...n.metadata,
+        },
+      }));
+
+      setNotifications(transformedNotifications);
+
+      // Update unread count if not provided in response
+      if (typeof data.unreadCount !== 'number') {
+        const unread = transformedNotifications.filter((n) => !n.read).length;
         setUnreadCount(unread);
       }
     } catch (error) {

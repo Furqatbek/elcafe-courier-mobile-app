@@ -26,6 +26,8 @@ import { useCourier, Notification } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
 
+import { Truck } from 'lucide-react-native';
+
 const notificationIcons: Record<string, any> = {
   NEW_ORDER_NEARBY: Package,
   ORDER_ASSIGNED: Package,
@@ -33,6 +35,9 @@ const notificationIcons: Record<string, any> = {
   PAYOUT_ISSUED: DollarSign,
   VERIFICATION_APPROVED: CheckCircle,
   RATING_RECEIVED: Star,
+  NEW_DELIVERY_AVAILABLE: Truck,
+  DELIVERY_COMPLETED: CheckCircle,
+  DELIVERY_CANCELLED: XCircle,
 };
 
 const notificationColors: Record<string, string> = {
@@ -42,6 +47,9 @@ const notificationColors: Record<string, string> = {
   PAYOUT_ISSUED: Colors.success,
   VERIFICATION_APPROVED: Colors.success,
   RATING_RECEIVED: Colors.warning,
+  NEW_DELIVERY_AVAILABLE: Colors.primary,
+  DELIVERY_COMPLETED: Colors.success,
+  DELIVERY_CANCELLED: Colors.danger,
 };
 
 export default function NotificationsScreen() {
@@ -72,8 +80,10 @@ export default function NotificationsScreen() {
       await markNotificationAsRead(notification.id);
     }
 
-    if (notification.data?.orderId) {
-      router.push(`/order/${notification.data.orderId}`);
+    // Use orderId from notification directly, or fall back to data.orderId
+    const orderId = notification.orderId || notification.data?.orderId;
+    if (orderId) {
+      router.push(`/order/${orderId}`);
     }
   };
 
