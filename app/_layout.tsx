@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 
-import { ToastProvider } from "@/components/Toast";
+import { ToastProvider, useToast } from "@/components/Toast";
 import { Logo } from "@/components/Logo";
 import Colors from "@/constants/colors";
 
@@ -103,20 +103,108 @@ function RootLayoutNav() {
 }
 
 
-// Configure notification handler
+// Configure notification handler - called for each notification when app is in foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
     shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
 
+// Set up Android notification channel
+async function setupNotificationChannel() {
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      sound: 'default',
+      lightColor: '#059669',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
+      enableLights: true,
+    });
+
+    // High priority channel for new orders
+    await Notifications.setNotificationChannelAsync('orders', {
+      name: 'New Orders',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 500, 200, 500],
+      sound: 'default',
+      lightColor: '#059669',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableVibrate: true,
+      enableLights: true,
+    });
+  }
+}
+
+// Component to handle notification events
+function NotificationHandler() {
+  const router = useRouter();
+  const toast = useToast();
+  const { fetchNotifications, fetchUnreadCount } = useCourier();
+  const notificationListener = useRef<Notifications.Subscription>();
+  const responseListener = useRef<Notifications.Subscription>();
+
+  useEffect(() => {
+    // Listen for notifications received while app is in foreground
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('[Notification] Received:', notification);
+
+      // Refresh notifications list
+      fetchNotifications();
+      fetchUnreadCount();
+
+      // Show in-app toast
+      const title = notification.request.content.title || 'New Notification';
+      const body = notification.request.content.body || '';
+      toast.show(`${title}: ${body}`, 'info');
+    });
+
+    // Listen for notification taps (user interaction)
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('[Notification] User tapped:', response);
+
+      const data = response.notification.request.content.data;
+
+      // Navigate based on notification data
+      if (data?.orderId) {
+        router.push(`/order/${data.orderId}`);
+      } else if (data?.actionUrl) {
+        // Handle actionUrl like /orders/27
+        const match = String(data.actionUrl).match(/\/orders\/(\d+)/);
+        if (match) {
+          router.push(`/order/${match[1]}`);
+        }
+      } else {
+        // Default: go to notifications screen
+        router.push('/notifications');
+      }
+    });
+
+    return () => {
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, [fetchNotifications, fetchUnreadCount, router, toast]);
+
+  return null;
+}
+
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+
+    // Set up notification channels
+    setupNotificationChannel();
 
     // Request permissions on app open
     (async () => {
@@ -124,7 +212,6 @@ export default function RootLayout() {
       const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
       if (locationStatus !== 'granted') {
         console.log('Permission to access location was denied');
-        // Optionally show alert only if critical
       }
 
       // Notification Permission
@@ -140,6 +227,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
           <CourierProvider>
+            <NotificationHandler />
             <AuthNavigator>
               <RootLayoutNav />
             </AuthNavigator>
