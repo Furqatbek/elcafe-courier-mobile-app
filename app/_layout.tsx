@@ -142,7 +142,7 @@ async function setupNotificationChannel() {
   }
 }
 
-// Component to handle notification events
+// Component to handle notification events (native only)
 function NotificationHandler() {
   const router = useRouter();
   const toast = useToast();
@@ -151,6 +151,9 @@ function NotificationHandler() {
   const responseListener = useRef<Notifications.Subscription>();
 
   useEffect(() => {
+    // Skip notification listeners on web - not fully supported
+    if (Platform.OS === 'web') return;
+
     // Listen for notifications received while app is in foreground
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('[Notification] Received:', notification);
