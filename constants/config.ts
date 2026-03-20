@@ -50,6 +50,12 @@ export const API_ENDPOINTS = {
     UNREAD_COUNT: '/api/v1/notifications/unread/count',
     MARK_READ: (id: string | number) => `/api/v1/notifications/${id}/read`,
   },
+
+  // Device tokens for push notifications
+  DEVICE_TOKENS: {
+    REGISTER: '/api/v1/device-tokens',
+    UNREGISTER: '/api/v1/device-tokens',
+  },
 } as const;
 
 // Courier Status Values

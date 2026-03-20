@@ -4,6 +4,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import websocketService, { NewOrderNotification, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
+import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 
 export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
@@ -798,6 +799,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Logout function - revokes refresh token on server
   const logout = useCallback(async () => {
+    // Unregister FCM device token before logout
+    if (accessToken) {
+      try {
+        await unregisterDeviceToken(accessToken);
+      } catch (error) {
+        console.warn('Failed to unregister FCM token:', error);
+      }
+    }
+
     try {
       // Call logout API to revoke refresh token
       if (refreshToken) {
@@ -816,10 +826,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     // Always clear local session
     await clearLocalSession();
-  }, [refreshToken, clearLocalSession]);
+  }, [accessToken, refreshToken, clearLocalSession]);
 
   // Logout from all devices - revokes all refresh tokens
   const logoutAllDevices = useCallback(async () => {
+    // Unregister FCM device token before logout
+    if (accessToken) {
+      try {
+        await unregisterDeviceToken(accessToken);
+      } catch (error) {
+        console.warn('Failed to unregister FCM token:', error);
+      }
+    }
+
     try {
       if (accessToken) {
         const response = await fetch(`${BASE_URL}${API_ENDPOINTS.USER.LOGOUT_ALL}`, {
@@ -860,6 +879,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           if (storedProfile) {
             setCourierProfile(JSON.parse(storedProfile));
           }
+
+          // Register FCM device token on app start
+          registerDeviceToken(storedToken).catch(err =>
+            console.warn('Failed to register FCM token on restore:', err)
+          );
         }
       } catch (e) {
         console.error('Failed to restore session', e);
@@ -1035,6 +1059,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
 
         hasLoadedInitialData.current = false; // Reset so data loads
+
+        // Register FCM device token for push notifications
+        registerDeviceToken(accessToken).catch(err =>
+          console.warn('Failed to register FCM token:', err)
+        );
       } else {
         throw new Error(data.message || 'Login failed');
       }
