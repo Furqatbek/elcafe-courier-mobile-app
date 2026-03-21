@@ -47,7 +47,7 @@
       ]
     },
     "web": {
-      "favicon": "./favicon.svg",
+      "favicon": "./assets/images/favicon.png",
       "bundler": "metro",
       "output": "single",
       "name": "ZBR Courier"
