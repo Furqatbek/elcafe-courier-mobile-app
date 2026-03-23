@@ -72,6 +72,9 @@
   },
   "orders": {
     "good_morning": "Доброе утро, {{name}}!",
+    "good_afternoon": "Добрый день, {{name}}!",
+    "good_evening": "Добрый вечер, {{name}}!",
+    "good_night": "Доброй ночи, {{name}}!",
     "you_are_online": "Вы сейчас",
     "online": "ОНЛАЙН",
     "offline": "ОФФЛАЙН",

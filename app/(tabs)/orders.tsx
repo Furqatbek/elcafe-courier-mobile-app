@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,15 @@ import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { useToast } from '@/components/Toast';
 import { OrderOfferModal } from '@/components/OrderOfferModal';
 import { soundService } from '@/services/soundService';
+
+// Get greeting key based on current hour
+const getGreetingKey = (): string => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'orders.good_morning';
+  if (hour >= 12 && hour < 17) return 'orders.good_afternoon';
+  if (hour >= 17 && hour < 21) return 'orders.good_evening';
+  return 'orders.good_night'; // 21:00 - 4:59
+};
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -273,7 +282,7 @@ export default function OrdersScreen() {
 
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>{t('orders.good_morning', { name: user?.firstName || '' })}</Text>
+          <Text style={styles.greeting}>{t(getGreetingKey(), { name: user?.firstName || '' })}</Text>
           <Text style={styles.statusText}>
             {t('orders.you_are_online')} <Text style={{ color: isOnline ? Colors.online : Colors.offline, fontWeight: '700' }}>
               {isOnline ? t('orders.online') : t('orders.offline')}

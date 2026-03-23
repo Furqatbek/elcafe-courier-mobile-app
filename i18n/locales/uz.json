@@ -72,6 +72,9 @@
   },
   "orders": {
     "good_morning": "Xayrli tong, {{name}}!",
+    "good_afternoon": "Xayrli kun, {{name}}!",
+    "good_evening": "Xayrli kech, {{name}}!",
+    "good_night": "Xayrli tun, {{name}}!",
     "you_are_online": "Siz hozir",
     "online": "ONLAYN",
     "offline": "OFFLAYN",

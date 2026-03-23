@@ -72,6 +72,9 @@
   },
   "orders": {
     "good_morning": "Good Morning, {{name}}!",
+    "good_afternoon": "Good Afternoon, {{name}}!",
+    "good_evening": "Good Evening, {{name}}!",
+    "good_night": "Good Night, {{name}}!",
     "you_are_online": "You are currently",
     "online": "ONLINE",
     "offline": "OFFLINE",
