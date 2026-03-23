@@ -31,13 +31,41 @@ export default function AvailableOrderDetailScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { availableOrders, acceptOrder } = useCourier();
+  const {
+    availableOrders,
+    acceptOrder,
+    orderTakenEvent,
+    clearOrderTakenEvent,
+    fetchAvailableOrders,
+    currentLocation,
+  } = useCourier();
   const orderId = Number(id);
 
   // Get order from context - no API call needed
   const order = availableOrders.find(o => o.orderId === orderId);
 
   const [isAccepting, setIsAccepting] = React.useState(false);
+
+  // Watch for ORDER_TAKEN event for this specific order
+  React.useEffect(() => {
+    if (orderTakenEvent && orderTakenEvent.orderId === orderId) {
+      const courierName = orderTakenEvent.courierName || t('available_orders.another_courier');
+      Alert.alert(
+        t('available_orders.order_taken_title', 'Order No Longer Available'),
+        t('available_orders.order_taken_message', { courierName }, `This order was taken by ${courierName}`),
+        [
+          {
+            text: t('common.ok', 'OK'),
+            onPress: () => {
+              clearOrderTakenEvent();
+              router.back();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [orderTakenEvent, orderId, clearOrderTakenEvent, router, t]);
 
   const formatCurrency = (amount: number | undefined) => {
     return `${((amount ?? 0)).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
@@ -62,7 +90,32 @@ export default function AvailableOrderDetailScreen() {
       router.replace(`/map-navigation/${order.orderId}`);
     } catch (error: any) {
       setIsAccepting(false);
-      Alert.alert(t('common.error'), error.message || t('available_orders.accept_error'));
+      const errorMessage = error.message || '';
+
+      // Check if the order was already taken by another courier
+      if (
+        errorMessage.includes('already has a courier assigned') ||
+        errorMessage.includes('already assigned') ||
+        errorMessage.includes('ORDER_TAKEN') ||
+        errorMessage.includes('no longer available')
+      ) {
+        Alert.alert(
+          t('available_orders.order_taken_title', 'Order No Longer Available'),
+          t('available_orders.order_already_taken', 'This order was already taken by another courier.'),
+          [
+            {
+              text: t('common.ok', 'OK'),
+              onPress: () => {
+                // Refresh available orders and go back
+                fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+                router.back();
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(t('common.error'), errorMessage || t('available_orders.accept_error'));
+      }
     }
   };
 

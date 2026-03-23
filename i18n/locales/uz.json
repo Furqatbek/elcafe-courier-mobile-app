@@ -508,7 +508,11 @@
     "tip": "Choy puli",
     "slide_to_accept": "Qabul qilish uchun suring",
     "fetch_error": "Buyurtmalarni yuklash imkonsiz",
-    "location_permission_required": "Joylashuvni aniqlash uchun ruxsat kerak"
+    "location_permission_required": "Joylashuvni aniqlash uchun ruxsat kerak",
+    "order_taken_title": "Buyurtma endi mavjud emas",
+    "order_taken_message": "Bu buyurtma {{courierName}} tomonidan qabul qilindi",
+    "order_already_taken": "Bu buyurtma boshqa kuryer tomonidan allaqachon qabul qilingan.",
+    "another_courier": "boshqa kuryer"
   },
   "navigation": {
     "heading_to_pickup": "Restoranga yo'l olmoqda",

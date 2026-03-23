@@ -508,7 +508,11 @@
     "tip": "Чаевые",
     "slide_to_accept": "Проведите для принятия",
     "fetch_error": "Не удалось загрузить заказы",
-    "location_permission_required": "Требуется разрешение на определение местоположения"
+    "location_permission_required": "Требуется разрешение на определение местоположения",
+    "order_taken_title": "Заказ больше недоступен",
+    "order_taken_message": "Этот заказ был взят курьером {{courierName}}",
+    "order_already_taken": "Этот заказ уже был взят другим курьером.",
+    "another_courier": "другим курьером"
   },
   "navigation": {
     "heading_to_pickup": "Едем к ресторану",

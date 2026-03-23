@@ -3,7 +3,7 @@ import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, I
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
-import websocketService, { NewOrderNotification, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
+import websocketService, { NewOrderNotification, OrderTakenNotification, OrderChannelMessage, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 
 export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
@@ -14,7 +14,7 @@ export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 export type { IssueType } from '@/constants/config';
 
 // Re-export WebSocket types for convenience
-export type { NewOrderNotification, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
+export type { NewOrderNotification, OrderTakenNotification, OrderChannelMessage, OrderStatusUpdate, WebSocketNotification } from '@/services/websocket';
 
 export interface User {
   id: number;
@@ -300,6 +300,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // WebSocket state
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [newOrderOffer, setNewOrderOffer] = useState<NewOrderNotification | null>(null);
+  const [orderTakenEvent, setOrderTakenEvent] = useState<OrderTakenNotification | null>(null);
   const wsUnsubscribeRefs = useRef<(() => void)[]>([]);
 
   // Track if initial data has been loaded
@@ -715,13 +716,43 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     wsUnsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
     wsUnsubscribeRefs.current = [];
 
-    // Subscribe to new orders
-    const unsubNewOrders = websocketService.subscribeToNewOrders((notification) => {
+    // Subscribe to new orders (and ORDER_TAKEN events on the same channel)
+    const unsubNewOrders = websocketService.subscribeToNewOrders((message) => {
       try {
-        console.log('[CourierContext] *** NEW CODE v4 *** New order received:', JSON.stringify(notification, null, 2));
-        console.log('[CourierContext] Keys in notification:', Object.keys(notification));
+        const messageType = (message as any).type;
+        console.log('[CourierContext] Order channel message received, type:', messageType);
+
+        // Handle ORDER_TAKEN - another courier accepted this order
+        if (messageType === 'ORDER_TAKEN') {
+          const takenNotification = message as unknown as OrderTakenNotification;
+          console.log('[CourierContext] ORDER_TAKEN received:', takenNotification.orderId, 'by courier:', takenNotification.courierName);
+
+          // Set the event so UI components can react
+          setOrderTakenEvent(takenNotification);
+
+          // Remove from available orders list
+          setAvailableOrders((prev) => {
+            const filtered = prev.filter((o) => o.orderId !== takenNotification.orderId);
+            if (filtered.length !== prev.length) {
+              console.log('[CourierContext] Removed order', takenNotification.orderId, 'from available orders');
+            }
+            return filtered;
+          });
+
+          // Clear the new order offer if it matches
+          setNewOrderOffer((prev) => {
+            if (prev && prev.orderId === takenNotification.orderId) {
+              return null;
+            }
+            return prev;
+          });
+          return;
+        }
+
+        // Handle NEW_ORDER (default case)
+        const notification = message as NewOrderNotification;
+        console.log('[CourierContext] New order received:', notification.orderId);
         console.log('[CourierContext] restaurantName:', notification.restaurantName);
-        console.log('[CourierContext] Has restaurant object?:', 'restaurant' in notification, (notification as any).restaurant);
 
         setNewOrderOffer(notification);
         // Also add to available orders list
@@ -763,7 +794,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           }
         });
       } catch (error) {
-        console.error('[CourierContext] Error handling new order notification:', error);
+        console.error('[CourierContext] Error handling order channel message:', error);
       }
     });
     wsUnsubscribeRefs.current.push(unsubNewOrders);
@@ -810,6 +841,16 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Clear new order offer (after user views/dismisses it)
   const clearNewOrderOffer = useCallback(() => {
     setNewOrderOffer(null);
+  }, []);
+
+  // Clear order taken event (after user acknowledges it)
+  const clearOrderTakenEvent = useCallback(() => {
+    setOrderTakenEvent(null);
+  }, []);
+
+  // Remove an order from available orders (e.g., when it's taken by another courier)
+  const removeAvailableOrder = useCallback((orderId: number) => {
+    setAvailableOrders((prev) => prev.filter((o) => o.orderId !== orderId));
   }, []);
 
   // Clear local session data
@@ -1553,6 +1594,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     isWebSocketConnected,
     newOrderOffer,
     clearNewOrderOffer,
+    orderTakenEvent,
+    clearOrderTakenEvent,
+    removeAvailableOrder,
     connectWebSocket,
     disconnectWebSocket,
 

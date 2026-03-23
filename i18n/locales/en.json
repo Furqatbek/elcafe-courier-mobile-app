@@ -495,7 +495,11 @@
     "items": "Items",
     "tip": "Tip",
     "slide_to_accept": "Slide to Accept Order",
-    "accepting": "Accepting order..."
+    "accepting": "Accepting order...",
+    "order_taken_title": "Order No Longer Available",
+    "order_taken_message": "This order was taken by {{courierName}}",
+    "order_already_taken": "This order was already taken by another courier.",
+    "another_courier": "another courier"
   },
   "navigation": {
     "heading_to_pickup": "Heading to Pickup",

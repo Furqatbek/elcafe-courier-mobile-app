@@ -5,6 +5,7 @@ import { WEBSOCKET_CONFIG } from '@/constants/config';
 // WebSocket message types
 // Matches the flat structure sent by the backend
 export interface NewOrderNotification {
+  type?: 'NEW_ORDER'; // Optional, defaults to NEW_ORDER
   orderId: number;
   externalOrderNo?: string;
   restaurantId: number;
@@ -24,6 +25,18 @@ export interface NewOrderNotification {
   createdAt?: string;
   expiresAt?: string;
 }
+
+export interface OrderTakenNotification {
+  type: 'ORDER_TAKEN';
+  orderId: number;
+  externalOrderNo?: string;
+  courierId: number;
+  courierName?: string;
+  timestamp: string;
+}
+
+// Union type for messages on the orders channel
+export type OrderChannelMessage = NewOrderNotification | OrderTakenNotification;
 
 export interface OrderStatusUpdate {
   orderId: number;
