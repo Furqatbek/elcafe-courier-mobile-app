@@ -602,6 +602,30 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
+  // Fetch courier profile and sync online status from backend
+  const fetchCourierProfile = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ME);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        const profile = data.data as CourierProfile;
+        setCourierProfile(profile);
+        await AsyncStorage.setItem('courier_profile', JSON.stringify(profile));
+
+        // Sync isOnline state from backend status
+        const backendIsOnline = profile.status === 'AVAILABLE' || profile.status === 'BUSY';
+        console.log('[CourierContext] Syncing status from backend:', profile.status, '-> isOnline:', backendIsOnline);
+        setIsOnline(backendIsOnline);
+
+        return profile;
+      }
+    } catch (error) {
+      console.error('Failed to fetch courier profile:', error);
+    }
+    return null;
+  }, [authenticatedFetch]);
+
   // Mark notification as read
   const markNotificationAsRead = useCallback(async (notificationId: number) => {
     try {
@@ -649,7 +673,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
-  // Refresh all data
+  // Refresh all data including courier status from backend
   const refreshData = useCallback(async () => {
     if (!user) return;
 
@@ -658,8 +682,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       fetchStats(),
       fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude),
       fetchUnreadCount(),
+      fetchCourierProfile(), // Sync courier status from backend
     ]);
-  }, [user, fetchOrders, fetchStats, fetchAvailableOrders, fetchUnreadCount, currentLocation]);
+  }, [user, fetchOrders, fetchStats, fetchAvailableOrders, fetchUnreadCount, currentLocation, fetchCourierProfile]);
 
   // Stop location tracking
   const stopLocationTracking = useCallback(async () => {
@@ -967,7 +992,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           setUser(JSON.parse(storedUser));
 
           if (storedProfile) {
-            setCourierProfile(JSON.parse(storedProfile));
+            const profile = JSON.parse(storedProfile) as CourierProfile;
+            setCourierProfile(profile);
+
+            // Set initial isOnline from stored profile (will be refreshed from backend)
+            const storedIsOnline = profile.status === 'AVAILABLE' || profile.status === 'BUSY';
+            console.log('[CourierContext] Initial status from storage:', profile.status, '-> isOnline:', storedIsOnline);
+            setIsOnline(storedIsOnline);
           }
 
           // Register FCM device token on app start
@@ -1212,23 +1243,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       throw error;
     }
   };
-
-  // Fetch courier profile
-  const fetchCourierProfile = useCallback(async () => {
-    try {
-      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ME);
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        setCourierProfile(data.data);
-        await AsyncStorage.setItem('courier_profile', JSON.stringify(data.data));
-        return data.data;
-      }
-    } catch (error) {
-      console.error('Failed to fetch courier profile:', error);
-    }
-    return null;
-  }, [authenticatedFetch]);
 
   // Update courier status (OFFLINE/AVAILABLE/BUSY/ON_BREAK)
   const updateCourierStatus = useCallback(async (status: CourierStatus) => {
