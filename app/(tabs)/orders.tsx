@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Vibration, Animated } from 'react-native';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Bell, Package } from 'lucide-react-native';
+import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
@@ -10,6 +10,8 @@ import { OrderCard } from '@/components/OrderCard';
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { useToast } from '@/components/Toast';
+import { OrderOfferModal } from '@/components/OrderOfferModal';
+import { soundService } from '@/services/soundService';
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -38,19 +40,26 @@ export default function OrdersScreen() {
     unreadCount,
     newOrderOffer,
     clearNewOrderOffer,
+    acceptOrder,
   } = useCourier();
   const toast = useToast();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
-  const [showNewOrderBanner, setShowNewOrderBanner] = useState(false);
-  const [bannerOrder, setBannerOrder] = useState<AvailableOrder | null>(null);
-  const bannerAnim = useRef(new Animated.Value(-100)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Order offer modal state
+  const [showOrderOfferModal, setShowOrderOfferModal] = useState(false);
+  const [offerOrder, setOfferOrder] = useState<AvailableOrder | null>(null);
   const previousOrderIdsRef = useRef<Set<number>>(new Set());
   const hasInitializedRef = useRef(false);
-  const pulseAnimationRef = useRef<Animated.CompositeAnimation | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Initialize sound service
+  useEffect(() => {
+    soundService.initialize();
+    return () => {
+      soundService.cleanup();
+    };
+  }, []);
 
   // Detect new orders from API fetches
   useEffect(() => {
@@ -85,79 +94,33 @@ export default function OrdersScreen() {
       previous: Array.from(previousOrderIdsRef.current),
       current: Array.from(currentOrderIds),
       newOrders: newOrders.map(o => o.orderId),
-      showingBanner: showNewOrderBanner
+      showingModal: showOrderOfferModal
     });
 
-    // Show notification for the first new order
-    if (newOrders.length > 0 && !showNewOrderBanner) {
+    // Show order offer modal for the first new order
+    if (newOrders.length > 0 && !showOrderOfferModal) {
       const newestOrder = newOrders[0];
-      console.log('[Orders] New order detected! Showing notification for:', newestOrder.orderId);
-      triggerNotification(newestOrder);
+      console.log('[Orders] New order detected! Showing offer modal for:', newestOrder.orderId);
+      showOrderOffer(newestOrder);
     }
 
     // Update previous order IDs
     previousOrderIdsRef.current = currentOrderIds;
-  }, [availableOrders, isOnline, showNewOrderBanner]);
+  }, [availableOrders, isOnline, showOrderOfferModal]);
 
-  // Trigger notification for an order (from API or WebSocket)
-  const triggerNotification = useCallback((order: AvailableOrder) => {
-    // Clear any existing timer
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-    }
-    if (pulseAnimationRef.current) {
-      pulseAnimationRef.current.stop();
-    }
-
-    // Vibrate device
-    Vibration.vibrate([0, 200, 100, 200]);
-
-    // Set the order for the banner
-    setBannerOrder(order);
-    setShowNewOrderBanner(true);
-
-    // Reset animation value and animate in
-    bannerAnim.setValue(-100);
-    Animated.spring(bannerAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 50,
-      friction: 8,
-    }).start();
-
-    // Pulse animation for the banner
-    pulseAnim.setValue(1);
-    pulseAnimationRef.current = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulseAnimationRef.current.start();
-
-    // Auto-hide after 10 seconds
-    hideTimerRef.current = setTimeout(() => {
-      hideBanner();
-    }, 10000);
-  }, [bannerAnim, pulseAnim]);
+  // Show order offer modal
+  const showOrderOffer = useCallback((order: AvailableOrder) => {
+    console.log('[Orders] Showing order offer modal for:', order.orderId);
+    setOfferOrder(order);
+    setShowOrderOfferModal(true);
+  }, []);
 
   // Show notification when new order arrives via WebSocket
   useEffect(() => {
-    if (newOrderOffer && isOnline && !showNewOrderBanner) {
+    if (newOrderOffer && isOnline && !showOrderOfferModal) {
       try {
-        console.log('[Orders] *** v4 *** WebSocket new order notification:', newOrderOffer.orderId);
-        console.log('[Orders] newOrderOffer keys:', Object.keys(newOrderOffer));
-        console.log('[Orders] restaurantName:', newOrderOffer.restaurantName);
+        console.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
         // Convert WebSocket notification to AvailableOrder format for display
-        // WebSocket now sends flat structure matching AvailableOrder
         const wsOrder: AvailableOrder = {
           orderId: newOrderOffer.orderId,
           externalOrderNo: newOrderOffer.externalOrderNo,
@@ -180,55 +143,51 @@ export default function OrdersScreen() {
           pickupDistance: newOrderOffer.restaurantDistance,
           estimatedDistance: newOrderOffer.deliveryDistance,
         };
-        console.log('[Orders] wsOrder created successfully');
-        triggerNotification(wsOrder);
+        showOrderOffer(wsOrder);
       } catch (error) {
         console.error('[Orders] Error processing newOrderOffer:', error);
       }
     }
-  }, [newOrderOffer, isOnline, showNewOrderBanner, triggerNotification]);
+  }, [newOrderOffer, isOnline, showOrderOfferModal, showOrderOffer]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current);
-      }
-      if (pulseAnimationRef.current) {
-        pulseAnimationRef.current.stop();
-      }
-    };
-  }, []);
-
-  const hideBanner = useCallback(() => {
-    // Stop animations and clear timer
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-    if (pulseAnimationRef.current) {
-      pulseAnimationRef.current.stop();
-      pulseAnimationRef.current = null;
-    }
-
-    Animated.timing(bannerAnim, {
-      toValue: -100,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowNewOrderBanner(false);
-      setBannerOrder(null);
+  // Handle accepting order from modal
+  const handleAcceptOrder = useCallback(async (orderId: number) => {
+    try {
+      await acceptOrder(orderId);
+      setShowOrderOfferModal(false);
+      setOfferOrder(null);
       clearNewOrderOffer();
-    });
-  }, [bannerAnim, clearNewOrderOffer]);
-
-  const handleNewOrderPress = () => {
-    if (bannerOrder) {
-      const orderId = bannerOrder.orderId;
-      hideBanner();
-      router.push(`/available-order/${orderId}`);
+      // Navigate to the map navigation screen
+      router.push(`/map-navigation/${orderId}`);
+    } catch (error: any) {
+      // Check if order was already taken
+      const errorMessage = error.message || '';
+      if (
+        errorMessage.includes('already has a courier assigned') ||
+        errorMessage.includes('already assigned') ||
+        errorMessage.includes('ORDER_TAKEN')
+      ) {
+        Alert.alert(
+          t('available_orders.order_taken_title', 'Order No Longer Available'),
+          t('available_orders.order_already_taken', 'This order was already taken by another courier.')
+        );
+        setShowOrderOfferModal(false);
+        setOfferOrder(null);
+        clearNewOrderOffer();
+        fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+      } else {
+        Alert.alert(t('common.error'), errorMessage || t('available_orders.accept_error'));
+        throw error; // Re-throw so modal knows acceptance failed
+      }
     }
-  };
+  }, [acceptOrder, clearNewOrderOffer, fetchAvailableOrders, currentLocation, router, t]);
+
+  // Handle declining order from modal
+  const handleDeclineOrder = useCallback(() => {
+    setShowOrderOfferModal(false);
+    setOfferOrder(null);
+    clearNewOrderOffer();
+  }, [clearNewOrderOffer]);
 
   // Refresh available orders when tab changes to available
   useEffect(() => {
@@ -303,42 +262,14 @@ export default function OrdersScreen() {
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="orders">
       <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* New Order Notification Banner */}
-      {showNewOrderBanner && bannerOrder && (
-        <Animated.View
-          style={[
-            styles.newOrderBanner,
-            {
-              transform: [
-                { translateY: bannerAnim },
-                { scale: pulseAnim },
-              ],
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.newOrderBannerContent}
-            onPress={handleNewOrderPress}
-            activeOpacity={0.9}
-          >
-            <View style={styles.newOrderIconContainer}>
-              <Package size={24} color={Colors.surface} />
-            </View>
-            <View style={styles.newOrderTextContainer}>
-              <Text style={styles.newOrderTitle}>{t('orders.new_order_available')}</Text>
-              <Text style={styles.newOrderSubtitle} numberOfLines={1}>
-                {bannerOrder.restaurantName || t('orders.tap_to_view')}
-              </Text>
-            </View>
-            <View style={styles.newOrderAction}>
-              <Text style={styles.newOrderActionText}>{t('orders.view')}</Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.dismissButton} onPress={hideBanner}>
-            <Text style={styles.dismissText}>×</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+      {/* Full-screen Order Offer Modal */}
+      <OrderOfferModal
+        visible={showOrderOfferModal}
+        order={offerOrder}
+        onAccept={handleAcceptOrder}
+        onDecline={handleDeclineOrder}
+        timeoutSeconds={60}
+      />
 
       <View style={styles.header}>
         <View>
@@ -562,72 +493,5 @@ const styles = StyleSheet.create({
   loadingMore: {
     paddingVertical: 20,
     alignItems: 'center',
-  },
-  newOrderBanner: {
-    position: 'absolute',
-    top: 0,
-    left: 16,
-    right: 16,
-    zIndex: 100,
-    backgroundColor: Colors.success,
-    borderRadius: 16,
-    shadowColor: Colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  newOrderBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    paddingRight: 40,
-  },
-  newOrderIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  newOrderTextContainer: {
-    flex: 1,
-  },
-  newOrderTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.surface,
-    marginBottom: 2,
-  },
-  newOrderSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  newOrderAction: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  newOrderActionText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.surface,
-  },
-  dismissButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dismissText: {
-    fontSize: 20,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '300',
   },
 });

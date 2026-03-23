@@ -514,6 +514,19 @@
     "order_already_taken": "Этот заказ уже был взят другим курьером.",
     "another_courier": "другим курьером"
   },
+  "order_offer": {
+    "new_order": "Новый заказ!",
+    "estimated_earnings": "Ожидаемый заработок",
+    "tip": "чаевые",
+    "pickup": "ЗАБОР",
+    "dropoff": "ДОСТАВКА",
+    "away": "от вас",
+    "total": "всего",
+    "items": "товаров",
+    "accept": "Принять заказ",
+    "decline": "Отклонить",
+    "accepting": "Принимаем..."
+  },
   "navigation": {
     "heading_to_pickup": "Едем к ресторану",
     "heading_to_dropoff": "Едем к клиенту",

@@ -501,6 +501,19 @@
     "order_already_taken": "This order was already taken by another courier.",
     "another_courier": "another courier"
   },
+  "order_offer": {
+    "new_order": "New Order!",
+    "estimated_earnings": "Estimated Earnings",
+    "tip": "tip",
+    "pickup": "PICKUP",
+    "dropoff": "DROP-OFF",
+    "away": "away",
+    "total": "total",
+    "items": "items",
+    "accept": "Accept Order",
+    "decline": "Decline",
+    "accepting": "Accepting..."
+  },
   "navigation": {
     "heading_to_pickup": "Heading to Pickup",
     "heading_to_dropoff": "Heading to Drop-off",

@@ -514,6 +514,19 @@
     "order_already_taken": "Bu buyurtma boshqa kuryer tomonidan allaqachon qabul qilingan.",
     "another_courier": "boshqa kuryer"
   },
+  "order_offer": {
+    "new_order": "Yangi buyurtma!",
+    "estimated_earnings": "Taxminiy daromad",
+    "tip": "choy puli",
+    "pickup": "OLISH",
+    "dropoff": "YETKAZISH",
+    "away": "masofada",
+    "total": "jami",
+    "items": "ta mahsulot",
+    "accept": "Buyurtmani qabul qilish",
+    "decline": "Rad etish",
+    "accepting": "Qabul qilinmoqda..."
+  },
   "navigation": {
     "heading_to_pickup": "Restoranga yo'l olmoqda",
     "heading_to_dropoff": "Mijozga yo'l olmoqda",
