@@ -1096,30 +1096,16 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [isWebSocketConnected, orders, subscribeToOrderStatusUpdates]);
 
-  // Set up auto-refresh for orders when online
+  // Fetch available orders once when going online
+  // New orders come via WebSocket and push notifications, no polling needed
   useEffect(() => {
     if (isOnline && user) {
-      // Clear any existing interval
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-      }
-
-      // Fetch available orders immediately when going online
+      // Fetch available orders once when going online
       fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-
-      // Set up new interval
-      refreshIntervalRef.current = setInterval(() => {
-        fetchOrders();
-        fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-      }, ORDER_CONFIG.REFRESH_INTERVAL);
-
-      return () => {
-        if (refreshIntervalRef.current) {
-          clearInterval(refreshIntervalRef.current);
-        }
-      };
+      // Also fetch active orders to sync state
+      fetchOrders();
     }
-  }, [isOnline, user, fetchOrders, fetchAvailableOrders, currentLocation]);
+  }, [isOnline, user]);
 
   const login = async (email: string, password: string): Promise<void> => {
     try {
