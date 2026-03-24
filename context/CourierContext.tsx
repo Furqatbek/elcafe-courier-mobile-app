@@ -194,24 +194,38 @@ export interface EarningsBreakdownItem {
 
 // Earnings summary from GET /couriers/me/earnings
 export interface EarningsSummary {
-  period: EarningsPeriod;
+  // Period-based earnings
+  todayEarnings: number;
+  weekEarnings: number;
+  monthEarnings: number;
   totalEarnings: number;
-  deliveryFees: number;
-  tips: number;
+  // Period-based deliveries
+  todayDeliveries: number;
+  weekDeliveries: number;
+  monthDeliveries: number;
   totalDeliveries: number;
-  avgPerDelivery: number;
-  onlineHours: number;
-  breakdown: EarningsBreakdownItem[];
+  // Stats
+  averagePerDelivery: number;
+  pendingPayout: number;
+  // Legacy fields (for backwards compatibility)
+  deliveryFees?: number;
+  tips?: number;
+  avgPerDelivery?: number;
+  onlineHours?: number;
+  breakdown?: EarningsBreakdownItem[];
 }
 
 const DEFAULT_EARNINGS: EarningsSummary = {
-  period: 'THIS_WEEK',
+  todayEarnings: 0,
+  weekEarnings: 0,
+  monthEarnings: 0,
   totalEarnings: 0,
-  deliveryFees: 0,
-  tips: 0,
+  todayDeliveries: 0,
+  weekDeliveries: 0,
+  monthDeliveries: 0,
   totalDeliveries: 0,
-  avgPerDelivery: 0,
-  onlineHours: 0,
+  averagePerDelivery: 0,
+  pendingPayout: 0,
   breakdown: [],
 };
 
@@ -430,10 +444,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       const data = await response.json();
 
       if (data.success && data.data) {
-        // Ensure breakdown is always an array to prevent undefined errors
+        // Map backend response to EarningsSummary
         setEarnings({
           ...DEFAULT_EARNINGS,
           ...data.data,
+          // Ensure breakdown is always an array
           breakdown: data.data.breakdown || [],
         });
         setEarningsPeriod(period);

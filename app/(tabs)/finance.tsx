@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, Clock, TrendingUp, Package, Gift } from 'lucide-react-native';
+import { DollarSign, TrendingUp, Package, Wallet, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
 import { useCourier, EarningsPeriod } from '@/context/CourierContext';
@@ -16,34 +16,69 @@ const TAB_ROUTES = [
 
 export default function FinanceScreen() {
   const { t } = useTranslation();
-  const { earnings, earningsPeriod, isLoadingEarnings, fetchEarnings } = useCourier();
-  const [selectedPeriod, setSelectedPeriod] = useState<EarningsPeriod>(earningsPeriod);
+  const { earnings, isLoadingEarnings, fetchEarnings } = useCourier();
+  const [selectedPeriod, setSelectedPeriod] = useState<'TODAY' | 'THIS_WEEK' | 'THIS_MONTH'>('THIS_WEEK');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchEarnings(selectedPeriod);
+    fetchEarnings(selectedPeriod as EarningsPeriod);
   }, [selectedPeriod]);
 
-  const handlePeriodChange = (period: EarningsPeriod) => {
+  const handlePeriodChange = (period: 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH') => {
     setSelectedPeriod(period);
   };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchEarnings(selectedPeriod);
+    await fetchEarnings(selectedPeriod as EarningsPeriod);
     setIsRefreshing(false);
   };
 
   const formatCurrency = (amount: number) => {
-    return `${amount.toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
+    return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  // Get earnings and deliveries based on selected period
+  const getPeriodEarnings = () => {
+    switch (selectedPeriod) {
+      case 'TODAY':
+        return earnings.todayEarnings;
+      case 'THIS_WEEK':
+        return earnings.weekEarnings;
+      case 'THIS_MONTH':
+        return earnings.monthEarnings;
+      default:
+        return 0;
+    }
   };
 
-  const PeriodButton = ({ period, label }: { period: EarningsPeriod; label: string }) => (
+  const getPeriodDeliveries = () => {
+    switch (selectedPeriod) {
+      case 'TODAY':
+        return earnings.todayDeliveries;
+      case 'THIS_WEEK':
+        return earnings.weekDeliveries;
+      case 'THIS_MONTH':
+        return earnings.monthDeliveries;
+      default:
+        return 0;
+    }
+  };
+
+  const getPeriodLabel = () => {
+    switch (selectedPeriod) {
+      case 'TODAY':
+        return t('finance.today_earnings');
+      case 'THIS_WEEK':
+        return t('finance.week_earnings');
+      case 'THIS_MONTH':
+        return t('finance.month_earnings');
+      default:
+        return '';
+    }
+  };
+
+  const PeriodButton = ({ period, label }: { period: 'TODAY' | 'THIS_WEEK' | 'THIS_MONTH'; label: string }) => (
     <TouchableOpacity
       style={[styles.periodButton, selectedPeriod === period && styles.periodButtonActive]}
       onPress={() => handlePeriodChange(period)}
@@ -54,20 +89,21 @@ export default function FinanceScreen() {
     </TouchableOpacity>
   );
 
-  const StatCard = ({ title, value, icon: Icon, isAmount = true }: {
+  const StatCard = ({ title, value, icon: Icon, isAmount = true, color = Colors.primary }: {
     title: string;
     value: number;
     icon: any;
     isAmount?: boolean;
+    color?: string;
   }) => (
     <View style={styles.statCard}>
       <View style={styles.statHeader}>
-        <View style={styles.iconContainer}>
-          <Icon size={20} color={Colors.primary} />
+        <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
+          <Icon size={20} color={color} />
         </View>
-        <Text style={styles.statTitle}>{title}</Text>
       </View>
-      <Text style={styles.statValue}>
+      <Text style={styles.statTitle}>{title}</Text>
+      <Text style={[styles.statValue, { color }]}>
         {isAmount ? formatCurrency(value) : value.toString()}
       </Text>
     </View>
@@ -99,95 +135,97 @@ export default function FinanceScreen() {
           <PeriodButton period="THIS_MONTH" label={t('common.month')} />
         </View>
 
-        {/* Balance Card */}
+        {/* Period Earnings Card */}
         <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>{t('finance.total_earnings')}</Text>
+          <View style={styles.balanceHeader}>
+            <Calendar size={20} color="rgba(255,255,255,0.8)" />
+            <Text style={styles.balanceLabel}>{getPeriodLabel()}</Text>
+          </View>
           {isLoadingEarnings ? (
             <ActivityIndicator size="large" color={Colors.surface} style={{ marginVertical: 20 }} />
           ) : (
-            <Text style={styles.balanceValue}>{formatCurrency(earnings.totalEarnings)}</Text>
+            <>
+              <Text style={styles.balanceValue}>{formatCurrency(getPeriodEarnings())}</Text>
+              <View style={styles.periodDeliveriesRow}>
+                <Package size={16} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.periodDeliveriesText}>
+                  {getPeriodDeliveries()} {t('finance.deliveries')}
+                </Text>
+              </View>
+            </>
           )}
-          <Button
-            title={t('finance.withdraw_funds')}
-            variant="secondary"
-            style={styles.withdrawButton}
-            onPress={() => {}}
-          />
         </View>
 
-        {/* Stats Overview */}
-        <Text style={styles.sectionTitle}>{t('finance.overview')}</Text>
+        {/* All-Time Stats */}
+        <Text style={styles.sectionTitle}>{t('finance.all_time_stats')}</Text>
 
         <View style={styles.statsGrid}>
           <StatCard
-            title={t('finance.delivery_fees')}
-            value={earnings.deliveryFees}
+            title={t('finance.total_earnings')}
+            value={earnings.totalEarnings}
             icon={DollarSign}
+            color={Colors.success}
           />
-          <StatCard
-            title={t('finance.tips')}
-            value={earnings.tips}
-            icon={Gift}
-          />
-        </View>
-
-        <View style={styles.statsGrid}>
           <StatCard
             title={t('finance.total_deliveries')}
             value={earnings.totalDeliveries}
             icon={Package}
             isAmount={false}
-          />
-          <StatCard
-            title={t('finance.avg_per_delivery')}
-            value={earnings.avgPerDelivery}
-            icon={TrendingUp}
+            color={Colors.primary}
           />
         </View>
 
         <View style={styles.statsGrid}>
           <StatCard
-            title={t('finance.online_hours')}
-            value={earnings.onlineHours}
-            icon={Clock}
-            isAmount={false}
+            title={t('finance.avg_per_delivery')}
+            value={earnings.averagePerDelivery}
+            icon={TrendingUp}
+            color={Colors.accent}
+          />
+          <StatCard
+            title={t('finance.pending_payout')}
+            value={earnings.pendingPayout}
+            icon={Wallet}
+            color={Colors.warning}
           />
         </View>
 
-        {/* Earnings Breakdown */}
-        {earnings.breakdown.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>{t('finance.breakdown')}</Text>
-            <View style={styles.breakdownList}>
-              {earnings.breakdown.map((item, index) => (
-                <View
-                  key={item.date}
-                  style={[
-                    styles.breakdownItem,
-                    index === earnings.breakdown.length - 1 && styles.breakdownItemLast
-                  ]}
-                >
-                  <View style={styles.breakdownLeft}>
-                    <Text style={styles.breakdownDate}>{formatDate(item.date)}</Text>
-                    <Text style={styles.breakdownDeliveries}>
-                      {item.deliveries} {t('finance.deliveries')}
-                    </Text>
-                  </View>
-                  <Text style={styles.breakdownAmount}>
-                    {formatCurrency(item.earnings)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
+        {/* Earnings Summary Table */}
+        <Text style={styles.sectionTitle}>{t('finance.overview')}</Text>
 
-        {/* Empty State for Breakdown */}
-        {!isLoadingEarnings && earnings.breakdown.length === 0 && (
-          <View style={styles.emptyBreakdown}>
-            <Text style={styles.emptyText}>{t('finance.no_earnings_period')}</Text>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{t('finance.today_earnings')}</Text>
+            <View style={styles.summaryRight}>
+              <Text style={styles.summaryValue}>{formatCurrency(earnings.todayEarnings)}</Text>
+              <Text style={styles.summaryDeliveries}>{earnings.todayDeliveries} {t('finance.deliveries')}</Text>
+            </View>
           </View>
-        )}
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{t('finance.week_earnings')}</Text>
+            <View style={styles.summaryRight}>
+              <Text style={styles.summaryValue}>{formatCurrency(earnings.weekEarnings)}</Text>
+              <Text style={styles.summaryDeliveries}>{earnings.weekDeliveries} {t('finance.deliveries')}</Text>
+            </View>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{t('finance.month_earnings')}</Text>
+            <View style={styles.summaryRight}>
+              <Text style={styles.summaryValue}>{formatCurrency(earnings.monthEarnings)}</Text>
+              <Text style={styles.summaryDeliveries}>{earnings.monthDeliveries} {t('finance.deliveries')}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Withdraw Button */}
+        <Button
+          title={t('finance.withdraw_funds')}
+          variant="primary"
+          style={styles.withdrawButton}
+          onPress={() => {}}
+        />
       </ScrollView>
     </WithSwipeGesture>
   );
@@ -250,21 +288,32 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
+  balanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   balanceLabel: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
   },
   balanceValue: {
     color: Colors.surface,
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '800',
-    marginBottom: 24,
+    marginBottom: 12,
   },
-  withdrawButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 0,
+  periodDeliveriesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  periodDeliveriesText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    fontWeight: '500',
   },
   sectionTitle: {
     fontSize: 18,
@@ -274,8 +323,8 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 12,
   },
   statCard: {
     flex: 1,
@@ -289,73 +338,60 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   statHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 12,
-    gap: 8,
   },
   iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.background,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   statTitle: {
     fontSize: 13,
     color: Colors.textSecondary,
-    fontWeight: '600',
-    flex: 1,
+    fontWeight: '500',
+    marginBottom: 4,
   },
   statValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: Colors.secondary,
   },
-  breakdownList: {
+  summaryCard: {
     backgroundColor: Colors.surface,
     borderRadius: 16,
-    padding: 8,
-  },
-  breakdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.background,
+    marginBottom: 24,
   },
-  breakdownItemLast: {
-    borderBottomWidth: 0,
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  breakdownLeft: {
-    flex: 1,
-  },
-  breakdownDate: {
-    fontSize: 16,
-    fontWeight: '600',
+  summaryLabel: {
+    fontSize: 15,
     color: Colors.text,
-    marginBottom: 2,
+    fontWeight: '500',
   },
-  breakdownDeliveries: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+  summaryRight: {
+    alignItems: 'flex-end',
   },
-  breakdownAmount: {
+  summaryValue: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.success,
   },
-  emptyBreakdown: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 32,
-    alignItems: 'center',
+  summaryDeliveries: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.textLight,
-    textAlign: 'center',
+  summaryDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+  },
+  withdrawButton: {
+    marginTop: 8,
   },
 });
