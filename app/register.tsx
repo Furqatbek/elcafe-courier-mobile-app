@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Lock, Mail, User, Phone } from 'lucide-react-native';
+import { Lock, Mail, User, Phone, Eye, EyeOff } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { BASE_URL, API_ENDPOINTS } from '@/constants/config';
@@ -30,6 +30,8 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Clear specific field error when user starts typing
   const handleFieldChange = (field: keyof FieldErrors, value: string, setter: (v: string) => void) => {
@@ -249,8 +251,19 @@ export default function RegisterScreen() {
                   placeholderTextColor={Colors.textLight}
                   value={password}
                   onChangeText={(v) => handleFieldChange('password', v, setPassword)}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  {showPassword ? (
+                    <EyeOff size={20} color={Colors.textLight} />
+                  ) : (
+                    <Eye size={20} color={Colors.textLight} />
+                  )}
+                </TouchableOpacity>
               </View>
               <ErrorText error={errors.password} />
 
@@ -262,8 +275,19 @@ export default function RegisterScreen() {
                   placeholderTextColor={Colors.textLight}
                   value={confirmPassword}
                   onChangeText={(v) => handleFieldChange('confirmPassword', v, setConfirmPassword)}
-                  secureTextEntry
+                  secureTextEntry={!showConfirmPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeButton}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff size={20} color={Colors.textLight} />
+                  ) : (
+                    <Eye size={20} color={Colors.textLight} />
+                  )}
+                </TouchableOpacity>
               </View>
               <ErrorText error={errors.confirmPassword} />
 
@@ -375,6 +399,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.text,
+  },
+  eyeButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   errorText: {
     color: Colors.danger,
