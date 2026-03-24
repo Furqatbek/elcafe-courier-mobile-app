@@ -8,6 +8,17 @@ import { Button } from '@/components/Button';
 import { BASE_URL, API_ENDPOINTS } from '@/constants/config';
 import { Logo } from '@/components/Logo';
 
+// Field error state type
+interface FieldErrors {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  confirmPassword?: string;
+  general?: string;
+}
+
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -18,23 +29,76 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+
+  // Clear specific field error when user starts typing
+  const handleFieldChange = (field: keyof FieldErrors, value: string, setter: (v: string) => void) => {
+    setter(value);
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  // Parse backend validation errors
+  const parseBackendErrors = (data: any): FieldErrors => {
+    const fieldErrors: FieldErrors = {};
+
+    if (data && typeof data === 'object') {
+      // Map backend field names to our field names
+      const fieldMapping: Record<string, keyof FieldErrors> = {
+        firstName: 'firstName',
+        lastName: 'lastName',
+        email: 'email',
+        phone: 'phone',
+        password: 'password',
+        confirmPassword: 'confirmPassword',
+      };
+
+      Object.keys(data).forEach(key => {
+        const mappedField = fieldMapping[key];
+        if (mappedField) {
+          fieldErrors[mappedField] = data[key];
+        }
+      });
+    }
+
+    return fieldErrors;
+  };
 
   const handleRegister = async () => {
-    if (!firstName || !lastName || !email || !phone || !password || !confirmPassword) {
-      Alert.alert(t('common.error_title'), t('common.fill_all_fields'));
+    // Clear previous errors
+    setErrors({});
+
+    // Client-side validation
+    const newErrors: FieldErrors = {};
+
+    if (!firstName.trim()) {
+      newErrors.firstName = t('register.first_name_required', 'First name is required');
+    }
+    if (!lastName.trim()) {
+      newErrors.lastName = t('register.last_name_required', 'Last name is required');
+    }
+    if (!email.trim()) {
+      newErrors.email = t('register.email_required', 'Email is required');
+    }
+    if (!phone.trim()) {
+      newErrors.phone = t('register.phone_required', 'Phone number is required');
+    }
+    if (!password) {
+      newErrors.password = t('register.password_required', 'Password is required');
+    }
+    if (!confirmPassword) {
+      newErrors.confirmPassword = t('register.confirm_password_required', 'Please confirm your password');
+    }
+    if (password && confirmPassword && password !== confirmPassword) {
+      newErrors.confirmPassword = t('register.password_mismatch', 'Passwords do not match');
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
-    if (password !== confirmPassword) {
-      Alert.alert(t('common.error_title'), t('register.password_mismatch'));
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert(t('common.error_title'), t('register.password_too_short'));
-      return;
-    }
-    
     setIsLoading(true);
     try {
       const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REGISTER}`, {
@@ -43,10 +107,10 @@ export default function RegisterScreen() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          firstName,
-          lastName,
-          email,
-          phone,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone.trim(),
           password,
         }),
       });
@@ -65,23 +129,41 @@ export default function RegisterScreen() {
           ]
         );
       } else {
-        throw new Error(data.message || t('register.registration_failed'));
+        // Parse field-specific errors from backend
+        if (data.data && typeof data.data === 'object') {
+          const fieldErrors = parseBackendErrors(data.data);
+          if (Object.keys(fieldErrors).length > 0) {
+            setErrors(fieldErrors);
+          } else {
+            // Fallback to general error message
+            setErrors({ general: data.message || t('register.registration_failed') });
+          }
+        } else {
+          // No field-specific errors, show general message
+          setErrors({ general: data.message || t('register.registration_failed') });
+        }
       }
     } catch (error: any) {
-      Alert.alert(t('common.error_title'), error.message || t('register.registration_failed'));
+      setErrors({ general: error.message || t('register.registration_failed') });
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Error text component
+  const ErrorText = ({ error }: { error?: string }) => {
+    if (!error) return null;
+    return <Text style={styles.errorText}>{error}</Text>;
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardView}
         >
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -92,90 +174,107 @@ export default function RegisterScreen() {
               <Text style={styles.subtitle}>{t('register.create_account_subtitle')}</Text>
             </View>
 
+            {/* General error message */}
+            {errors.general && (
+              <View style={styles.generalErrorContainer}>
+                <Text style={styles.generalErrorText}>{errors.general}</Text>
+              </View>
+            )}
+
             <View style={styles.form}>
               <View style={styles.row}>
-                <View style={[styles.inputContainer, styles.halfWidth]}>
-                  <User size={20} color={Colors.textLight} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('register.first_name_placeholder')}
-                    placeholderTextColor={Colors.textLight}
-                    value={firstName}
-                    onChangeText={setFirstName}
-                    autoCapitalize="words"
-                  />
+                <View style={styles.halfWidthContainer}>
+                  <View style={[styles.inputContainer, errors.firstName && styles.inputContainerError]}>
+                    <User size={20} color={errors.firstName ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('register.first_name_placeholder')}
+                      placeholderTextColor={Colors.textLight}
+                      value={firstName}
+                      onChangeText={(v) => handleFieldChange('firstName', v, setFirstName)}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                  <ErrorText error={errors.firstName} />
                 </View>
-                
-                <View style={[styles.inputContainer, styles.halfWidth]}>
-                  <User size={20} color={Colors.textLight} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('register.last_name_placeholder')}
-                    placeholderTextColor={Colors.textLight}
-                    value={lastName}
-                    onChangeText={setLastName}
-                    autoCapitalize="words"
-                  />
+
+                <View style={styles.halfWidthContainer}>
+                  <View style={[styles.inputContainer, errors.lastName && styles.inputContainerError]}>
+                    <User size={20} color={errors.lastName ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('register.last_name_placeholder')}
+                      placeholderTextColor={Colors.textLight}
+                      value={lastName}
+                      onChangeText={(v) => handleFieldChange('lastName', v, setLastName)}
+                      autoCapitalize="words"
+                    />
+                  </View>
+                  <ErrorText error={errors.lastName} />
                 </View>
               </View>
 
-              <View style={styles.inputContainer}>
-                <Mail size={20} color={Colors.textLight} style={styles.inputIcon} />
+              <View style={[styles.inputContainer, errors.email && styles.inputContainerError]}>
+                <Mail size={20} color={errors.email ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder={t('register.email_placeholder')}
                   placeholderTextColor={Colors.textLight}
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(v) => handleFieldChange('email', v, setEmail)}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
               </View>
+              <ErrorText error={errors.email} />
 
-              <View style={styles.inputContainer}>
-                <Phone size={20} color={Colors.textLight} style={styles.inputIcon} />
+              <View style={[styles.inputContainer, errors.phone && styles.inputContainerError]}>
+                <Phone size={20} color={errors.phone ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder={t('register.phone_placeholder')}
                   placeholderTextColor={Colors.textLight}
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={(v) => handleFieldChange('phone', v, setPhone)}
                   keyboardType="phone-pad"
                 />
               </View>
-              
-              <View style={styles.inputContainer}>
-                <Lock size={20} color={Colors.textLight} style={styles.inputIcon} />
+              <ErrorText error={errors.phone} />
+
+              <View style={[styles.inputContainer, errors.password && styles.inputContainerError]}>
+                <Lock size={20} color={errors.password ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder={t('register.password_placeholder')}
                   placeholderTextColor={Colors.textLight}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(v) => handleFieldChange('password', v, setPassword)}
                   secureTextEntry
                 />
               </View>
+              <ErrorText error={errors.password} />
 
-              <View style={styles.inputContainer}>
-                <Lock size={20} color={Colors.textLight} style={styles.inputIcon} />
+              <View style={[styles.inputContainer, errors.confirmPassword && styles.inputContainerError]}>
+                <Lock size={20} color={errors.confirmPassword ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder={t('register.confirm_password_placeholder')}
                   placeholderTextColor={Colors.textLight}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(v) => handleFieldChange('confirmPassword', v, setConfirmPassword)}
                   secureTextEntry
                 />
               </View>
+              <ErrorText error={errors.confirmPassword} />
 
               <Text style={styles.termsText}>
                 {t('register.by_signing_up')} <Text style={styles.linkText}>{t('register.terms')}</Text> {t('register.and')} <Text style={styles.linkText}>{t('register.privacy')}</Text>
               </Text>
 
-              <Button 
-                title={t('register.register_button')} 
-                onPress={handleRegister} 
-                isLoading={isLoading} 
+              <Button
+                title={t('register.register_button')}
+                onPress={handleRegister}
+                isLoading={isLoading}
                 style={styles.registerButton}
               />
             </View>
@@ -229,13 +328,30 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 8,
   },
+  generalErrorContainer: {
+    backgroundColor: Colors.danger + '15',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.danger + '30',
+  },
+  generalErrorText: {
+    color: Colors.danger,
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   form: {
     marginBottom: 24,
   },
   row: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 0,
+  },
+  halfWidthContainer: {
+    flex: 1,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -244,13 +360,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     height: 56,
-    marginBottom: 16,
+    marginBottom: 4,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  halfWidth: {
-    flex: 1,
-    marginBottom: 0,
+  inputContainerError: {
+    borderColor: Colors.danger,
+    backgroundColor: Colors.danger + '08',
   },
   inputIcon: {
     marginRight: 12,
@@ -259,6 +375,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: Colors.text,
+  },
+  errorText: {
+    color: Colors.danger,
+    fontSize: 12,
+    marginBottom: 12,
+    marginLeft: 4,
+    marginTop: 2,
   },
   termsText: {
     fontSize: 12,
