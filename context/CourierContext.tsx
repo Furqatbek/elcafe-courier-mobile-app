@@ -660,6 +660,23 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
+  // Mark all notifications as read
+  const markAllNotificationsAsRead = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ, {
+        method: 'PUT',
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        setUnreadCount(0);
+      }
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+    }
+  }, [authenticatedFetch]);
+
   // Fetch available orders nearby
   const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
     setIsLoadingAvailableOrders(true);
@@ -1634,6 +1651,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     fetchNotifications,
     fetchUnreadCount,
     markNotificationAsRead,
+    markAllNotificationsAsRead,
 
     // WebSocket / Real-time updates
     isWebSocketConnected,

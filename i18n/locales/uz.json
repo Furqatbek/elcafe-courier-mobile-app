@@ -593,6 +593,7 @@
     "empty_title": "Bildirishnomalar yo'q",
     "empty_message": "Yangi bildirishnomalar shu yerda paydo bo'ladi",
     "fetch_error": "Bildirishnomalarni yuklab bo'lmadi",
+    "read_all": "Barchasini o'qish",
     "mark_read_error": "O'qilgan deb belgilab bo'lmadi",
     "types": {
       "new_order": "Yangi buyurtma",

@@ -16,6 +16,7 @@ import {
   DollarSign,
   Star,
   CheckCircle,
+  CheckCheck,
   XCircle,
   AlertCircle,
   ChevronRight,
@@ -58,12 +59,21 @@ export default function NotificationsScreen() {
   const toast = useToast();
   const {
     notifications,
+    unreadCount,
     isLoadingNotifications,
     fetchNotifications,
     markNotificationAsRead,
+    markAllNotificationsAsRead,
   } = useCourier();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+
+  const handleMarkAllRead = useCallback(async () => {
+    setIsMarkingAllRead(true);
+    await markAllNotificationsAsRead();
+    setIsMarkingAllRead(false);
+  }, [markAllNotificationsAsRead]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -119,6 +129,19 @@ export default function NotificationsScreen() {
     <>
       <Stack.Screen options={{ title: t('notifications.title') }} />
       <View style={styles.container}>
+        {notifications.length > 0 && unreadCount > 0 && (
+          <TouchableOpacity
+            style={styles.readAllButton}
+            onPress={handleMarkAllRead}
+            disabled={isMarkingAllRead}
+            activeOpacity={0.7}
+          >
+            <CheckCheck size={18} color={Colors.primary} />
+            <Text style={styles.readAllText}>
+              {t('notifications.read_all')}
+            </Text>
+          </TouchableOpacity>
+        )}
         {isLoadingNotifications && notifications.length === 0 ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
@@ -160,6 +183,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  readAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  readAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
   },
   listContent: {
     padding: 16,

@@ -572,7 +572,8 @@
     "title": "Notifications",
     "empty_title": "No Notifications",
     "empty_message": "You're all caught up! New notifications will appear here.",
-    "fetch_error": "Failed to load notifications"
+    "fetch_error": "Failed to load notifications",
+    "read_all": "Read All"
   },
   "verification_pending": {
     "title": "Verification Pending",
