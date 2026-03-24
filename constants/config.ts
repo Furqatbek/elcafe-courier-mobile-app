@@ -54,7 +54,7 @@ export const API_ENDPOINTS = {
   // Device tokens for push notifications
   DEVICE_TOKENS: {
     REGISTER: '/api/v1/device-tokens',
-    UNREGISTER: '/api/v1/device-tokens',
+    UNREGISTER_ALL: '/api/v1/device-tokens/all',
   },
 } as const;
 

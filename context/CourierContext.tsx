@@ -868,6 +868,36 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setNewOrderOffer(null);
   }, []);
 
+  // Handle push notification for new delivery (FCM NEW_DELIVERY_AVAILABLE)
+  const handleNewOrderPush = useCallback((data: {
+    orderId?: string | number;
+    orderNumber?: string;
+    restaurantName?: string;
+  }) => {
+    if (!data.orderId) {
+      console.log('[CourierContext] Push notification missing orderId');
+      return;
+    }
+
+    const orderId = typeof data.orderId === 'string' ? parseInt(data.orderId, 10) : data.orderId;
+
+    console.log('[CourierContext] Handling NEW_DELIVERY_AVAILABLE push:', orderId);
+
+    // Create a minimal NewOrderNotification to trigger the modal
+    const notification: NewOrderNotification = {
+      type: 'NEW_ORDER',
+      orderId,
+      externalOrderNo: data.orderNumber,
+      restaurantId: 0,
+      restaurantName: data.restaurantName || 'Restaurant',
+    };
+
+    setNewOrderOffer(notification);
+
+    // Also refresh available orders to get full details
+    fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+  }, [fetchAvailableOrders, currentLocation]);
+
   // Clear order taken event (after user acknowledges it)
   const clearOrderTakenEvent = useCallback(() => {
     setOrderTakenEvent(null);
@@ -1608,6 +1638,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     isWebSocketConnected,
     newOrderOffer,
     clearNewOrderOffer,
+    handleNewOrderPush,
     orderTakenEvent,
     clearOrderTakenEvent,
     removeAvailableOrder,

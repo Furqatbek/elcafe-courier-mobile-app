@@ -142,11 +142,16 @@ async function setupNotificationChannel() {
   }
 }
 
+// Push notification types from backend
+const PUSH_TYPES = {
+  NEW_DELIVERY_AVAILABLE: 'NEW_DELIVERY_AVAILABLE',
+} as const;
+
 // Component to handle notification events (native only)
 function NotificationHandler() {
   const router = useRouter();
   const toast = useToast();
-  const { fetchNotifications, fetchUnreadCount } = useCourier();
+  const { fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline } = useCourier();
   const notificationListener = useRef<Notifications.Subscription>();
   const responseListener = useRef<Notifications.Subscription>();
 
@@ -158,11 +163,33 @@ function NotificationHandler() {
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
       console.log('[Notification] Received:', notification);
 
-      // Refresh notifications list
+      const data = notification.request.content.data as Record<string, unknown> | undefined;
+      const notificationType = data?.type as string | undefined;
+
+      // Handle NEW_DELIVERY_AVAILABLE - show order offer modal
+      if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE) {
+        console.log('[Notification] NEW_DELIVERY_AVAILABLE received:', data);
+
+        // Only show modal if courier is online
+        if (isOnline) {
+          handleNewOrderPush({
+            orderId: data?.orderId as string | number | undefined,
+            orderNumber: data?.orderNumber as string | undefined,
+            restaurantName: data?.restaurantName as string | undefined,
+          });
+        } else {
+          // Show toast if offline
+          const title = notification.request.content.title || 'New Delivery';
+          const body = notification.request.content.body || '';
+          toast.show(`${title}: ${body}`, 'info');
+        }
+        return;
+      }
+
+      // For other notification types, refresh list and show toast
       fetchNotifications();
       fetchUnreadCount();
 
-      // Show in-app toast
       const title = notification.request.content.title || 'New Notification';
       const body = notification.request.content.body || '';
       toast.show(`${title}: ${body}`, 'info');
@@ -172,7 +199,15 @@ function NotificationHandler() {
     responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('[Notification] User tapped:', response);
 
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      const notificationType = data?.type as string | undefined;
+
+      // Handle NEW_DELIVERY_AVAILABLE tap - navigate to available order
+      if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE && data?.orderId) {
+        console.log('[Notification] Navigating to available order:', data.orderId);
+        router.push(`/available-order/${data.orderId}`);
+        return;
+      }
 
       // Navigate based on notification data
       if (data?.orderId) {
@@ -197,7 +232,7 @@ function NotificationHandler() {
         Notifications.removeNotificationSubscription(responseListener.current);
       }
     };
-  }, [fetchNotifications, fetchUnreadCount, router, toast]);
+  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline, router, toast]);
 
   return null;
 }

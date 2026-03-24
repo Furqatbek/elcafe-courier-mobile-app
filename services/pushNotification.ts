@@ -114,38 +114,31 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
 }
 
 /**
- * Unregister device token from the backend (call on logout)
+ * Unregister all device tokens from the backend (call on logout)
+ * This removes all tokens for this user, ensuring clean logout
  */
 export async function unregisterDeviceToken(accessToken: string): Promise<boolean> {
   try {
-    const storedToken = await AsyncStorage.getItem(DEVICE_TOKEN_KEY);
-
-    if (!storedToken) {
-      console.log('No stored device token to unregister');
-      return true;
-    }
-
-    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.UNREGISTER}`, {
+    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.UNREGISTER_ALL}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ deviceToken: storedToken }),
     });
 
     // Clear local storage regardless of API response
     await AsyncStorage.removeItem(DEVICE_TOKEN_KEY);
 
     if (response.ok) {
-      console.log('Device token unregistered successfully');
+      console.log('All device tokens unregistered successfully');
       return true;
     }
 
-    console.error('Failed to unregister device token:', response.status);
+    console.error('Failed to unregister device tokens:', response.status);
     return false;
   } catch (error) {
-    console.error('Error unregistering device token:', error);
+    console.error('Error unregistering device tokens:', error);
     // Still clear local storage on error
     await AsyncStorage.removeItem(DEVICE_TOKEN_KEY);
     return false;
