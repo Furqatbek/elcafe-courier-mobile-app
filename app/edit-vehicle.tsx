@@ -23,6 +23,7 @@ import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useCourier } from '@/context/CourierContext';
+import { courierApi } from '@/services/api';
 import { validateRequired, validateLicensePlate } from '@/lib/validation';
 
 type VehicleType = 'car' | 'motorcycle' | 'bicycle' | 'scooter';
@@ -36,7 +37,7 @@ interface VehicleOption {
 export default function EditVehicleScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useCourier();
+  const { user, fetchCourierProfile } = useCourier();
 
   const [vehicleType, setVehicleType] = useState<VehicleType>(
     (user?.vehicleType as VehicleType) || 'car'
@@ -91,11 +92,14 @@ export default function EditVehicleScreen() {
 
     setIsLoading(true);
     try {
-      // Simulate API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // In production, call your vehicle update API here
-      // await api.updateVehicle({ vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber });
+      await courierApi.updateProfile({
+        vehicleType: vehicleType.toUpperCase() as any,
+        vehicleNumber: vehiclePlate,
+        vehicleBrand,
+        vehicleModel,
+        licenseNumber,
+      });
+      await fetchCourierProfile();
 
       Alert.alert(
         t('common.success'),

@@ -25,12 +25,13 @@ import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useCourier } from '@/context/CourierContext';
+import { courierApi } from '@/services/api';
 import { validateEmail, validatePhone, validateRequired } from '@/lib/validation';
 
 export default function EditProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user } = useCourier();
+  const { user, fetchCourierProfile } = useCourier();
 
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
@@ -131,11 +132,8 @@ export default function EditProfileScreen() {
 
     setIsLoading(true);
     try {
-      // Simulate API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // In production, call your profile update API here
-      // await api.updateProfile({ firstName, lastName, email, phone, profileImage });
+      await courierApi.updateProfile({ firstName, lastName, email, phone });
+      await fetchCourierProfile();
 
       Alert.alert(
         t('common.success'),

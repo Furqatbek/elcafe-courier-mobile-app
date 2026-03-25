@@ -94,8 +94,15 @@ export interface CourierRegisterRequest {
 }
 
 export interface CourierUpdateRequest {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
   vehicleType?: VehicleType;
   vehicleNumber?: string;
+  vehicleBrand?: string;
+  vehicleModel?: string;
+  licenseNumber?: string;
   preferredRadiusKm?: number;
 }
 
