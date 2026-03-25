@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X } from 'lucide-react-native';
+import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS, ISSUE_TYPES } from '@/constants/config';
 import { useCourier, OrderStatus, Order, IssueType } from '@/context/CourierContext';
@@ -145,6 +145,58 @@ export default function OrderDetailScreen() {
     }
   };
 
+  // Determine if order is active (needs navigation)
+  const isActiveOrder = order.status === 'ACCEPTED' || order.status === 'READY' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING';
+  const isGoingToPickup = order.status === 'ACCEPTED' || order.status === 'READY';
+
+  const handleOpenNavigator = () => {
+    const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;
+    const lng = isGoingToPickup ? order.restaurantLng : order.deliveryLng;
+    const name = isGoingToPickup ? (order.restaurantName ?? 'Pickup') : (order.customerName ?? 'Delivery');
+
+    if (!lat || !lng) {
+      // Fallback to map-navigation screen
+      router.push(`/map-navigation/${order.orderId}`);
+      return;
+    }
+
+    const label = encodeURIComponent(name);
+    const navigationUrls = Platform.select({
+      ios: [
+        `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+        `waze://?ll=${lat},${lng}&navigate=yes`,
+        `maps://?daddr=${lat},${lng}`,
+      ],
+      android: [
+        `google.navigation:q=${lat},${lng}`,
+        `waze://?ll=${lat},${lng}&navigate=yes`,
+        `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+      ],
+      default: [
+        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+      ],
+    }) || [];
+
+    const tryOpenUrl = async (urls: string[], index: number = 0) => {
+      if (index >= urls.length) {
+        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
+        return;
+      }
+      try {
+        const supported = await Linking.canOpenURL(urls[index]);
+        if (supported) {
+          await Linking.openURL(urls[index]);
+        } else {
+          tryOpenUrl(urls, index + 1);
+        }
+      } catch {
+        tryOpenUrl(urls, index + 1);
+      }
+    };
+
+    tryOpenUrl(navigationUrls);
+  };
+
   const handleCallCustomer = () => {
     if (customerPhone) {
       Linking.openURL(`tel:${customerPhone}`);
@@ -248,6 +300,21 @@ export default function OrderDetailScreen() {
             </View>
           </View>
         </View>
+
+        {/* Navigate Button */}
+        {isActiveOrder && (
+          <View style={styles.navigateContainer}>
+            <TouchableOpacity
+              style={styles.navigateButton}
+              onPress={handleOpenNavigator}
+              activeOpacity={0.7}
+            >
+              <Navigation size={22} color={Colors.surface} />
+              <Text style={styles.navigateButtonText}>{t('navigation.open_navigator')}</Text>
+              <ExternalLink size={16} color={Colors.surface} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Contact Actions */}
         {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
@@ -529,6 +596,24 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: Colors.success,
+  },
+  navigateContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+  },
+  navigateButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.surface,
   },
   contactRow: {
     flexDirection: 'row',
