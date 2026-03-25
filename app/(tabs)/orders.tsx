@@ -198,13 +198,6 @@ export default function OrdersScreen() {
     clearNewOrderOffer();
   }, [clearNewOrderOffer]);
 
-  // Refresh available orders when tab changes to available
-  useEffect(() => {
-    if (activeTab === 'available' && isOnline) {
-      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-    }
-  }, [activeTab, isOnline]);
-
   // Fetch order history when tab changes to history
   useEffect(() => {
     if (activeTab === 'history' && orderHistory.length === 0) {

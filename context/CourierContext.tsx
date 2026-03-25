@@ -724,11 +724,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     await Promise.all([
       fetchOrders(),
       fetchStats(),
-      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude),
       fetchUnreadCount(),
       fetchCourierProfile(), // Sync courier status from backend
     ]);
-  }, [user, fetchOrders, fetchStats, fetchAvailableOrders, fetchUnreadCount, currentLocation, fetchCourierProfile]);
+  }, [user, fetchOrders, fetchStats, fetchUnreadCount, fetchCourierProfile]);
 
   // Stop location tracking
   const stopLocationTracking = useCallback(async () => {
@@ -937,10 +936,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     };
 
     setNewOrderOffer(notification);
-
-    // Also refresh available orders to get full details
-    fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-  }, [fetchAvailableOrders, currentLocation]);
+  }, []);
 
   // Clear order taken event (after user acknowledges it)
   const clearOrderTakenEvent = useCallback(() => {
@@ -1125,13 +1121,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [isWebSocketConnected, orders, subscribeToOrderStatusUpdates]);
 
-  // Fetch available orders once when going online
-  // New orders come via WebSocket and push notifications, no polling needed
+  // Fetch active orders when going online
+  // Available orders come via WebSocket and push notifications, no polling needed
   useEffect(() => {
     if (isOnline && user) {
-      // Fetch available orders once when going online
-      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-      // Also fetch active orders to sync state
       fetchOrders();
     }
   }, [isOnline, user]);
