@@ -664,7 +664,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const markAllNotificationsAsRead = useCallback(async () => {
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ, {
-        method: 'PUT',
+        method: 'PATCH',
       });
       const data = await response.json();
 

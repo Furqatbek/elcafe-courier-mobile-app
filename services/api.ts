@@ -564,7 +564,7 @@ export const notificationsApi = {
     apiClient.put<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.MARK_READ(id)),
 
   markAllAsRead: () =>
-    apiClient.put<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ),
+    apiClient.patch<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ),
 };
 
 // Export all APIs
