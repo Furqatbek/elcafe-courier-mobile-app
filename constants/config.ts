@@ -47,9 +47,11 @@ export const API_ENDPOINTS = {
   // Notifications
   NOTIFICATIONS: {
     LIST: '/api/v1/notifications/me',
-    UNREAD_COUNT: '/api/v1/notifications/unread/count',
+    COUNTS: (userId: string | number) => `/api/v1/notifications/user/${userId}/counts`,
     MARK_READ: (id: string | number) => `/api/v1/notifications/${id}/read`,
-    MARK_ALL_READ: '/api/v1/notifications/read-all',
+    READ_BATCH: '/api/v1/notifications/read-batch',
+    DISMISS: (id: string | number) => `/api/v1/notifications/${id}/dismiss`,
+    BULK_ACTION: '/api/v1/notifications/bulk-action',
   },
 
   // Device tokens for push notifications

@@ -606,16 +606,23 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Fetch unread notification count
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT);
+      const userId = user?.id || courierProfile?.userId;
+      if (!userId) return;
+
+      const response = await authenticatedFetch(
+        `${API_ENDPOINTS.NOTIFICATIONS.COUNTS(userId)}?role=COURIER`
+      );
       const data = await response.json();
 
       if (data.success && data.data !== undefined) {
-        setUnreadCount(data.data.count ?? data.data);
+        setUnreadCount(data.data.unreadCount ?? data.data.count ?? data.data);
+      } else if (typeof data.unreadCount === 'number') {
+        setUnreadCount(data.unreadCount);
       }
     } catch (error) {
       console.error('Failed to fetch unread count:', error);
     }
-  }, [authenticatedFetch]);
+  }, [authenticatedFetch, user, courierProfile]);
 
   // Fetch courier profile and sync online status from backend
   const fetchCourierProfile = useCallback(async () => {
@@ -662,9 +669,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Mark all notifications as read
   const markAllNotificationsAsRead = useCallback(async () => {
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ, {
+      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.READ_BATCH, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: unreadIds }),
       });
       const data = await response.json();
 
@@ -675,7 +687,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
     }
-  }, [authenticatedFetch]);
+  }, [authenticatedFetch, notifications]);
 
   // Fetch available orders nearby
   const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {

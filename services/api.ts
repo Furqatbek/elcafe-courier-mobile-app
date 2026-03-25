@@ -432,6 +432,14 @@ class ApiClient {
     );
   }
 
+  async patch<T>(endpoint: string, body?: any, requiresAuth = true): Promise<T> {
+    return this.request<T>(
+      endpoint,
+      { method: 'PATCH', body: body ? JSON.stringify(body) : undefined },
+      requiresAuth
+    );
+  }
+
   async delete<T>(endpoint: string, requiresAuth = true): Promise<T> {
     return this.request<T>(endpoint, { method: 'DELETE' }, requiresAuth);
   }
@@ -557,14 +565,22 @@ export const earningsApi = {
 export const notificationsApi = {
   getAll: () => apiClient.get<Notification[]>(API_ENDPOINTS.NOTIFICATIONS.LIST),
 
-  getUnreadCount: () =>
-    apiClient.get<{ count: number }>(API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT),
+  getCounts: (userId: string | number) =>
+    apiClient.get<{ unreadCount: number; totalCount: number }>(
+      `${API_ENDPOINTS.NOTIFICATIONS.COUNTS(userId)}?role=COURIER`
+    ),
 
   markAsRead: (id: string | number) =>
-    apiClient.put<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.MARK_READ(id)),
+    apiClient.patch<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.MARK_READ(id)),
 
-  markAllAsRead: () =>
-    apiClient.patch<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.MARK_ALL_READ),
+  readBatch: (ids: (string | number)[]) =>
+    apiClient.patch<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.READ_BATCH, { ids }),
+
+  dismiss: (id: string | number) =>
+    apiClient.patch<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.DISMISS(id)),
+
+  bulkAction: (action: 'READ' | 'DISMISS' | 'DELETE', ids: (string | number)[]) =>
+    apiClient.post<{ message: string }>(API_ENDPOINTS.NOTIFICATIONS.BULK_ACTION, { action, ids }),
 };
 
 // Export all APIs
