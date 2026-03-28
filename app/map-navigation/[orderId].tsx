@@ -54,7 +54,7 @@ export default function MapNavigationScreen() {
 
   // Determine current destination based on order status
   // Going to pickup if status is ACCEPTED or READY
-  const isGoingToPickup = order?.status === 'ACCEPTED' || order?.status === 'READY';
+  const isGoingToPickup = order?.status === 'ACCEPTED' || order?.status === 'COURIER_ASSIGNED' || order?.status === 'READY';
 
   // Auto-open navigation when screen loads or status changes
   useEffect(() => {

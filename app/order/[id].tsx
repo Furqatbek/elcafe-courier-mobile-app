@@ -81,7 +81,7 @@ export default function OrderDetailScreen() {
   const handleSlideComplete = async () => {
     console.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
     try {
-      if (order.status === 'ACCEPTED' || order.status === 'READY') {
+      if (order.status === 'ACCEPTED' || order.status === 'COURIER_ASSIGNED' || order.status === 'READY') {
         console.log('[OrderDetail] Updating status to PICKED_UP...');
         await updateOrderStatus(order.orderId, 'PICKED_UP');
         router.push(`/map-navigation/${order.orderId}`);
@@ -138,6 +138,7 @@ export default function OrderDetailScreen() {
   const getButtonTitle = () => {
     switch (order.status) {
       case 'ACCEPTED':
+      case 'COURIER_ASSIGNED':
       case 'READY':
         return t('order_detail.slide_pickup');
       case 'PICKED_UP':
@@ -150,8 +151,8 @@ export default function OrderDetailScreen() {
   };
 
   // Determine if order is active (needs navigation)
-  const isActiveOrder = order.status === 'ACCEPTED' || order.status === 'READY' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING';
-  const isGoingToPickup = order.status === 'ACCEPTED' || order.status === 'READY';
+  const isActiveOrder = order.status === 'ACCEPTED' || order.status === 'COURIER_ASSIGNED' || order.status === 'READY' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING';
+  const isGoingToPickup = order.status === 'ACCEPTED' || order.status === 'COURIER_ASSIGNED' || order.status === 'READY';
 
   const handleOpenNavigator = () => {
     const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;

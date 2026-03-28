@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 
-export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
+export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
