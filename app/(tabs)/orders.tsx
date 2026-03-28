@@ -37,6 +37,7 @@ export default function OrdersScreen() {
     availableOrders,
     isLoadingAvailableOrders,
     fetchAvailableOrders,
+    fetchOrders,
     isOnline,
     toggleOnline,
     currentLocation,
@@ -207,7 +208,10 @@ export default function OrdersScreen() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+    await Promise.all([
+      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude),
+      fetchOrders(),
+    ]);
     setIsRefreshing(false);
   };
 
