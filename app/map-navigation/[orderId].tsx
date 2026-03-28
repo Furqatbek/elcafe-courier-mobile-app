@@ -125,37 +125,50 @@ export default function MapNavigationScreen() {
   // Open external navigation app (Google Maps, Apple Maps, Waze)
   const openExternalNavigation = () => {
     const dest = getDestinationInfo();
-    if (!dest.lat || !dest.lng) return;
-
     const lat = dest.lat;
     const lng = dest.lng;
+    const hasCoords = lat != null && lng != null && (lat !== 0 || lng !== 0);
     const label = encodeURIComponent(dest.name);
+    const destination = hasCoords
+      ? `${lat},${lng}`
+      : encodeURIComponent(dest.address || dest.name);
 
-    // Try to open navigation apps in order of preference
-    const navigationUrls = Platform.select({
-      ios: [
-        `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`, // Google Maps
-        `waze://?ll=${lat},${lng}&navigate=yes`, // Waze
-        `maps://?daddr=${lat},${lng}`, // Apple Maps
-      ],
-      android: [
-        `google.navigation:q=${lat},${lng}`, // Google Maps Navigation
-        `waze://?ll=${lat},${lng}&navigate=yes`, // Waze
-        `geo:${lat},${lng}?q=${lat},${lng}(${label})`, // Generic geo intent
-      ],
-      default: [
-        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
-      ],
-    }) || [];
+    if (!hasCoords && !dest.address) return;
 
-    // Try each URL until one works
+    const navigationUrls = hasCoords
+      ? Platform.select({
+          ios: [
+            `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+            `waze://?ll=${lat},${lng}&navigate=yes`,
+            `maps://?daddr=${lat},${lng}`,
+          ],
+          android: [
+            `google.navigation:q=${lat},${lng}`,
+            `waze://?ll=${lat},${lng}&navigate=yes`,
+            `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+          ],
+          default: [
+            `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`,
+          ],
+        }) || []
+      : Platform.select({
+          ios: [
+            `comgooglemaps://?daddr=${destination}&directionsmode=driving`,
+            `maps://?daddr=${destination}`,
+          ],
+          android: [
+            `geo:0,0?q=${destination}`,
+          ],
+          default: [
+            `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`,
+          ],
+        }) || [];
+
     const tryOpenUrl = async (urls: string[], index: number = 0) => {
       if (index >= urls.length) {
-        // Fallback to web Google Maps
-        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
+        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`);
         return;
       }
-
       try {
         const supported = await Linking.canOpenURL(urls[index]);
         if (supported) {

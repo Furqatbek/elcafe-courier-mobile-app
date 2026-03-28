@@ -1573,6 +1573,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       console.error('[CourierContext] Failed to update order status on server:', error);
       // Revert optimistic update on error
       await fetchOrders();
+      throw error;
     }
   };
 

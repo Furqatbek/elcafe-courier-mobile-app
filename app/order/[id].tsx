@@ -151,33 +151,47 @@ export default function OrderDetailScreen() {
     const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;
     const lng = isGoingToPickup ? order.restaurantLng : order.deliveryLng;
     const name = isGoingToPickup ? (order.restaurantName ?? 'Pickup') : (order.customerName ?? 'Delivery');
+    const address = isGoingToPickup ? restaurantAddress : deliveryAddr;
+    const hasCoords = lat != null && lng != null && (lat !== 0 || lng !== 0);
 
-    if (!lat || !lng) {
-      // Fallback to map-navigation screen
-      router.push(`/map-navigation/${order.orderId}`);
-      return;
-    }
-
+    // Build the destination query: prefer coords, fall back to address text
+    const destination = hasCoords
+      ? `${lat},${lng}`
+      : encodeURIComponent(address || name);
     const label = encodeURIComponent(name);
-    const navigationUrls = Platform.select({
-      ios: [
-        `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
-        `waze://?ll=${lat},${lng}&navigate=yes`,
-        `maps://?daddr=${lat},${lng}`,
-      ],
-      android: [
-        `google.navigation:q=${lat},${lng}`,
-        `waze://?ll=${lat},${lng}&navigate=yes`,
-        `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
-      ],
-      default: [
-        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
-      ],
-    }) || [];
+
+    const navigationUrls = hasCoords
+      ? Platform.select({
+          ios: [
+            `comgooglemaps://?daddr=${lat},${lng}&directionsmode=driving`,
+            `waze://?ll=${lat},${lng}&navigate=yes`,
+            `maps://?daddr=${lat},${lng}`,
+          ],
+          android: [
+            `google.navigation:q=${lat},${lng}`,
+            `waze://?ll=${lat},${lng}&navigate=yes`,
+            `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+          ],
+          default: [
+            `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`,
+          ],
+        }) || []
+      : Platform.select({
+          ios: [
+            `comgooglemaps://?daddr=${destination}&directionsmode=driving`,
+            `maps://?daddr=${destination}`,
+          ],
+          android: [
+            `geo:0,0?q=${destination}`,
+          ],
+          default: [
+            `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`,
+          ],
+        }) || [];
 
     const tryOpenUrl = async (urls: string[], index: number = 0) => {
       if (index >= urls.length) {
-        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`);
+        Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`);
         return;
       }
       try {

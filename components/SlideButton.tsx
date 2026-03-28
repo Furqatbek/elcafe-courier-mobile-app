@@ -89,6 +89,10 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
     }
   };
 
+  // Keep triggerCompletion accessible via ref so the web useEffect never has a stale closure
+  const triggerCompletionRef = useRef(triggerCompletion);
+  triggerCompletionRef.current = triggerCompletion;
+
   // Web mouse event handlers - attached to window
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -113,7 +117,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       if (!isDraggingRef.current) return;
       console.log('[SlideButton] Mouse up, currentDx:', currentDxRef.current);
       isDraggingRef.current = false;
-      triggerCompletion(currentDxRef.current);
+      triggerCompletionRef.current(currentDxRef.current);
       currentDxRef.current = 0;
     };
 
