@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Phone, MessageSquare, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink } from 'lucide-react-native';
+import { Phone, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS, ISSUE_TYPES } from '@/constants/config';
 import { useCourier, OrderStatus, Order, IssueType } from '@/context/CourierContext';
@@ -211,10 +211,6 @@ export default function OrderDetailScreen() {
     }
   };
 
-  const handleChat = () => {
-    router.push(`/chat?type=customer&orderId=${order.orderId}`);
-  };
-
   const renderContactButton = (icon: any, label: string, color: string, onPress: () => void) => (
     <TouchableOpacity style={[styles.contactButton, { backgroundColor: color + '15' }]} onPress={onPress}>
       <View style={[styles.contactIcon, { backgroundColor: color }]}>
@@ -321,7 +317,6 @@ export default function OrderDetailScreen() {
           <>
             <View style={styles.contactRow}>
               {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCallCustomer)}
-              {renderContactButton(<MessageSquare size={20} color="white" />, t('order_detail.chat'), Colors.secondary, handleChat)}
             </View>
             <View style={styles.reportIssueContainer}>
               <TouchableOpacity
