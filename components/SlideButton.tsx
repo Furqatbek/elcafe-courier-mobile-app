@@ -27,7 +27,8 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
   const { t } = useTranslation();
   const [completed, setCompleted] = useState(false);
 
-  // Refs to hold mutable values
+  // Refs to hold mutable values — updated synchronously during render
+  // (NOT in useEffect) so they are never stale when event handlers fire
   const widthRef = useRef(0);
   const completedRef = useRef(false);
   const loadingRef = useRef(false);
@@ -40,18 +41,10 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
 
   const translateX = useRef(new Animated.Value(0)).current;
 
-  // Keep refs in sync
-  useEffect(() => {
-    loadingRef.current = !!isLoading;
-  }, [isLoading]);
-
-  useEffect(() => {
-    completedRef.current = completed;
-  }, [completed]);
-
-  useEffect(() => {
-    onCompleteRef.current = onComplete;
-  }, [onComplete]);
+  // Sync refs during render (synchronous — always up-to-date)
+  loadingRef.current = !!isLoading;
+  completedRef.current = completed;
+  onCompleteRef.current = onComplete;
 
   const getMaxDrag = () => widthRef.current - BUTTON_HEIGHT;
 
@@ -79,9 +72,11 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       translateX.setValue(maxDrag);
 
       try {
+        console.log('[SlideButton] Calling onComplete handler...');
         await onCompleteRef.current();
+        console.log('[SlideButton] onComplete resolved successfully');
       } catch (error) {
-        console.log('[SlideButton] onComplete failed, resetting slider');
+        console.log('[SlideButton] onComplete failed, resetting slider:', error);
         resetSlider();
       }
     } else {

@@ -79,12 +79,16 @@ export default function OrderDetailScreen() {
   const totalAmount = order.total ?? order.totalAmount ?? ((order.deliveryFee ?? 0) + (order.tipAmount ?? 0));
 
   const handleSlideComplete = async () => {
+    console.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
     try {
       if (order.status === 'ACCEPTED' || order.status === 'READY') {
+        console.log('[OrderDetail] Updating status to PICKED_UP...');
         await updateOrderStatus(order.orderId, 'PICKED_UP');
         router.push(`/map-navigation/${order.orderId}`);
       } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING') {
+        console.log('[OrderDetail] Completing order...');
         const result = await completeOrder(order.orderId);
+        console.log('[OrderDetail] completeOrder result:', result);
         if (result) {
           Alert.alert(
             t('order_detail.delivery_complete'),
@@ -92,11 +96,13 @@ export default function OrderDetailScreen() {
             [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
           );
         }
+      } else {
+        console.warn('[OrderDetail] Unhandled order status for slide action:', order.status);
       }
     } catch (error) {
       console.error('[OrderDetail] Error in handleSlideComplete:', error);
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
-      throw error; // Re-throw so SlideButton resets
+      throw error;
     }
   };
 
