@@ -23,6 +23,7 @@ export interface NewOrderNotification {
   total?: number;
   itemCount: number;
   createdAt?: string;
+  readyAt?: string;
   expiresAt?: string;
 }
 
@@ -35,9 +36,49 @@ export interface OrderTakenNotification {
   timestamp: string;
 }
 
-// Union type for messages on the orders channel
-export type OrderChannelMessage = NewOrderNotification | OrderTakenNotification;
+// Union type for messages on the available-orders broadcast channel
+// (topic 1 sends both new orders and ORDER_TAKEN alerts)
+export type AvailableOrdersChannelMessage = NewOrderNotification | OrderTakenNotification;
 
+/** @deprecated Use AvailableOrdersChannelMessage */
+export type OrderChannelMessage = AvailableOrdersChannelMessage;
+
+// Full OrderDto sent on /topic/orders/{orderId} (topic 3)
+export interface OrderDto {
+  id: number;
+  externalOrderNo?: string;
+  consumerId?: number;
+  consumerName?: string;
+  restaurantId: number;
+  restaurantName?: string;
+  courierId?: number;
+  courierName?: string;
+  orderType?: string;
+  status: string;
+  paymentStatus?: string;
+  items?: unknown[];
+  subtotal?: number;
+  tax?: number;
+  deliveryFee?: number;
+  discount?: number;
+  tipAmount?: number;
+  total?: number;
+  deliveryAddress?: string;
+  deliveryInstructions?: string;
+  customerName?: string;
+  customerPhone?: string;
+  notes?: string | null;
+  estimatedPrepTimeMinutes?: number;
+  estimatedDeliveryTime?: string;
+  createdAt?: string;
+  acceptedAt?: string;
+  readyAt?: string;
+  pickedUpAt?: string;
+  deliveredAt?: string | null;
+  cancellationReason?: string | null;
+}
+
+/** @deprecated Use OrderDto */
 export interface OrderStatusUpdate {
   orderId: number;
   status: string;
@@ -45,13 +86,45 @@ export interface OrderStatusUpdate {
   message?: string;
 }
 
+// NotificationResponseDto (topics 5, 6, 7)
 export interface WebSocketNotification {
   id: number;
-  type: string;
+  userId?: number | null;
+  role?: string;
+  roleDisplayName?: string;
   title: string;
   message: string;
-  data?: Record<string, unknown>;
+  category?: string;
+  categoryDisplayName?: string;
+  notificationType?: string;
+  notificationTypeDisplayName?: string;
+  priority?: string;
+  priorityDisplayName?: string;
+  orderId?: number;
+  relatedEntityId?: number;
+  relatedEntityType?: string;
   createdAt: string;
+  readAt?: string | null;
+  expiresAt?: string | null;
+  metadata?: Record<string, unknown>;
+  actionUrl?: string;
+  icon?: string;
+  dismissed?: boolean;
+  dismissedAt?: string | null;
+  isRead?: boolean;
+  isExpired?: boolean;
+  timeAgo?: string;
+  // Legacy fields for backward compatibility
+  type?: string;
+  data?: Record<string, unknown>;
+}
+
+// Location update confirmation (topic 8)
+export interface LocationConfirmation {
+  courierId: number;
+  lat: number;
+  lng: number;
+  timestamp: string;
 }
 
 export type WebSocketMessageHandler<T> = (message: T) => void;
@@ -185,9 +258,11 @@ class WebSocketService {
   // ── Order Topics ──
 
   /**
-   * Subscribe to broadcast available orders (all couriers)
+   * Subscribe to broadcast available orders (all couriers).
+   * This channel sends both new order payloads and ORDER_TAKEN alerts.
+   * Check message.type === 'ORDER_TAKEN' to distinguish.
    */
-  subscribeToAvailableOrders(handler: WebSocketMessageHandler<NewOrderNotification>): () => void {
+  subscribeToAvailableOrders(handler: WebSocketMessageHandler<AvailableOrdersChannelMessage>): () => void {
     return this.subscribe(WEBSOCKET_CONFIG.TOPICS.AVAILABLE_ORDERS, handler);
   }
 
@@ -199,11 +274,11 @@ class WebSocketService {
   }
 
   /**
-   * Subscribe to full order updates for a specific order (status, items, totals)
+   * Subscribe to full order updates for a specific order (full OrderDto)
    */
   subscribeToOrderUpdates(
     orderId: string | number,
-    handler: WebSocketMessageHandler<OrderStatusUpdate>
+    handler: WebSocketMessageHandler<OrderDto>
   ): () => void {
     return this.subscribe(WEBSOCKET_CONFIG.TOPICS.ORDER_UPDATES(orderId), handler);
   }
@@ -244,12 +319,24 @@ class WebSocketService {
     return this.subscribe(WEBSOCKET_CONFIG.TOPICS.BROADCAST_NOTIFICATIONS, handler);
   }
 
+  // ── Location Topics ──
+
+  /**
+   * Subscribe to location update confirmations for this courier (optional)
+   */
+  subscribeToLocationConfirmation(
+    courierId: string | number,
+    handler: WebSocketMessageHandler<LocationConfirmation>
+  ): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.COURIER_LOCATION(courierId), handler);
+  }
+
   // ── Deprecated (kept for backward compatibility) ──
 
   /** @deprecated Use subscribeToOrderUpdates instead */
   subscribeToOrderStatus(
     orderId: string | number,
-    handler: WebSocketMessageHandler<OrderStatusUpdate>
+    handler: WebSocketMessageHandler<OrderDto>
   ): () => void {
     return this.subscribeToOrderUpdates(orderId, handler);
   }

@@ -248,6 +248,9 @@ export const WEBSOCKET_CONFIG = {
     USER_NOTIFICATIONS: (userId: string | number) => `/topic/users/${userId}/notifications`,
     BROADCAST_NOTIFICATIONS: '/topic/broadcast/notifications',
 
+    // Location topics
+    COURIER_LOCATION: (courierId: string | number) => `/topic/couriers/${courierId}/location`,
+
     /** @deprecated Use ORDER_UPDATES instead */
     ORDER_STATUS: (orderId: string | number) => `/topic/orders/${orderId}`,
     /** @deprecated Use USER_NOTIFICATIONS instead */
