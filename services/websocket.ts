@@ -182,28 +182,79 @@ class WebSocketService {
     return this.client?.connected ?? false;
   }
 
+  // ── Order Topics ──
+
   /**
-   * Subscribe to new orders channel
+   * Subscribe to broadcast available orders (all couriers)
    */
-  subscribeToNewOrders(handler: WebSocketMessageHandler<NewOrderNotification>): () => void {
-    const topic = WEBSOCKET_CONFIG.TOPICS.NEW_ORDERS;
-    return this.subscribe(topic, handler);
+  subscribeToAvailableOrders(handler: WebSocketMessageHandler<NewOrderNotification>): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.AVAILABLE_ORDERS, handler);
   }
 
   /**
-   * Subscribe to order status updates for a specific order
+   * Subscribe to new orders targeted to this courier
    */
+  subscribeToNewOrders(handler: WebSocketMessageHandler<NewOrderNotification>): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.NEW_ORDERS, handler);
+  }
+
+  /**
+   * Subscribe to full order updates for a specific order (status, items, totals)
+   */
+  subscribeToOrderUpdates(
+    orderId: string | number,
+    handler: WebSocketMessageHandler<OrderStatusUpdate>
+  ): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.ORDER_UPDATES(orderId), handler);
+  }
+
+  /**
+   * Subscribe to order-taken events for a specific order
+   */
+  subscribeToOrderTaken(
+    orderId: string | number,
+    handler: WebSocketMessageHandler<OrderTakenNotification>
+  ): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.ORDER_TAKEN(orderId), handler);
+  }
+
+  // ── Notification Topics ──
+
+  /**
+   * Subscribe to courier-role notifications (broadcast to all couriers)
+   */
+  subscribeToCourierNotifications(handler: WebSocketMessageHandler<WebSocketNotification>): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.COURIER_NOTIFICATIONS, handler);
+  }
+
+  /**
+   * Subscribe to personal user notifications
+   */
+  subscribeToUserNotifications(
+    userId: string | number,
+    handler: WebSocketMessageHandler<WebSocketNotification>
+  ): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.USER_NOTIFICATIONS(userId), handler);
+  }
+
+  /**
+   * Subscribe to platform-wide broadcast notifications
+   */
+  subscribeToBroadcastNotifications(handler: WebSocketMessageHandler<WebSocketNotification>): () => void {
+    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.BROADCAST_NOTIFICATIONS, handler);
+  }
+
+  // ── Deprecated (kept for backward compatibility) ──
+
+  /** @deprecated Use subscribeToOrderUpdates instead */
   subscribeToOrderStatus(
     orderId: string | number,
     handler: WebSocketMessageHandler<OrderStatusUpdate>
   ): () => void {
-    const topic = WEBSOCKET_CONFIG.TOPICS.ORDER_STATUS(orderId);
-    return this.subscribe(topic, handler);
+    return this.subscribeToOrderUpdates(orderId, handler);
   }
 
-  /**
-   * Subscribe to personal notifications
-   */
+  /** @deprecated Use subscribeToUserNotifications instead */
   subscribeToNotifications(handler: WebSocketMessageHandler<WebSocketNotification>): () => void {
     const topic = WEBSOCKET_CONFIG.TOPICS.NOTIFICATIONS;
     return this.subscribe(topic, handler);

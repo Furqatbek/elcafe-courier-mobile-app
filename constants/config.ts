@@ -237,8 +237,20 @@ export const WEBSOCKET_CONFIG = {
   HEARTBEAT_INCOMING: 10000,
   HEARTBEAT_OUTGOING: 10000,
   TOPICS: {
+    // Order topics
+    AVAILABLE_ORDERS: '/topic/couriers/orders/available',
     NEW_ORDERS: '/user/queue/orders/new',
-    ORDER_STATUS: (orderId: string | number) => `/topic/orders/${orderId}/status`,
+    ORDER_UPDATES: (orderId: string | number) => `/topic/orders/${orderId}`,
+    ORDER_TAKEN: (orderId: string | number) => `/topic/orders/${orderId}/taken`,
+
+    // Notification topics
+    COURIER_NOTIFICATIONS: '/topic/roles/courier/notifications',
+    USER_NOTIFICATIONS: (userId: string | number) => `/topic/users/${userId}/notifications`,
+    BROADCAST_NOTIFICATIONS: '/topic/broadcast/notifications',
+
+    /** @deprecated Use ORDER_UPDATES instead */
+    ORDER_STATUS: (orderId: string | number) => `/topic/orders/${orderId}`,
+    /** @deprecated Use USER_NOTIFICATIONS instead */
     NOTIFICATIONS: '/user/queue/notifications',
   },
 } as const;

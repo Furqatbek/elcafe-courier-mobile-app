@@ -778,130 +778,149 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setNewOrderOffer(null);
   }, []);
 
+  // Handler for incoming new order notifications (shared by broadcast + targeted topics)
+  const handleNewOrderMessage = useCallback((notification: NewOrderNotification) => {
+    try {
+      console.log('[CourierContext] New order received:', notification.orderId);
+
+      setNewOrderOffer(notification);
+      // Also add to available orders list
+      setAvailableOrders((prev) => {
+        try {
+          if (prev.some((o) => o.orderId === notification.orderId)) {
+            return prev;
+          }
+          const newOrder: AvailableOrder = {
+            orderId: notification.orderId,
+            externalOrderNo: notification.externalOrderNo,
+            restaurantId: notification.restaurantId,
+            restaurantName: notification.restaurantName || 'Restaurant',
+            restaurantAddress: notification.restaurantAddress || '',
+            restaurantLat: notification.restaurantLat || 0,
+            restaurantLng: notification.restaurantLng || 0,
+            deliveryAddress: notification.deliveryAddress || '',
+            deliveryLat: notification.deliveryLat || 0,
+            deliveryLng: notification.deliveryLng || 0,
+            customerName: '',
+            customerPhone: '',
+            status: 'READY',
+            deliveryFee: notification.deliveryFee || 0,
+            tipAmount: notification.tipAmount || 0,
+            total: notification.total || notification.deliveryFee || 0,
+            itemCount: notification.itemCount || 0,
+            createdAt: notification.createdAt || new Date().toISOString(),
+            pickupDistance: notification.restaurantDistance,
+            estimatedDistance: notification.deliveryDistance,
+          };
+          return [newOrder, ...prev];
+        } catch (innerError) {
+          console.error('[CourierContext] Error in setAvailableOrders callback:', innerError);
+          return prev;
+        }
+      });
+    } catch (error) {
+      console.error('[CourierContext] Error handling new order message:', error);
+    }
+  }, []);
+
+  // Handler for incoming notification messages (shared by courier/user/broadcast topics)
+  const handleNotificationMessage = useCallback((notification: WebSocketNotification) => {
+    console.log('[CourierContext] Notification received:', notification);
+    setNotifications((prev) => {
+      const newNotification: Notification = {
+        id: notification.id,
+        type: notification.type as any,
+        title: notification.title,
+        message: notification.message,
+        read: false,
+        createdAt: notification.createdAt,
+        data: notification.data as any,
+      };
+      return [newNotification, ...prev];
+    });
+    setUnreadCount((prev) => prev + 1);
+  }, []);
+
   // Subscribe to WebSocket topics
   const subscribeToWebSocketTopics = useCallback(() => {
     // Clear existing subscriptions
     wsUnsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
     wsUnsubscribeRefs.current = [];
 
-    // Subscribe to new orders (and ORDER_TAKEN events on the same channel)
-    const unsubNewOrders = websocketService.subscribeToNewOrders((message) => {
-      try {
-        const messageType = (message as any).type;
-        console.log('[CourierContext] Order channel message received, type:', messageType);
+    // 1. Broadcast available orders (all couriers)
+    wsUnsubscribeRefs.current.push(
+      websocketService.subscribeToAvailableOrders(handleNewOrderMessage)
+    );
 
-        // Handle ORDER_TAKEN - another courier accepted this order
-        if (messageType === 'ORDER_TAKEN') {
-          const takenNotification = message as unknown as OrderTakenNotification;
-          console.log('[CourierContext] ORDER_TAKEN received:', takenNotification.orderId, 'by courier:', takenNotification.courierName);
+    // 2. New orders targeted to this courier specifically
+    wsUnsubscribeRefs.current.push(
+      websocketService.subscribeToNewOrders(handleNewOrderMessage)
+    );
 
-          // Set the event so UI components can react
-          setOrderTakenEvent(takenNotification);
+    // 5. Courier role notifications (broadcast to all couriers)
+    wsUnsubscribeRefs.current.push(
+      websocketService.subscribeToCourierNotifications(handleNotificationMessage)
+    );
 
-          // Remove from available orders list
-          setAvailableOrders((prev) => {
-            const filtered = prev.filter((o) => o.orderId !== takenNotification.orderId);
-            if (filtered.length !== prev.length) {
-              console.log('[CourierContext] Removed order', takenNotification.orderId, 'from available orders');
-            }
-            return filtered;
-          });
-
-          // Clear the new order offer if it matches
-          setNewOrderOffer((prev) => {
-            if (prev && prev.orderId === takenNotification.orderId) {
-              return null;
-            }
-            return prev;
-          });
-          return;
-        }
-
-        // Handle NEW_ORDER (default case)
-        const notification = message as NewOrderNotification;
-        console.log('[CourierContext] New order received:', notification.orderId);
-        console.log('[CourierContext] restaurantName:', notification.restaurantName);
-
-        setNewOrderOffer(notification);
-        // Also add to available orders list
-        setAvailableOrders((prev) => {
-          try {
-            // Check if order already exists
-            if (prev.some((o) => o.orderId === notification.orderId)) {
-              return prev;
-            }
-            // Create an AvailableOrder from the notification
-            // WebSocket now sends flat structure matching AvailableOrder
-            const newOrder: AvailableOrder = {
-              orderId: notification.orderId,
-              externalOrderNo: notification.externalOrderNo,
-              restaurantId: notification.restaurantId,
-              restaurantName: notification.restaurantName || 'Restaurant',
-              restaurantAddress: notification.restaurantAddress || '',
-              restaurantLat: notification.restaurantLat || 0,
-              restaurantLng: notification.restaurantLng || 0,
-              deliveryAddress: notification.deliveryAddress || '',
-              deliveryLat: notification.deliveryLat || 0,
-              deliveryLng: notification.deliveryLng || 0,
-              customerName: '',
-              customerPhone: '',
-              status: 'READY',
-              deliveryFee: notification.deliveryFee || 0,
-              tipAmount: notification.tipAmount || 0,
-              total: notification.total || notification.deliveryFee || 0,
-              itemCount: notification.itemCount || 0,
-              createdAt: notification.createdAt || new Date().toISOString(),
-              pickupDistance: notification.restaurantDistance,
-              estimatedDistance: notification.deliveryDistance,
-            };
-            console.log('[CourierContext] Created newOrder:', JSON.stringify(newOrder, null, 2));
-            return [newOrder, ...prev];
-          } catch (innerError) {
-            console.error('[CourierContext] Error in setAvailableOrders callback:', innerError);
-            return prev;
-          }
-        });
-      } catch (error) {
-        console.error('[CourierContext] Error handling order channel message:', error);
-      }
-    });
-    wsUnsubscribeRefs.current.push(unsubNewOrders);
-
-    // Subscribe to personal notifications
-    const unsubNotifications = websocketService.subscribeToNotifications((notification) => {
-      console.log('[CourierContext] Notification received:', notification);
-      // Add to notifications list
-      setNotifications((prev) => {
-        const newNotification: Notification = {
-          id: notification.id,
-          type: notification.type as any,
-          title: notification.title,
-          message: notification.message,
-          read: false,
-          createdAt: notification.createdAt,
-          data: notification.data as any,
-        };
-        return [newNotification, ...prev];
-      });
-      // Increment unread count
-      setUnreadCount((prev) => prev + 1);
-    });
-    wsUnsubscribeRefs.current.push(unsubNotifications);
-  }, []);
-
-  // Subscribe to order status updates for active orders
-  const subscribeToOrderStatusUpdates = useCallback((orderId: string | number) => {
-    const unsubscribe = websocketService.subscribeToOrderStatus(orderId, (statusUpdate) => {
-      console.log('[CourierContext] Order status update:', statusUpdate);
-      // Update the order in the orders list
-      setOrders((prev) =>
-        prev.map((order) =>
-          order.orderId === statusUpdate.orderId
-            ? { ...order, status: statusUpdate.status as OrderStatus }
-            : order
-        )
+    // 6. Personal user notifications
+    const userId = user?.id || courierProfile?.userId;
+    if (userId) {
+      wsUnsubscribeRefs.current.push(
+        websocketService.subscribeToUserNotifications(userId, handleNotificationMessage)
       );
-    });
+    }
+
+    // 7. Platform-wide broadcast notifications
+    wsUnsubscribeRefs.current.push(
+      websocketService.subscribeToBroadcastNotifications(handleNotificationMessage)
+    );
+  }, [user, courierProfile, handleNewOrderMessage, handleNotificationMessage]);
+
+  // Subscribe to order-specific topics (status updates + taken) for active orders.
+  // These are subscribed/unsubscribed dynamically as orders are accepted and completed.
+  const subscribeToOrderStatusUpdates = useCallback((orderId: string | number) => {
+    const unsubs: Array<() => void> = [];
+
+    // 3. Full order updates (status, items, totals)
+    unsubs.push(
+      websocketService.subscribeToOrderUpdates(orderId, (statusUpdate) => {
+        console.log('[CourierContext] Order status update:', statusUpdate);
+        setOrders((prev) =>
+          prev.map((order) =>
+            order.orderId === statusUpdate.orderId
+              ? { ...order, status: statusUpdate.status as OrderStatus }
+              : order
+          )
+        );
+      })
+    );
+
+    // 4. Order taken by another courier (dismiss from available list)
+    unsubs.push(
+      websocketService.subscribeToOrderTaken(orderId, (takenNotification) => {
+        console.log('[CourierContext] ORDER_TAKEN received:', takenNotification.orderId, 'by courier:', takenNotification.courierName);
+
+        setOrderTakenEvent(takenNotification);
+
+        setAvailableOrders((prev) => {
+          const filtered = prev.filter((o) => o.orderId !== takenNotification.orderId);
+          if (filtered.length !== prev.length) {
+            console.log('[CourierContext] Removed order', takenNotification.orderId, 'from available orders');
+          }
+          return filtered;
+        });
+
+        setNewOrderOffer((prev) => {
+          if (prev && prev.orderId === takenNotification.orderId) {
+            return null;
+          }
+          return prev;
+        });
+      })
+    );
+
+    // Combined unsubscribe for both order-specific topics
+    const unsubscribe = () => unsubs.forEach((fn) => fn());
     wsUnsubscribeRefs.current.push(unsubscribe);
     return unsubscribe;
   }, []);
