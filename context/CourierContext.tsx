@@ -546,34 +546,28 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   // Fetch notifications
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (page: number = 0, pageSize: number = 20) => {
     setIsLoadingNotifications(true);
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.LIST);
+      const params = new URLSearchParams({
+        role: 'COURIER',
+        page: page.toString(),
+        pageSize: pageSize.toString(),
+      });
+      const response = await authenticatedFetch(
+        `${API_ENDPOINTS.NOTIFICATIONS.LIST}?${params}`
+      );
       const data = await response.json();
 
-      // Handle paginated response: { notifications: [...], unreadCount, ... }
-      // or legacy response: { success: true, data: [...] }
-      let notificationsList: any[] = [];
+      // Response: { notifications: [...], page, pageSize, totalElements, totalPages }
+      const notificationsList: any[] = data.notifications ?? [];
 
-      if (data.notifications && Array.isArray(data.notifications)) {
-        // New paginated response format
-        notificationsList = data.notifications;
-        if (typeof data.unreadCount === 'number') {
-          setUnreadCount(data.unreadCount);
-        }
-      } else if (data.success && Array.isArray(data.data)) {
-        // Legacy response format
-        notificationsList = data.data;
-      }
-
-      // Transform backend fields to app format
       const transformedNotifications: Notification[] = notificationsList.map((n: any) => ({
         id: n.id,
         type: n.notificationType || n.type || 'ORDER_ASSIGNED',
         title: n.title,
         message: n.message,
-        read: n.isRead ?? n.read ?? false,
+        read: n.read ?? false,
         createdAt: n.createdAt,
         priority: n.priority,
         category: n.category,
@@ -581,21 +575,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         orderId: n.orderId || n.relatedEntityId,
         actionUrl: n.actionUrl,
         timeAgo: n.timeAgo,
-        data: {
-          orderId: n.orderId || n.relatedEntityId,
-          orderNumber: n.metadata?.orderNumber,
-          restaurantName: n.metadata?.restaurantName,
-          ...n.metadata,
-        },
+        data: n.metadata ?? n.data,
       }));
 
       setNotifications(transformedNotifications);
 
-      // Update unread count if not provided in response
-      if (typeof data.unreadCount !== 'number') {
-        const unread = transformedNotifications.filter((n) => !n.read).length;
-        setUnreadCount(unread);
-      }
+      // Count unread from the list, or fetch separately
+      const unread = transformedNotifications.filter((n) => !n.read).length;
+      setUnreadCount(unread);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
     } finally {
@@ -606,23 +593,18 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Fetch unread notification count
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const userId = user?.id || courierProfile?.userId;
-      if (!userId) return;
-
       const response = await authenticatedFetch(
-        `${API_ENDPOINTS.NOTIFICATIONS.COUNTS(userId)}?role=COURIER`
+        `${API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT}?role=COURIER`
       );
       const data = await response.json();
-
-      if (data.success && data.data !== undefined) {
-        setUnreadCount(data.data.unreadCount ?? data.data.count ?? data.data);
-      } else if (typeof data.unreadCount === 'number') {
+      // Response: { unreadCount: 5 }
+      if (typeof data.unreadCount === 'number') {
         setUnreadCount(data.unreadCount);
       }
     } catch (error) {
       console.error('Failed to fetch unread count:', error);
     }
-  }, [authenticatedFetch, user, courierProfile]);
+  }, [authenticatedFetch]);
 
   // Fetch courier profile and sync online status from backend
   const fetchCourierProfile = useCallback(async () => {
@@ -648,15 +630,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     return null;
   }, [authenticatedFetch]);
 
-  // Mark notification as read
+  // Mark single notification as read
+  // PATCH /notifications/{id}/read — returns the updated notification object
   const markNotificationAsRead = useCallback(async (notificationId: number) => {
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.MARK_READ(notificationId), {
         method: 'PATCH',
       });
-      const data = await response.json();
-
-      if (data.success) {
+      if (response.ok) {
         setNotifications(prev =>
           prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
         );
@@ -668,26 +649,28 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   // Mark all notifications as read
+  // PATCH /notifications/read-all?userId={userId}&role=COURIER
   const markAllNotificationsAsRead = useCallback(async () => {
-    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
-    if (unreadIds.length === 0) return;
+    if (unreadCount === 0) return;
 
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.NOTIFICATIONS.READ_BATCH, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: unreadIds }),
-      });
-      const data = await response.json();
+      const userId = user?.id || courierProfile?.userId;
+      const params = new URLSearchParams({ role: 'COURIER' });
+      if (userId) params.append('userId', String(userId));
 
-      if (data.success) {
+      const response = await authenticatedFetch(
+        `${API_ENDPOINTS.NOTIFICATIONS.READ_ALL}?${params}`,
+        { method: 'PATCH' }
+      );
+
+      if (response.ok) {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         setUnreadCount(0);
       }
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
     }
-  }, [authenticatedFetch, notifications]);
+  }, [authenticatedFetch, unreadCount, user, courierProfile]);
 
   // Fetch available orders nearby
   const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
