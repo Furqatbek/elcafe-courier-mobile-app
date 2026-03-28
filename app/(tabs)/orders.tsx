@@ -206,6 +206,14 @@ export default function OrdersScreen() {
     }
   }, [activeTab]);
 
+  // Fetch available and active orders on mount (handles page refresh)
+  useEffect(() => {
+    if (isOnline) {
+      fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+      fetchOrders();
+    }
+  }, [isOnline]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await Promise.all([
