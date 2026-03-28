@@ -19,7 +19,7 @@ const SWIPE_THRESHOLD = 0.7;
 
 interface SlideButtonProps {
   title: string;
-  onComplete: () => void;
+  onComplete: () => void | Promise<void>;
   isLoading?: boolean;
 }
 
@@ -55,7 +55,13 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
 
   const getMaxDrag = () => widthRef.current - BUTTON_HEIGHT;
 
-  const triggerCompletion = (dx: number) => {
+  const resetSlider = () => {
+    setCompleted(false);
+    completedRef.current = false;
+    translateX.setValue(0);
+  };
+
+  const triggerCompletion = async (dx: number) => {
     if (completedRef.current || loadingRef.current) return;
 
     const maxDrag = getMaxDrag();
@@ -71,7 +77,13 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       }
 
       translateX.setValue(maxDrag);
-      onCompleteRef.current();
+
+      try {
+        await onCompleteRef.current();
+      } catch (error) {
+        console.log('[SlideButton] onComplete failed, resetting slider');
+        resetSlider();
+      }
     } else {
       translateX.setValue(0);
     }
@@ -153,24 +165,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       },
       onPanResponderRelease: (_, gestureState) => {
         if (completedRef.current || loadingRef.current) return;
-
-        const containerWidth = widthRef.current;
-        const maxDrag = containerWidth - BUTTON_HEIGHT;
-
-        if (gestureState.dx > maxDrag * SWIPE_THRESHOLD) {
-          console.log('[SlideButton] Swipe threshold reached');
-          setCompleted(true);
-          completedRef.current = true;
-
-          if (Platform.OS !== 'web') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-
-          translateX.setValue(maxDrag);
-          onCompleteRef.current();
-        } else {
-          translateX.setValue(0);
-        }
+        triggerCompletion(gestureState.dx);
       },
     })
   ).current;

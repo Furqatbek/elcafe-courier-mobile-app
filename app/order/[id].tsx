@@ -81,12 +81,9 @@ export default function OrderDetailScreen() {
   const handleSlideComplete = async () => {
     try {
       if (order.status === 'ACCEPTED' || order.status === 'READY') {
-        // Pickup: transition to PICKED_UP - backend handles status
         await updateOrderStatus(order.orderId, 'PICKED_UP');
-        // Navigate to map for delivery
         router.push(`/map-navigation/${order.orderId}`);
       } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING') {
-        // Complete delivery
         const result = await completeOrder(order.orderId);
         if (result) {
           Alert.alert(
@@ -99,6 +96,7 @@ export default function OrderDetailScreen() {
     } catch (error) {
       console.error('[OrderDetail] Error in handleSlideComplete:', error);
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
+      throw error; // Re-throw so SlideButton resets
     }
   };
 
