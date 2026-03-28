@@ -81,11 +81,11 @@ export default function OrderDetailScreen() {
   const handleSlideComplete = async () => {
     console.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
     try {
-      if (order.status === 'ACCEPTED' || order.status === 'COURIER_ASSIGNED' || order.status === 'READY') {
+      if (order.status === 'COURIER_ASSIGNED') {
         console.log('[OrderDetail] Updating status to PICKED_UP...');
         await updateOrderStatus(order.orderId, 'PICKED_UP');
         router.push(`/map-navigation/${order.orderId}`);
-      } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING') {
+      } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT') {
         console.log('[OrderDetail] Completing order...');
         const result = await completeOrder(order.orderId);
         console.log('[OrderDetail] completeOrder result:', result);
@@ -137,13 +137,10 @@ export default function OrderDetailScreen() {
 
   const getButtonTitle = () => {
     switch (order.status) {
-      case 'ACCEPTED':
       case 'COURIER_ASSIGNED':
-      case 'READY':
         return t('order_detail.slide_pickup');
       case 'PICKED_UP':
       case 'IN_TRANSIT':
-      case 'DELIVERING':
         return t('order_detail.slide_delivery');
       default:
         return t('order_detail.order_completed');
@@ -151,8 +148,8 @@ export default function OrderDetailScreen() {
   };
 
   // Determine if order is active (needs navigation)
-  const isActiveOrder = order.status === 'ACCEPTED' || order.status === 'COURIER_ASSIGNED' || order.status === 'READY' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT' || order.status === 'DELIVERING';
-  const isGoingToPickup = order.status === 'ACCEPTED' || order.status === 'COURIER_ASSIGNED' || order.status === 'READY';
+  const isActiveOrder = order.status === 'COURIER_ASSIGNED' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT';
+  const isGoingToPickup = order.status === 'COURIER_ASSIGNED';
 
   const handleOpenNavigator = () => {
     const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;

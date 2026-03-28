@@ -143,7 +143,7 @@ export default function OrdersScreen() {
           deliveryLng: newOrderOffer.deliveryLng || 0,
           customerName: '',
           customerPhone: '',
-          status: 'READY',
+          status: 'PENDING',
           deliveryFee: newOrderOffer.deliveryFee || 0,
           tipAmount: newOrderOffer.tipAmount || 0,
           total: newOrderOffer.total || newOrderOffer.deliveryFee || 0,

@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 
-export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERING' | 'DELIVERED' | 'CANCELLED';
+export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -799,7 +799,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           deliveryLng: notification.deliveryLng || 0,
           customerName: '',
           customerPhone: '',
-          status: 'READY',
+          status: 'PENDING',
           deliveryFee: notification.deliveryFee || 0,
           tipAmount: notification.tipAmount || 0,
           total: notification.total || notification.deliveryFee || 0,
@@ -1486,10 +1486,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setAvailableOrders(prev => prev.filter(o => o.orderId !== orderId));
 
         // Add accepted order to active orders
-        // Ensure status is 'ACCEPTED' - this is critical for navigation to work correctly
         const acceptedOrder: Order = {
           ...data.data,
-          status: 'ACCEPTED' as OrderStatus, // Force ACCEPTED status regardless of API response
+          status: (data.data.status || 'COURIER_ASSIGNED') as OrderStatus,
         };
         console.log('[CourierContext] Adding accepted order with status:', acceptedOrder.status);
         setOrders(prev => [acceptedOrder, ...prev]);
@@ -1531,18 +1530,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
       switch (status) {
         case 'PICKED_UP':
-          // Picked up from restaurant - PUT
           endpoint = API_ENDPOINTS.ORDERS.PICKUP(orderId);
           method = 'PUT';
           break;
         case 'IN_TRANSIT':
-        case 'DELIVERING':
-          // Start transit to customer - PUT (support both status names)
           endpoint = API_ENDPOINTS.ORDERS.TRANSIT(orderId);
           method = 'PUT';
           break;
         case 'DELIVERED':
-          // Complete delivery - POST
           endpoint = API_ENDPOINTS.ORDERS.COMPLETE(orderId);
           method = 'POST';
           break;
