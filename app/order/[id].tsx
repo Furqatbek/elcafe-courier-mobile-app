@@ -301,8 +301,8 @@ export default function OrderDetailScreen() {
           </View>
         </View>
 
-        {/* Navigate Button */}
-        {isActiveOrder && (
+        {/* Navigate Button — shown for active orders, or any order with valid coordinates */}
+        {(isActiveOrder || order.restaurantLat || order.deliveryLat) && (
           <View style={styles.navigateContainer}>
             <TouchableOpacity
               style={styles.navigateButton}
