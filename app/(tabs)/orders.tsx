@@ -37,7 +37,7 @@ export default function OrdersScreen() {
     availableOrders,
     isLoadingAvailableOrders,
     fetchAvailableOrders,
-    fetchOrders,
+    refreshData,
     isOnline,
     toggleOnline,
     currentLocation,
@@ -210,7 +210,7 @@ export default function OrdersScreen() {
   useEffect(() => {
     if (isOnline) {
       fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-      fetchOrders();
+      refreshData();
     }
   }, [isOnline]);
 
@@ -218,7 +218,7 @@ export default function OrdersScreen() {
     setIsRefreshing(true);
     await Promise.all([
       fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude),
-      fetchOrders(),
+      refreshData(),
     ]);
     setIsRefreshing(false);
   };
