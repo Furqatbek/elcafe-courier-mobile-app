@@ -323,11 +323,21 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
+  const isOnlineRef = useRef(false);
+  const courierProfileRef = useRef<CourierProfile | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
     accessTokenRef.current = accessToken;
   }, [accessToken]);
+
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    courierProfileRef.current = courierProfile;
+  }, [courierProfile]);
 
   useEffect(() => {
     refreshTokenRef.current = refreshToken;
@@ -739,6 +749,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     websocketService.onDisconnected(() => {
       console.log('[CourierContext] WebSocket disconnected');
       setIsWebSocketConnected(false);
+
+      // Auto-offline: if courier was AVAILABLE or ON_BREAK, set to OFFLINE
+      const status = courierProfileRef.current?.status;
+      if (status === 'AVAILABLE' || status === 'ON_BREAK') {
+        console.log('[CourierContext] Auto-setting courier OFFLINE after disconnect (was', status, ')');
+        setCourierProfile(prev => prev ? { ...prev, status: 'OFFLINE' } : null);
+        setIsOnline(false);
+      }
     });
 
     websocketService.onError((error) => {
