@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { User, Shield, Bell, HelpCircle, LogOut, ChevronRight, Car, Globe, Smartphone } from 'lucide-react-native';
+import { User, Star, Bell, HelpCircle, LogOut, ChevronRight, Car, Globe, Smartphone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { useCourier } from '@/context/CourierContext';
@@ -153,15 +153,15 @@ export default function SettingsScreen() {
           title={t('settings.personal_info')} 
           onPress={() => router.push('/personal-info')}
         />
-        <MenuItem 
-          icon={Car} 
-          title={t('settings.vehicle_info')} 
+        <MenuItem
+          icon={Car}
+          title={t('settings.vehicle_info')}
           onPress={() => router.push('/vehicle-info')}
         />
         <MenuItem
-          icon={Shield}
-          title={t('settings.security')}
-          onPress={() => router.push('/security')}
+          icon={Star}
+          title={t('settings.reviews')}
+          onPress={() => router.push('/reviews')}
         />
       </View>
 

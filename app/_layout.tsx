@@ -97,6 +97,14 @@ function RootLayoutNav() {
       {/* Other Screens */}
       <Stack.Screen name="notifications" options={{ headerShown: true }} />
       <Stack.Screen name="chat" options={{ headerShown: false, presentation: 'card' }} />
+      <Stack.Screen name="personal-info" options={{ headerShown: false }} />
+      <Stack.Screen name="vehicle-info" options={{ headerShown: false }} />
+      <Stack.Screen name="language" options={{ headerShown: false }} />
+      <Stack.Screen name="help-center" options={{ headerShown: false }} />
+      <Stack.Screen name="security" options={{ headerShown: false }} />
+      <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
+      <Stack.Screen name="edit-vehicle" options={{ headerShown: false }} />
+      <Stack.Screen name="reviews" options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" options={{ title: "Oops" }} />
     </Stack>
   );

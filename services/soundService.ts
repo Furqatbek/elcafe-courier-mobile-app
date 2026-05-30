@@ -17,6 +17,7 @@ class SoundService {
   private isLoaded: boolean = false;
   private isPlaying: boolean = false;
   private soundSource: AVPlaybackSource;
+  private webAudioContext: AudioContext | null = null;
 
   constructor() {
     // Use bundled sound if available, otherwise use fallback URL
@@ -65,11 +66,66 @@ class SoundService {
   }
 
   /**
+   * Play a notification tone on web using the Web Audio API.
+   * Generates two ascending sine-wave beeps for an attention-getting effect.
+   */
+  private playWebSound(): void {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) {
+        console.log('[SoundService] Web Audio API not available');
+        return;
+      }
+
+      if (!this.webAudioContext) {
+        this.webAudioContext = new AudioCtx() as AudioContext;
+      }
+
+      const ctx = this.webAudioContext;
+
+      // Resume context if it was suspended (browsers require user gesture)
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+
+      // First beep – 880 Hz for 150ms
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.value = 880;
+      gain1.gain.setValueAtTime(0.5, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.15);
+
+      // Second beep – 1174 Hz (higher) for 200ms, starts after a short gap
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = 1174;
+      gain2.gain.setValueAtTime(0.5, now + 0.2);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.2);
+      osc2.stop(now + 0.4);
+
+      console.log('[SoundService] Playing web notification tone');
+    } catch (error) {
+      console.error('[SoundService] Failed to play web sound:', error);
+    }
+  }
+
+  /**
    * Play the new order notification sound (loops until stopped)
    */
   async playNewOrderSound(): Promise<void> {
     if (Platform.OS === 'web') {
-      console.log('[SoundService] Sound not supported on web');
+      this.playWebSound();
       return;
     }
 
@@ -108,7 +164,10 @@ class SoundService {
    * Play a short notification beep (non-looping)
    */
   async playNotificationBeep(): Promise<void> {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      this.playWebSound();
+      return;
+    }
 
     try {
       const { sound } = await Audio.Sound.createAsync(this.soundSource, {

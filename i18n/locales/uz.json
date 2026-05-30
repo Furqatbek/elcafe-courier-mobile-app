@@ -168,7 +168,16 @@
     "logout_all_title": "Barcha qurilmalardan chiqish",
     "logout_all_confirm": "Barcha qurilmalardan chiqishni xohlaysizmi? Har bir qurilmada qayta kirish kerak bo'ladi.",
     "logout_all_failed": "Barcha qurilmalardan chiqib bo'lmadi. Qaytadan urinib ko'ring.",
-    "version": "Versiya {{version}}"
+    "version": "Versiya {{version}}",
+    "reviews": "Mening sharhlarim"
+  },
+  "reviews": {
+    "title": "Mening sharhlarim",
+    "no_reviews": "Hali sharhlar yo'q",
+    "no_reviews_description": "Mijozlar yetkazib berishingizni baholashganda, ularning sharhlari shu yerda ko'rinadi.",
+    "loading_error": "Sharhlarni yuklab bo'lmadi",
+    "order": "Buyurtma #{{orderId}}",
+    "anonymous": "Mijoz"
   },
   "order_detail": {
     "not_found": "Buyurtma topilmadi",

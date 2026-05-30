@@ -199,6 +199,10 @@ export interface EarningsSummary {
   weekEarnings: number;
   monthEarnings: number;
   totalEarnings: number;
+  // Payment type breakdown
+  cashEarnings: number;
+  cardEarnings: number;
+  withdrawableBalance: number;
   // Period-based deliveries
   todayDeliveries: number;
   weekDeliveries: number;
@@ -220,6 +224,9 @@ const DEFAULT_EARNINGS: EarningsSummary = {
   weekEarnings: 0,
   monthEarnings: 0,
   totalEarnings: 0,
+  cashEarnings: 0,
+  cardEarnings: 0,
+  withdrawableBalance: 0,
   todayDeliveries: 0,
   weekDeliveries: 0,
   monthDeliveries: 0,
