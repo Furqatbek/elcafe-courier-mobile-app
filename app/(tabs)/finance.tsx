@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Platform, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, Banknote, CreditCard, Wallet } from 'lucide-react-native';
+import { DollarSign, Banknote, CreditCard, Wallet, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
 import { useCourier } from '@/context/CourierContext';
@@ -14,23 +14,55 @@ const TAB_ROUTES = [
   { name: 'settings', path: '/(tabs)/settings' },
 ];
 
+function formatDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatDisplayDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 export default function FinanceScreen() {
   const { t } = useTranslation();
   const { earnings, isLoadingEarnings, fetchEarnings } = useCourier();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const today = formatDate(new Date());
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   useEffect(() => {
-    fetchEarnings('TODAY');
+    fetchEarnings('CUSTOM', startDate, endDate);
   }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchEarnings('TODAY');
+    await fetchEarnings('CUSTOM', startDate, endDate);
     setIsRefreshing(false);
   };
 
+  const handleApplyDateRange = () => {
+    setShowDatePicker(false);
+    fetchEarnings('CUSTOM', startDate, endDate);
+  };
+
+  const handleQuickSelect = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    setStartDate(formatDate(start));
+    setEndDate(formatDate(end));
+    setShowDatePicker(false);
+    fetchEarnings('CUSTOM', formatDate(start), formatDate(end));
+  };
+
   const formatCurrency = (amount: number) => {
-    return `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${DEFAULTS.CURRENCY_SYMBOL}`;
+    return `${(amount || 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
   const canWithdraw = earnings.withdrawableBalance > 0;
@@ -54,11 +86,70 @@ export default function FinanceScreen() {
           <Text style={styles.subtitle}>{t('finance.subtitle')}</Text>
         </View>
 
-        {/* Today's Earnings Hero Card */}
+        {/* Date Range Selector */}
+        <TouchableOpacity
+          style={styles.dateRangeButton}
+          onPress={() => setShowDatePicker(!showDatePicker)}
+          activeOpacity={0.7}
+        >
+          <Calendar size={18} color={Colors.primary} />
+          <Text style={styles.dateRangeText}>
+            {formatDisplayDate(startDate)} — {formatDisplayDate(endDate)}
+          </Text>
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <View style={styles.datePickerCard}>
+            {/* Quick select buttons */}
+            <View style={styles.quickSelectRow}>
+              <TouchableOpacity style={styles.quickButton} onPress={() => handleQuickSelect(0)}>
+                <Text style={styles.quickButtonText}>{t('common.today')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickButton} onPress={() => handleQuickSelect(6)}>
+                <Text style={styles.quickButtonText}>{t('common.this_week')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.quickButton} onPress={() => handleQuickSelect(29)}>
+                <Text style={styles.quickButtonText}>{t('common.month')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Date inputs */}
+            <View style={styles.dateInputRow}>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateInputLabel}>{t('finance.from')}</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={startDate}
+                  onChangeText={setStartDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textLight}
+                  {...(Platform.OS === 'web' ? { type: 'date' } as any : {})}
+                />
+              </View>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateInputLabel}>{t('finance.to')}</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  value={endDate}
+                  onChangeText={setEndDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={Colors.textLight}
+                  {...(Platform.OS === 'web' ? { type: 'date' } as any : {})}
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.applyButton} onPress={handleApplyDateRange}>
+              <Text style={styles.applyButtonText}>{t('finance.apply')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Earnings Hero Card */}
         <View style={styles.heroCard}>
           <View style={styles.heroHeader}>
             <DollarSign size={20} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.heroLabel}>{t('finance.today_earnings')}</Text>
+            <Text style={styles.heroLabel}>{t('finance.total_earnings')}</Text>
           </View>
           {isLoadingEarnings ? (
             <ActivityIndicator size="large" color={Colors.surface} style={{ marginVertical: 20 }} />
@@ -71,7 +162,6 @@ export default function FinanceScreen() {
         <Text style={styles.sectionTitle}>{t('finance.payment_breakdown')}</Text>
 
         <View style={styles.breakdownRow}>
-          {/* Cash Earnings Card */}
           <View style={styles.breakdownCard}>
             <View style={styles.breakdownIconRow}>
               <View style={[styles.iconContainer, { backgroundColor: '#10B98115' }]}>
@@ -88,7 +178,6 @@ export default function FinanceScreen() {
             )}
           </View>
 
-          {/* Card Earnings Card */}
           <View style={styles.breakdownCard}>
             <View style={styles.breakdownIconRow}>
               <View style={[styles.iconContainer, { backgroundColor: '#3B82F615' }]}>
@@ -167,6 +256,85 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: Colors.textSecondary,
+  },
+  dateRangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  dateRangeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  datePickerCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickSelectRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  quickButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
+  dateInputGroup: {
+    flex: 1,
+  },
+  dateInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 6,
+  },
+  dateInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  applyButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.surface,
   },
   heroCard: {
     backgroundColor: Colors.primary,

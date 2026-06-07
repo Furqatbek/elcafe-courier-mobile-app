@@ -141,7 +141,10 @@
     "cash_earnings": "Naqd",
     "card_earnings": "Karta",
     "withdrawable_balance": "Yechib olish mumkin",
-    "card_payments_available": "Karta orqali to'lovlar yechib olinadi"
+    "card_payments_available": "Karta orqali to'lovlar yechib olinadi",
+    "from": "Dan",
+    "to": "Gacha",
+    "apply": "Qo'llash"
   },
   "settings": {
     "title": "Sozlamalar",

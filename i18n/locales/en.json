@@ -141,7 +141,10 @@
     "cash_earnings": "Cash",
     "card_earnings": "Card",
     "withdrawable_balance": "Withdrawable Balance",
-    "card_payments_available": "Card payments available for withdrawal"
+    "card_payments_available": "Card payments available for withdrawal",
+    "from": "From",
+    "to": "To",
+    "apply": "Apply"
   },
   "settings": {
     "title": "Settings",

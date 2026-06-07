@@ -141,7 +141,10 @@
     "cash_earnings": "Наличные",
     "card_earnings": "Карта",
     "withdrawable_balance": "Доступно к выводу",
-    "card_payments_available": "Оплата картой доступна для вывода"
+    "card_payments_available": "Оплата картой доступна для вывода",
+    "from": "От",
+    "to": "До",
+    "apply": "Применить"
   },
   "settings": {
     "title": "Настройки",
