@@ -136,7 +136,12 @@
     "bonuses": "Bonuslar",
     "recent_transactions": "Oxirgi tranzaksiyalar",
     "weekly_payout": "Haftalik to'lov",
-    "vs_yesterday": "Kecha bilan solishtirganda +12%"
+    "vs_yesterday": "Kecha bilan solishtirganda +12%",
+    "payment_breakdown": "To'lov turi bo'yicha",
+    "cash_earnings": "Naqd",
+    "card_earnings": "Karta",
+    "withdrawable_balance": "Yechib olish mumkin",
+    "card_payments_available": "Karta orqali to'lovlar yechib olinadi"
   },
   "settings": {
     "title": "Sozlamalar",

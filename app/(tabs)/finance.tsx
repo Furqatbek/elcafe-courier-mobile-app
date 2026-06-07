@@ -68,7 +68,7 @@ export default function FinanceScreen() {
         </View>
 
         {/* Payment Breakdown */}
-        <Text style={styles.sectionTitle}>{t('finance.payment_breakdown', { defaultValue: 'Payment Breakdown' })}</Text>
+        <Text style={styles.sectionTitle}>{t('finance.payment_breakdown')}</Text>
 
         <View style={styles.breakdownRow}>
           {/* Cash Earnings Card */}
@@ -78,7 +78,7 @@ export default function FinanceScreen() {
                 <Banknote size={20} color={Colors.success} />
               </View>
             </View>
-            <Text style={styles.breakdownLabel}>{t('finance.cash_earnings', { defaultValue: 'Cash' })}</Text>
+            <Text style={styles.breakdownLabel}>{t('finance.cash_earnings')}</Text>
             {isLoadingEarnings ? (
               <ActivityIndicator size="small" color={Colors.success} style={{ marginTop: 4 }} />
             ) : (
@@ -95,7 +95,7 @@ export default function FinanceScreen() {
                 <CreditCard size={20} color="#3B82F6" />
               </View>
             </View>
-            <Text style={styles.breakdownLabel}>{t('finance.card_earnings', { defaultValue: 'Card' })}</Text>
+            <Text style={styles.breakdownLabel}>{t('finance.card_earnings')}</Text>
             {isLoadingEarnings ? (
               <ActivityIndicator size="small" color="#3B82F6" style={{ marginTop: 4 }} />
             ) : (
@@ -107,7 +107,7 @@ export default function FinanceScreen() {
         </View>
 
         {/* Withdrawable Balance */}
-        <Text style={styles.sectionTitle}>{t('finance.withdrawable_balance', { defaultValue: 'Withdrawable Balance' })}</Text>
+        <Text style={styles.sectionTitle}>{t('finance.withdrawable_balance')}</Text>
 
         <View style={styles.withdrawableCard}>
           <View style={styles.withdrawableTop}>
@@ -123,7 +123,7 @@ export default function FinanceScreen() {
                 </Text>
               )}
               <Text style={styles.withdrawableNote}>
-                {t('finance.card_payments_available', { defaultValue: 'Card payments available for withdrawal' })}
+                {t('finance.card_payments_available')}
               </Text>
             </View>
           </View>

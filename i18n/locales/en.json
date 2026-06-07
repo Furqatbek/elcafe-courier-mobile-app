@@ -136,7 +136,12 @@
     "bonuses": "Bonuses",
     "recent_transactions": "Recent Transactions",
     "weekly_payout": "Weekly Payout",
-    "vs_yesterday": "+12% vs yesterday"
+    "vs_yesterday": "+12% vs yesterday",
+    "payment_breakdown": "Payment Breakdown",
+    "cash_earnings": "Cash",
+    "card_earnings": "Card",
+    "withdrawable_balance": "Withdrawable Balance",
+    "card_payments_available": "Card payments available for withdrawal"
   },
   "settings": {
     "title": "Settings",

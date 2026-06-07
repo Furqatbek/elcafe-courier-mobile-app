@@ -136,7 +136,12 @@
     "bonuses": "Бонусы",
     "recent_transactions": "Недавние транзакции",
     "weekly_payout": "Еженедельная выплата",
-    "vs_yesterday": "+12% по сравнению со вчера"
+    "vs_yesterday": "+12% по сравнению со вчера",
+    "payment_breakdown": "Разбивка по оплате",
+    "cash_earnings": "Наличные",
+    "card_earnings": "Карта",
+    "withdrawable_balance": "Доступно к выводу",
+    "card_payments_available": "Оплата картой доступна для вывода"
   },
   "settings": {
     "title": "Настройки",
