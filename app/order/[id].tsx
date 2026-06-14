@@ -99,9 +99,17 @@ export default function OrderDetailScreen() {
       } else {
         console.warn('[OrderDetail] Unhandled order status for slide action:', order.status);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[OrderDetail] Error in handleSlideComplete:', error);
-      Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
+      const msg = error?.message || '';
+      if (msg.toLowerCase().includes('not ready for pickup')) {
+        Alert.alert(
+          t('order_detail.not_ready_title'),
+          t('order_detail.not_ready_message')
+        );
+      } else {
+        Alert.alert(t('common.error'), msg || t('order_detail.status_update_failed'));
+      }
       throw error;
     }
   };
@@ -135,10 +143,14 @@ export default function OrderDetailScreen() {
     OTHER: t('order_detail.issue_other'),
   };
 
+  const isOrderReady = !!order.readyAt;
+
   const getButtonTitle = () => {
     switch (order.status) {
       case 'COURIER_ASSIGNED':
-        return t('order_detail.slide_pickup');
+        return isOrderReady
+          ? t('order_detail.slide_pickup')
+          : t('order_detail.slide_pickup_waiting');
       case 'PICKED_UP':
       case 'IN_TRANSIT':
         return t('order_detail.slide_delivery');

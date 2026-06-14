@@ -1557,6 +1557,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         const response = await authenticatedFetch(endpoint, { method });
         const result = await response.json();
         console.log('[CourierContext] API response:', { status: response.status, result });
+        if (result.success === false) {
+          throw new Error(result.message || 'Failed to update order status');
+        }
       }
 
       // Refresh stats and set status back to AVAILABLE after delivery completed

@@ -198,10 +198,18 @@ export default function MapNavigationScreen() {
       // Trigger route recalculation for new destination
       setRecalculateTrigger(prev => prev + 1);
       // Note: hasOpenedNavigation is reset by the useEffect watching order.status
-    } catch (error) {
+    } catch (error: any) {
       console.error('[MapNavigation] Error updating pickup status:', error);
-      Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
-      throw error; // Re-throw so SlideButton resets
+      const msg = error?.message || '';
+      if (msg.toLowerCase().includes('not ready for pickup')) {
+        Alert.alert(
+          t('order_detail.not_ready_title'),
+          t('order_detail.not_ready_message')
+        );
+      } else {
+        Alert.alert(t('common.error'), msg || t('order_detail.status_update_failed'));
+      }
+      throw error;
     } finally {
       setIsUpdatingStatus(false);
     }
