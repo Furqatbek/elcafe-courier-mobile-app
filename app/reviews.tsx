@@ -20,10 +20,16 @@ import { BASE_URL } from '@/constants/config';
 
 interface Review {
   id: number | string;
-  rating: number;
-  comment: string;
-  consumerName: string;
   orderId: number | string;
+  consumerId?: number;
+  consumerName: string;
+  restaurantId?: number;
+  courierId?: number;
+  restaurantRating?: number;
+  foodRating?: number;
+  courierRating: number;
+  comment: string;
+  tags?: string;
   createdAt: string;
 }
 
@@ -31,13 +37,14 @@ interface ReviewsResponse {
   success: boolean;
   data: {
     content: Review[];
-    totalPages: number;
+    page: number;
+    size: number;
     totalElements: number;
-    number: number;
+    totalPages: number;
   };
 }
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 20;
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -162,10 +169,19 @@ export default function ReviewsScreen() {
               </Text>
             </View>
           </View>
-          <StarRating rating={item.rating} />
+          <StarRating rating={item.courierRating} />
         </View>
         {item.comment ? (
           <Text style={styles.reviewComment}>{item.comment}</Text>
+        ) : null}
+        {item.tags ? (
+          <View style={styles.tagsRow}>
+            {item.tags.split(',').map((tag) => (
+              <View key={tag} style={styles.tag}>
+                <Text style={styles.tagText}>{tag.replace(/_/g, ' ')}</Text>
+              </View>
+            ))}
+          </View>
         ) : null}
         {item.orderId ? (
           <Text style={styles.reviewOrder}>
@@ -337,6 +353,24 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 20,
     marginTop: 4,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  tag: {
+    backgroundColor: Colors.primary + '12',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  tagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+    textTransform: 'capitalize',
   },
   reviewOrder: {
     fontSize: 12,
