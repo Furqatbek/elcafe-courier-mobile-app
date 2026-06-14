@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Platform, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, Banknote, CreditCard, Wallet, Calendar } from 'lucide-react-native';
+import { DollarSign, Banknote, CreditCard, Wallet, Calendar, Package, TrendingUp } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
 import { useCourier } from '@/context/CourierContext';
@@ -154,7 +154,25 @@ export default function FinanceScreen() {
           {isLoadingEarnings ? (
             <ActivityIndicator size="large" color={Colors.surface} style={{ marginVertical: 20 }} />
           ) : (
-            <Text style={styles.heroValue}>{formatCurrency(earnings.todayEarnings)}</Text>
+            <>
+              <Text style={styles.heroValue}>{formatCurrency(earnings.totalEarnings)}</Text>
+              <View style={styles.heroStatsRow}>
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatLabel}>{t('finance.today_earnings')}</Text>
+                  <Text style={styles.heroStatValue}>{formatCurrency(earnings.todayEarnings)}</Text>
+                </View>
+                <View style={styles.heroStatDivider} />
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatLabel}>{t('finance.total_deliveries')}</Text>
+                  <Text style={styles.heroStatValue}>{earnings.totalDeliveries}</Text>
+                </View>
+                <View style={styles.heroStatDivider} />
+                <View style={styles.heroStat}>
+                  <Text style={styles.heroStatLabel}>{t('finance.avg_per_delivery')}</Text>
+                  <Text style={styles.heroStatValue}>{formatCurrency(earnings.averagePerDelivery)}</Text>
+                </View>
+              </View>
+            </>
           )}
         </View>
 
@@ -362,6 +380,32 @@ const styles = StyleSheet.create({
     color: Colors.surface,
     fontSize: 40,
     fontWeight: '800',
+    marginBottom: 16,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  heroStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  heroStatLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  heroStatValue: {
+    fontSize: 14,
+    color: Colors.surface,
+    fontWeight: '700',
+  },
+  heroStatDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   sectionTitle: {
     fontSize: 18,
