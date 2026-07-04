@@ -54,7 +54,9 @@ export default function MapNavigationScreen() {
 
   // Determine current destination based on order status
   // Going to pickup if status is ACCEPTED or READY
-  const isGoingToPickup = order?.status === 'COURIER_ASSIGNED';
+  const isGoingToPickup = order?.status === 'COURIER_ASSIGNED' || order?.status === 'READY';
+  // Pickup is blocked server-side until the restaurant marks the order READY
+  const isOrderReady = !!order?.readyAt || order?.status === 'READY';
 
   // Auto-open navigation when screen loads or status changes
   useEffect(() => {
@@ -412,9 +414,10 @@ export default function MapNavigationScreen() {
           {isGoingToPickup ? (
             <SlideButton
               key={`pickup-${order.status}-${order.orderId}`}
-              title={t('navigation.slide_picked_up')}
+              title={isOrderReady ? t('navigation.slide_picked_up') : t('order_detail.slide_pickup_waiting')}
               onComplete={handlePickupComplete}
               isLoading={isUpdatingStatus}
+              disabled={!isOrderReady}
             />
           ) : (
             <SlideButton

@@ -6,7 +6,7 @@ import * as Location from 'expo-location';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 
-export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -332,6 +332,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const refreshTokenRef = useRef<string | null>(null);
   const isOnlineRef = useRef(false);
   const courierProfileRef = useRef<CourierProfile | null>(null);
+  // The status the courier *wants* (set by user actions). The backend flips
+  // couriers to OFFLINE when the WebSocket drops, so after every reconnect we
+  // re-assert this intent — otherwise the courier silently stops receiving
+  // targeted order pushes while the UI still says "online".
+  const intendedStatusRef = useRef<CourierStatus | null>(null);
+  const wasDisconnectedRef = useRef(false);
+  const reassertStatusRef = useRef<(() => void) | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -751,16 +758,26 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     websocketService.onConnected(() => {
       console.log('[CourierContext] WebSocket connected');
       setIsWebSocketConnected(true);
+
+      // The backend flips couriers to OFFLINE when the socket drops. After a
+      // reconnect, re-assert the courier's intended status so they keep
+      // receiving targeted order pushes.
+      if (wasDisconnectedRef.current) {
+        wasDisconnectedRef.current = false;
+        reassertStatusRef.current?.();
+      }
     });
 
     websocketService.onDisconnected(() => {
       console.log('[CourierContext] WebSocket disconnected');
       setIsWebSocketConnected(false);
+      wasDisconnectedRef.current = true;
 
-      // Auto-offline: if courier was AVAILABLE or ON_BREAK, set to OFFLINE
+      // Reflect server truth: backend auto-flips AVAILABLE/ON_BREAK to OFFLINE
+      // on disconnect. Intent is preserved in intendedStatusRef for re-assert.
       const status = courierProfileRef.current?.status;
       if (status === 'AVAILABLE' || status === 'ON_BREAK') {
-        console.log('[CourierContext] Auto-setting courier OFFLINE after disconnect (was', status, ')');
+        console.log('[CourierContext] Reflecting server auto-offline after disconnect (was', status, ')');
         setCourierProfile(prev => prev ? { ...prev, status: 'OFFLINE' } : null);
         setIsOnline(false);
       }
@@ -945,12 +962,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const subscribeToOrderStatusUpdates = useCallback((orderId: string | number) => {
     const unsubs: Array<() => void> = [];
 
-    // 3. Full order updates (/topic/orders/{orderId}) — receives full OrderDto
+    // 3. Full order updates (/topic/orders/{orderId}) — receives full OrderDto.
+    // Cancellations/refunds arrive here too: the CANCELLED status propagates
+    // into local state and every screen (detail, map-navigation, orders list)
+    // reacts by pulling the courier off the job.
     unsubs.push(
       websocketService.subscribeToOrderUpdates(orderId, (orderDto) => {
         console.log('[CourierContext] Order update:', orderDto.id, 'status:', orderDto.status);
-        setOrders((prev) =>
-          prev.map((order) =>
+        setOrders((prev) => {
+          const updated = prev.map((order) =>
             order.orderId === orderDto.id
               ? {
                   ...order,
@@ -965,8 +985,23 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
                   deliveredAt: orderDto.deliveredAt ?? order.deliveredAt,
                 }
               : order
-          )
-        );
+          );
+
+          // Order cancelled mid-delivery: if nothing else is active, flip the
+          // courier back to AVAILABLE (mirrors the server-side state machine)
+          if (orderDto.status === 'CANCELLED') {
+            const remainingActive = updated.filter(
+              (o) => o.orderId !== orderDto.id && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
+            );
+            if (remainingActive.length === 0) {
+              setCourierProfile((p) => (p && p.status === 'BUSY' ? { ...p, status: 'AVAILABLE' } : p));
+              if (intendedStatusRef.current === 'BUSY') {
+                intendedStatusRef.current = 'AVAILABLE';
+              }
+            }
+          }
+          return updated;
+        });
       })
     );
 
@@ -1374,6 +1409,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Update courier status (OFFLINE/AVAILABLE/BUSY/ON_BREAK)
   const updateCourierStatus = useCallback(async (status: CourierStatus) => {
+    // Record intent first so a reconnect re-asserts it even if this call races
+    // with a connection drop
+    intendedStatusRef.current = status;
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_STATUS, {
         method: 'PUT',
@@ -1390,6 +1428,22 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       throw error;
     }
   }, [authenticatedFetch]);
+
+  // Keep the reconnect re-assert handler pointing at the latest closure.
+  // Called after every WebSocket reconnect: if the courier intended to be
+  // online, push that status back to the server (backend flipped it to
+  // OFFLINE when the socket dropped).
+  useEffect(() => {
+    reassertStatusRef.current = () => {
+      const intended = intendedStatusRef.current;
+      if (intended && intended !== 'OFFLINE') {
+        console.log('[CourierContext] Re-asserting courier status after reconnect:', intended);
+        updateCourierStatus(intended).catch((error) => {
+          console.error('[CourierContext] Failed to re-assert status after reconnect:', error);
+        });
+      }
+    };
+  }, [updateCourierStatus]);
 
   // Update courier location to server
   const updateLocationOnServer = useCallback(async (
@@ -1501,8 +1555,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         console.log('[CourierContext] Adding accepted order with status:', acceptedOrder.status);
         setOrders(prev => [acceptedOrder, ...prev]);
 
-        // Update courier status to BUSY since they have an active order
+        // Update courier status to BUSY since they have an active order.
+        // Keep intent in sync so a reconnect doesn't re-assert AVAILABLE
+        // mid-delivery.
         setCourierProfile(prev => prev ? { ...prev, status: 'BUSY' } : null);
+        intendedStatusRef.current = 'BUSY';
 
         return acceptedOrder;
       } else {
@@ -1510,9 +1567,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
     } catch (error) {
       console.error('Failed to accept order:', error);
+      // The order may have been taken by another courier or auto-cancelled by
+      // the no-courier timeout. Drop it locally and refresh the list so the
+      // courier sees current reality instead of a stale offer.
+      setAvailableOrders(prev => prev.filter(o => o.orderId !== Number(orderId)));
+      setNewOrderOffer(prev => (prev && prev.orderId === Number(orderId) ? null : prev));
+      fetchAvailableOrders().catch(() => {});
       throw error;
     }
-  }, [authenticatedFetch]);
+  }, [authenticatedFetch, fetchAvailableOrders]);
 
   const updateOrderStatus = async (orderId: number | string, status: OrderStatus) => {
     const numericOrderId = Number(orderId);
@@ -1571,6 +1634,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         );
         if (remainingActive.length === 0) {
           setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
+          intendedStatusRef.current = 'AVAILABLE';
         }
       }
 
@@ -1617,6 +1681,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         );
         if (remainingActive.length === 0) {
           setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
+          intendedStatusRef.current = 'AVAILABLE';
         }
 
         return result.data;

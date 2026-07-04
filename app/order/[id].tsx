@@ -81,7 +81,7 @@ export default function OrderDetailScreen() {
   const handleSlideComplete = async () => {
     console.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
     try {
-      if (order.status === 'COURIER_ASSIGNED') {
+      if (order.status === 'COURIER_ASSIGNED' || order.status === 'READY') {
         console.log('[OrderDetail] Updating status to PICKED_UP...');
         await updateOrderStatus(order.orderId, 'PICKED_UP');
         router.push(`/map-navigation/${order.orderId}`);
@@ -143,11 +143,15 @@ export default function OrderDetailScreen() {
     OTHER: t('order_detail.issue_other'),
   };
 
-  const isOrderReady = !!order.readyAt;
+  // Pickup is blocked server-side until the restaurant marks the order READY
+  // (sets readyAt). The courier can accept early and drive to the restaurant,
+  // but the pickup slide stays disabled until the kitchen is done.
+  const isOrderReady = !!order.readyAt || order.status === 'READY';
 
   const getButtonTitle = () => {
     switch (order.status) {
       case 'COURIER_ASSIGNED':
+      case 'READY':
         return isOrderReady
           ? t('order_detail.slide_pickup')
           : t('order_detail.slide_pickup_waiting');
@@ -160,8 +164,8 @@ export default function OrderDetailScreen() {
   };
 
   // Determine if order is active (needs navigation)
-  const isActiveOrder = order.status === 'COURIER_ASSIGNED' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT';
-  const isGoingToPickup = order.status === 'COURIER_ASSIGNED';
+  const isActiveOrder = order.status === 'COURIER_ASSIGNED' || order.status === 'READY' || order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT';
+  const isGoingToPickup = order.status === 'COURIER_ASSIGNED' || order.status === 'READY';
 
   const handleOpenNavigator = () => {
     const lat = isGoingToPickup ? order.restaurantLat : order.deliveryLat;
@@ -323,6 +327,18 @@ export default function OrderDetailScreen() {
               <Text style={styles.earningsValue}>{formatCurrency(totalAmount)}</Text>
             </View>
           </View>
+
+          {/* Cash to collect — cash-only MVP: courier collects order.total on
+              delivery; the complete call records the payment server-side */}
+          {!order.isPaid && isActiveOrder && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.collectCashRow}>
+                <Text style={styles.collectCashLabel}>{t('order_detail.collect_cash')}</Text>
+                <Text style={styles.collectCashValue}>{formatCurrency(order.total ?? totalAmount)}</Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Navigate Button — shown for active orders, or any order with valid coordinates */}
@@ -435,6 +451,7 @@ export default function OrderDetailScreen() {
             key={order.status}
             title={getButtonTitle()}
             onComplete={handleSlideComplete}
+            disabled={isGoingToPickup && !isOrderReady}
           />
         </View>
       )}
@@ -619,6 +636,25 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: Colors.success,
+  },
+  collectCashRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  collectCashLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  collectCashValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#92400E',
   },
   navigateContainer: {
     paddingHorizontal: 16,

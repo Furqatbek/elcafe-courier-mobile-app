@@ -47,7 +47,7 @@ export default function OrderMap({
   }), [deliveryLat, deliveryLng]);
 
   // Determine destination based on order status in navigation mode
-  const isGoingToPickup = order.status === 'COURIER_ASSIGNED';
+  const isGoingToPickup = order.status === 'COURIER_ASSIGNED' || order.status === 'READY';
   const destination = isGoingToPickup ? pickupLocation : dropoffLocation;
 
   // Get user location

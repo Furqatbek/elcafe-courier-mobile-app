@@ -76,8 +76,10 @@ export type CourierStatusType = typeof COURIER_STATUS[keyof typeof COURIER_STATU
 
 // Order Status Values
 // Courier delivery flow: COURIER_ASSIGNED → PICKED_UP → IN_TRANSIT → DELIVERED
+// READY = restaurant finished preparing (pickup is blocked server-side until then)
 export const ORDER_STATUS = {
   PENDING: 'PENDING',
+  READY: 'READY',
   COURIER_ASSIGNED: 'COURIER_ASSIGNED',
   PICKED_UP: 'PICKED_UP',
   IN_TRANSIT: 'IN_TRANSIT',
@@ -231,8 +233,10 @@ export const WEBSOCKET_CONFIG = {
   URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE_URL}/ws`,
   // SockJS endpoint for web browsers (with fallbacks)
   SOCKJS_URL: process.env.EXPO_PUBLIC_WS_SOCKJS_URL || `${BASE_URL}/ws-sockjs`,
-  RECONNECT_INTERVAL: 5000,
-  MAX_RECONNECT_ATTEMPTS: 10,
+  // Aggressive reconnect: the backend flips couriers OFFLINE when the socket
+  // drops, so every second disconnected is time not receiving orders
+  RECONNECT_INTERVAL: 3000,
+  MAX_RECONNECT_ATTEMPTS: 30,
   HEARTBEAT_INCOMING: 10000,
   HEARTBEAT_OUTGOING: 10000,
   TOPICS: {
@@ -242,17 +246,13 @@ export const WEBSOCKET_CONFIG = {
     ORDER_UPDATES: (orderId: string | number) => `/topic/orders/${orderId}`,
     ORDER_TAKEN: (orderId: string | number) => `/topic/orders/${orderId}/taken`,
 
-    // Notification topics
+    // Notification topics — /topic/users/{userId}/notifications is the
+    // canonical personal destination (/user/queue/notifications is dead)
     COURIER_NOTIFICATIONS: '/topic/roles/courier/notifications',
     USER_NOTIFICATIONS: (userId: string | number) => `/topic/users/${userId}/notifications`,
     BROADCAST_NOTIFICATIONS: '/topic/broadcast/notifications',
 
     // Location topics
     COURIER_LOCATION: (courierId: string | number) => `/topic/couriers/${courierId}/location`,
-
-    /** @deprecated Use ORDER_UPDATES instead */
-    ORDER_STATUS: (orderId: string | number) => `/topic/orders/${orderId}`,
-    /** @deprecated Use USER_NOTIFICATIONS instead */
-    NOTIFICATIONS: '/user/queue/notifications',
   },
 } as const;

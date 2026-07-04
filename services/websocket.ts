@@ -331,22 +331,6 @@ class WebSocketService {
     return this.subscribe(WEBSOCKET_CONFIG.TOPICS.COURIER_LOCATION(courierId), handler);
   }
 
-  // ── Deprecated (kept for backward compatibility) ──
-
-  /** @deprecated Use subscribeToOrderUpdates instead */
-  subscribeToOrderStatus(
-    orderId: string | number,
-    handler: WebSocketMessageHandler<OrderDto>
-  ): () => void {
-    return this.subscribeToOrderUpdates(orderId, handler);
-  }
-
-  /** @deprecated Use subscribeToUserNotifications instead */
-  subscribeToNotifications(handler: WebSocketMessageHandler<WebSocketNotification>): () => void {
-    const topic = WEBSOCKET_CONFIG.TOPICS.NOTIFICATIONS;
-    return this.subscribe(topic, handler);
-  }
-
   /**
    * Generic subscribe method
    */

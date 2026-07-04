@@ -21,9 +21,10 @@ interface SlideButtonProps {
   title: string;
   onComplete: () => void | Promise<void>;
   isLoading?: boolean;
+  disabled?: boolean;
 }
 
-export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) {
+export function SlideButton({ title, onComplete, isLoading, disabled }: SlideButtonProps) {
   const { t } = useTranslation();
   const [completed, setCompleted] = useState(false);
 
@@ -41,8 +42,10 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
 
   const translateX = useRef(new Animated.Value(0)).current;
 
-  // Sync refs during render (synchronous — always up-to-date)
-  loadingRef.current = !!isLoading;
+  // Sync refs during render (synchronous — always up-to-date).
+  // `disabled` shares the loading gate: both block every interaction path
+  // (press-in, drag, release, completion).
+  loadingRef.current = !!isLoading || !!disabled;
   completedRef.current = completed;
   onCompleteRef.current = onComplete;
 
@@ -174,9 +177,11 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
     { transform: [{ translateX }] },
   ];
 
+  const isBlocked = completed || isLoading || disabled;
+
   return (
     <View
-      style={styles.container}
+      style={[styles.container, disabled && styles.containerDisabled]}
       onLayout={(e) => {
         widthRef.current = e.nativeEvent.layout.width;
         console.log('[SlideButton] Layout width:', e.nativeEvent.layout.width);
@@ -188,7 +193,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
       {Platform.OS === 'web' ? (
         <Pressable
           onPressIn={handlePressIn}
-          disabled={completed || isLoading}
+          disabled={isBlocked}
           style={{ position: 'absolute', left: BUTTON_PADDING, opacity: 1 }}
           android_disableSound
         >
@@ -196,7 +201,7 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
             style={[
               styles.thumbInner,
               { transform: [{ translateX }] },
-              { cursor: completed || isLoading ? 'not-allowed' : 'grab' },
+              { cursor: isBlocked ? 'not-allowed' : 'grab' },
             ] as any}
           >
             <ChevronRight color={Colors.primary} size={24} />
@@ -215,6 +220,9 @@ export function SlideButton({ title, onComplete, isLoading }: SlideButtonProps) 
 }
 
 const styles = StyleSheet.create({
+  containerDisabled: {
+    opacity: 0.6,
+  },
   container: {
     height: BUTTON_HEIGHT,
     backgroundColor: Colors.secondary,
