@@ -9,7 +9,6 @@ import { Platform } from 'react-native';
 import {
   BASE_URL,
   API_ENDPOINTS,
-  TOKEN_CONFIG,
   REQUEST_CONFIG,
   CourierStatusType,
   VehicleType,
@@ -17,6 +16,10 @@ import {
   EarningsPeriodType,
 } from '@/constants/config';
 import { error as logError } from '@/lib/logger';
+// NOTE: tokenManager imports tokenStorage back from this module. The cycle is
+// safe because neither module touches the other at module-eval time — all
+// cross-references happen inside functions.
+import tokenManager from '@/services/tokenManager';
 
 // ============================================================================
 // Token Storage
@@ -329,115 +332,19 @@ export class ValidationError extends ApiRequestError {
 // ============================================================================
 
 class ApiClient {
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
-  private isRefreshing = false;
-  private refreshPromise: Promise<string | null> | null = null;
-  // Lets the session owner (CourierContext) mirror tokens rotated by this
-  // client's own 401-retry refresh path into its React state/refs.
-  private onTokensRefreshed: ((accessToken: string, refreshToken: string) => void) | null = null;
-
-  constructor() {
-    this.loadTokens();
-  }
-
-  private async loadTokens() {
-    try {
-      this.accessToken = await tokenStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
-      this.refreshToken = await tokenStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
-    } catch (error) {
-      logError('Failed to load tokens:', error);
-    }
-  }
-
+  // Token state and refresh logic live in services/tokenManager — the single
+  // refresh authority shared by every auth path in the app. These two methods
+  // are kept as thin delegates for backward compatibility.
   setTokens(accessToken: string, refreshToken: string) {
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
+    tokenManager.setTokens(accessToken, refreshToken).catch((error) => {
+      logError('Failed to persist tokens:', error);
+    });
   }
 
   clearTokens() {
-    this.accessToken = null;
-    this.refreshToken = null;
-  }
-
-  setOnTokensRefreshed(listener: ((accessToken: string, refreshToken: string) => void) | null) {
-    this.onTokensRefreshed = listener;
-  }
-
-  /**
-   * Single-flight token refresh: concurrent 401s share ONE refresh request so
-   * a rotated refresh token is never double-spent.
-   *
-   * Returns the new access token, `null` on a DEFINITIVE rejection
-   * (401/403/failed payload — the refresh token is dead), and THROWS a
-   * NetworkError on transport failures (the session may still be valid).
-   */
-  private async refreshAccessToken(): Promise<string | null> {
-    if (this.refreshPromise) {
-      return this.refreshPromise;
-    }
-
-    if (!this.refreshToken) {
-      return null;
-    }
-
-    this.isRefreshing = true;
-    this.refreshPromise = this._doRefresh();
-
-    try {
-      return await this.refreshPromise;
-    } finally {
-      this.isRefreshing = false;
-      this.refreshPromise = null;
-    }
-  }
-
-  private async _doRefresh(): Promise<string | null> {
-    let response: Response;
-    try {
-      response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: this.refreshToken }),
-      });
-    } catch (error: any) {
-      // Transport failure — do NOT treat as an auth failure; keep the session
-      logError('Token refresh network error:', error);
-      throw new NetworkError(error?.message || 'Token refresh network error');
-    }
-
-    if (response.status === 401 || response.status === 403) {
-      // Definitive: the refresh token is expired/revoked
-      this.clearTokens();
-      return null;
-    }
-
-    if (!response.ok) {
-      // Transient server error (5xx etc.) — keep the session, let caller retry
-      throw new ApiRequestError(`Token refresh failed with status ${response.status}`, response.status);
-    }
-
-    let data: ApiResponse<{ accessToken: string; refreshToken: string }>;
-    try {
-      data = await response.json();
-    } catch {
-      throw new ApiRequestError('Token refresh returned an invalid response', response.status);
-    }
-
-    if (data.success && data.data?.accessToken && data.data?.refreshToken) {
-      this.accessToken = data.data.accessToken;
-      this.refreshToken = data.data.refreshToken;
-      await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
-      await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
-      this.onTokensRefreshed?.(data.data.accessToken, data.data.refreshToken);
-      return data.data.accessToken;
-    }
-
-    // Server answered but rejected the refresh — definitive
-    this.clearTokens();
-    return null;
+    tokenManager.clearTokens().catch((error) => {
+      logError('Failed to clear tokens:', error);
+    });
   }
 
   async request<T>(
@@ -452,8 +359,11 @@ class ApiClient {
       ...options.headers,
     };
 
-    if (requiresAuth && this.accessToken) {
-      (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
+    if (requiresAuth) {
+      const accessToken = await tokenManager.getAccessToken();
+      if (accessToken) {
+        (headers as Record<string, string>)['Authorization'] = `Bearer ${accessToken}`;
+      }
     }
 
     const controller = new AbortController();
@@ -468,9 +378,11 @@ class ApiClient {
 
       clearTimeout(timeout);
 
-      // Handle 401 - try refresh
+      // Handle 401 - try refresh (single-flight, shared with every other
+      // refresh path via tokenManager). A definitive rejection purges the
+      // stored tokens and emits 'session-dead' inside tokenManager.
       if (response.status === 401 && requiresAuth) {
-        const newToken = await this.refreshAccessToken();
+        const newToken = await tokenManager.refresh();
         if (newToken) {
           (headers as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
           const retryResponse = await fetch(url, { ...options, headers });

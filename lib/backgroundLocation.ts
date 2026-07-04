@@ -7,8 +7,15 @@
  *
  * The task callback runs OUTSIDE React (the JS context may have been revived
  * headlessly), so it must not touch React state or contexts: it reads the
- * access token straight from secure storage and PUTs the fix itself.
- * Failures are swallowed — the next fix retries.
+ * access token through tokenManager (storage-backed, works headless) and
+ * PUTs the fix itself. Failures are swallowed — the next fix retries.
+ *
+ * Token refresh goes through tokenManager too — the SAME single-flight
+ * authority every other refresh path uses — so a background rotation is
+ * immediately visible to the foreground (same JS context) or persisted for
+ * it (headless revival). On definitive rejection tokenManager purges stored
+ * tokens; no UI decisions are made here (no listeners exist headless — the
+ * foreground discovers the dead session on resume).
  *
  * IMPORTANT: this module must be imported at app startup (CourierContext
  * imports it) so TaskManager.defineTask runs at module scope before the OS
@@ -18,64 +25,13 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, LOCATION_CONFIG } from '@/constants/config';
-import { tokenStorage } from '@/services/api';
+import { BASE_URL, API_ENDPOINTS, LOCATION_CONFIG } from '@/constants/config';
+import tokenManager from '@/services/tokenManager';
 import { warn } from '@/lib/logger';
 
 export const BACKGROUND_LOCATION_TASK = 'courier-location-task';
 
 const isNative = Platform.OS !== 'web';
-
-// Serializes refresh attempts within this JS context so a burst of queued
-// fixes can't double-spend one rotated refresh token.
-let backgroundRefreshInFlight: Promise<string | null> | null = null;
-
-/**
- * Access tokens are short-lived; on long background stints (external nav app,
- * phone in pocket) the stored token expires while nothing in the foreground
- * refresh path is running. Without this, every subsequent fix 401s silently
- * and the courier's position goes dark until the app foregrounds.
- *
- * Definitive rejection returns null WITHOUT clearing stored tokens — session
- * teardown is a foreground decision, not a background task's.
- */
-async function refreshAccessTokenInBackground(): Promise<string | null> {
-  if (backgroundRefreshInFlight) {
-    return backgroundRefreshInFlight;
-  }
-  backgroundRefreshInFlight = (async () => {
-    try {
-      const refreshToken = await tokenStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
-      if (!refreshToken) {
-        return null;
-      }
-      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (!response.ok) {
-        return null;
-      }
-      const data = await response.json();
-      const newAccess = data?.data?.accessToken ?? data?.accessToken;
-      const newRefresh = data?.data?.refreshToken ?? data?.refreshToken;
-      if (!newAccess) {
-        return null;
-      }
-      await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, newAccess);
-      if (newRefresh) {
-        await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, newRefresh);
-      }
-      return newAccess as string;
-    } catch {
-      return null;
-    } finally {
-      backgroundRefreshInFlight = null;
-    }
-  })();
-  return backgroundRefreshInFlight;
-}
 
 function putLocation(token: string, latest: Location.LocationObject): Promise<Response> {
   return fetch(`${BASE_URL}${API_ENDPOINTS.COURIER.UPDATE_LOCATION}`, {
@@ -109,21 +65,25 @@ if (isNative) {
       // Only the latest fix matters — the backend keeps current position only
       const latest = locations[locations.length - 1];
       try {
-        const token = await tokenStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
+        const token = await tokenManager.getAccessToken();
         if (!token) {
           // Logged out / session cleared — nothing to report
           return;
         }
         const response = await putLocation(token, latest);
         if (response.status === 401 || response.status === 403) {
-          // Expired mid-background-stint: refresh once and retry this fix
-          const freshToken = await refreshAccessTokenInBackground();
+          // Expired mid-background-stint: refresh once and retry this fix.
+          // Single-flight and storage-backed, so a burst of queued fixes (or
+          // a concurrent foreground refresh in the same JS context) can't
+          // double-spend one rotated refresh token. Definitive rejection
+          // returns null after tokenManager purged the stored tokens.
+          const freshToken = await tokenManager.refresh();
           if (freshToken) {
             await putLocation(freshToken, latest);
           }
         }
       } catch {
-        // Swallow transient network failures — the next fix retries
+        // Swallow transient network/refresh failures — the next fix retries
       }
     }
   );

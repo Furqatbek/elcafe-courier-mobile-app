@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL, API_ENDPOINTS, APP_CONFIG } from '@/constants/config';
+import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
 
 const DEVICE_TOKEN_KEY = 'fcm_device_token';
@@ -132,6 +133,20 @@ export async function isNotificationsPreferenceEnabled(): Promise<boolean> {
 }
 
 /**
+ * The passed access token may be stale (e.g. a session restore after days
+ * offline hands us the token that was persisted before the app was killed).
+ * Prefer a validated/refreshed token from the token manager and only fall
+ * back to the caller's token when the manager has none.
+ */
+async function resolveAuthToken(accessToken: string): Promise<string> {
+  try {
+    return (await tokenManager.getValidAccessToken()) ?? accessToken;
+  } catch {
+    return accessToken;
+  }
+}
+
+/**
  * Register device token with the backend
  */
 export async function registerDeviceToken(accessToken: string): Promise<boolean> {
@@ -167,11 +182,13 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
       appVersion: APP_CONFIG.VERSION,
     };
 
+    const authToken = await resolveAuthToken(accessToken);
+
     const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.REGISTER}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -197,11 +214,13 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
  */
 export async function unregisterDeviceToken(accessToken: string): Promise<boolean> {
   try {
+    const authToken = await resolveAuthToken(accessToken);
+
     const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.UNREGISTER_ALL}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${authToken}`,
       },
     });
 

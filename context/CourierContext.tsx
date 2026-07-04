@@ -9,7 +9,8 @@ import * as Location from 'expo-location';
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '@/lib/backgroundLocation';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
-import { apiClient, tokenStorage } from '@/services/api';
+import { tokenStorage } from '@/services/api';
+import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
 
 export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
@@ -300,28 +301,6 @@ const DEFAULT_STATS: DriverStats = {
   rating: 0,
 };
 
-// Decode a JWT's exp claim; returns true when the token is expired or expires
-// within TOKEN_CONFIG.REFRESH_THRESHOLD_MS. Returns false when exp cannot be
-// determined — better to attempt using the token than to block on it.
-const isAccessTokenExpiringSoon = (token: string): boolean => {
-  try {
-    const payloadPart = token.split('.')[1];
-    const atobFn: ((data: string) => string) | undefined = (globalThis as any).atob;
-    if (!payloadPart || typeof atobFn !== 'function') {
-      return false;
-    }
-    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    const payload = JSON.parse(atobFn(padded));
-    if (typeof payload.exp !== 'number') {
-      return false;
-    }
-    return payload.exp * 1000 - Date.now() < TOKEN_CONFIG.REFRESH_THRESHOLD_MS;
-  } catch {
-    return false;
-  }
-};
-
 export const [CourierProvider, useCourier] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
   const [courierProfile, setCourierProfile] = useState<CourierProfile | null>(null);
@@ -333,7 +312,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [stats, setStats] = useState<DriverStats>(DEFAULT_STATS);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{latitude: number; longitude: number} | null>(null);
   const [isLocationTracking, setIsLocationTracking] = useState(false);
   const [availableOrders, setAvailableOrders] = useState<AvailableOrder[]>([]);
@@ -364,9 +342,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
-  // Single-flight guard: concurrent 401s share ONE refresh request instead of
-  // double-spending a rotated refresh token
-  const refreshInFlightRef = useRef<Promise<string | null> | null>(null);
   // Whether the location watcher was last started with the active-order
   // (fast) interval — lets us restart it when the active set flips
   const watcherHasActiveOrdersRef = useRef<boolean | null>(null);
@@ -379,6 +354,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // connect after login, or after logout) means nothing to re-assert.
   const intendedStatusRef = useRef<CourierStatus | null>(null);
   const reassertStatusRef = useRef<(() => void) | null>(null);
+  // Re-sync order state after a WebSocket (re)connect: events that fired
+  // during the outage (cancellations, ORDER_TAKEN) are never replayed by the
+  // broker, so pull fresh lists instead. Ref-based for the same stale-closure
+  // reason as reassertStatusRef.
+  const resyncAfterReconnectRef = useRef<(() => void) | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -397,86 +377,17 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     refreshTokenRef.current = refreshToken;
   }, [refreshToken]);
 
-  // Always points at the latest logout closure — refreshAccessToken has no
-  // deps (single-flight via ref), so it must not capture a stale logout.
+  // Always points at the latest logout closure — the tokenManager
+  // subscription below has no deps, so it must not capture a stale logout.
   const logoutRef = useRef<() => Promise<void>>(async () => {});
 
-  // Refresh access token using refresh token.
-  //
-  // Single-flight: concurrent 401s share ONE in-flight refresh request, so a
-  // rotated refresh token is never double-spent. Only a DEFINITIVE server
-  // rejection (401/403 or an explicit failure payload) logs the user out —
-  // transport failures throw and keep the session intact.
+  // Refresh access token — delegates to the SINGLE single-flight refresh
+  // authority (services/tokenManager), shared with the ApiClient 401-retry
+  // path and the background location task. A DEFINITIVE rejection makes
+  // tokenManager purge storage and emit 'session-dead' (routed to logout by
+  // the subscription below); transport failures throw and keep the session.
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
-    if (refreshInFlightRef.current) {
-      return refreshInFlightRef.current;
-    }
-
-    const currentRefreshToken = refreshTokenRef.current;
-    if (!currentRefreshToken) {
-      return null;
-    }
-
-    const doRefresh = async (): Promise<string | null> => {
-      setIsRefreshing(true);
-      try {
-        let response: Response;
-        try {
-          response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ refreshToken: currentRefreshToken }),
-          });
-        } catch (networkError) {
-          // Transport failure: the refresh token may still be valid — keep
-          // the session and surface the error to the caller.
-          logger.error('Token refresh network error:', networkError);
-          throw networkError;
-        }
-
-        if (response.status === 401 || response.status === 403) {
-          // Definitive: refresh token expired/revoked
-          logger.warn('Token refresh rejected by server, logging out');
-          await logoutRef.current();
-          return null;
-        }
-
-        if (!response.ok) {
-          // Transient server error (5xx etc.) — keep the session
-          throw new Error(`Token refresh failed with status ${response.status}`);
-        }
-
-        const data: RefreshTokenResponse = await response.json();
-
-        if (data.success && data.data?.accessToken && data.data?.refreshToken) {
-          const newAccessToken = data.data.accessToken;
-          const newRefreshToken = data.data.refreshToken;
-          // Update refs synchronously so concurrent callers (WebSocket token
-          // provider, queued 401 retries) see the fresh tokens immediately
-          accessTokenRef.current = newAccessToken;
-          refreshTokenRef.current = newRefreshToken;
-          setAccessToken(newAccessToken);
-          setRefreshToken(newRefreshToken);
-          apiClient.setTokens(newAccessToken, newRefreshToken);
-          await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, newAccessToken);
-          await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, newRefreshToken);
-          return newAccessToken;
-        }
-
-        // Server answered but rejected the refresh — definitive
-        await logoutRef.current();
-        return null;
-      } finally {
-        setIsRefreshing(false);
-        refreshInFlightRef.current = null;
-      }
-    };
-
-    const inFlight = doRefresh();
-    refreshInFlightRef.current = inFlight;
-    return inFlight;
+    return tokenManager.refresh();
   }, []);
 
   // Helper function for authenticated API requests
@@ -848,27 +759,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, []);
 
   // Token provider for the WebSocket layer. Called by stompjs before EVERY
-  // (re)connect attempt, so reconnects never present a stale JWT. Reads from
-  // refs (not state) and reuses the single-flight refresh, so its identity is
-  // stable and concurrent refreshes are impossible.
+  // (re)connect attempt, so reconnects never present a stale JWT. Delegates
+  // to tokenManager: refresh-if-expiring, single-flight, and on transport
+  // failures it falls back to the current token (the reconnect loop retries
+  // with a fresh one later).
   const getWebSocketToken = useCallback(async (): Promise<string | null> => {
-    const token = accessTokenRef.current;
-    if (!token) {
-      return null;
-    }
-    if (!isAccessTokenExpiringSoon(token)) {
-      return token;
-    }
-    try {
-      const refreshed = await refreshAccessToken();
-      return refreshed ?? accessTokenRef.current;
-    } catch (error) {
-      // Network error during refresh — try the current token anyway; the
-      // reconnect loop will retry with a fresh one later
-      logger.warn('[CourierContext] Token refresh before WS connect failed:', error);
-      return accessTokenRef.current;
-    }
-  }, [refreshAccessToken]);
+    return tokenManager.getValidAccessToken();
+  }, []);
 
   // WebSocket connection management
   const connectWebSocket = useCallback(() => {
@@ -881,6 +778,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       // the courier's intended status on every (re)connect — on the first
       // connect after login intent is null, so this is a no-op then.
       reassertStatusRef.current?.();
+
+      // Re-sync order state after every (re)connect: cancellations and
+      // ORDER_TAKEN events that fired during the outage are never replayed
+      // by the broker, so without this pull they would be missed forever.
+      resyncAfterReconnectRef.current?.();
     });
 
     // Fires on both graceful disconnects and abrupt connection losses
@@ -1217,13 +1119,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setLastSyncError(null);
     hasLoadedInitialData.current = false;
 
-    // Keep the shared API client and its persisted tokens in sync
-    apiClient.clearTokens();
+    // Purge tokens from memory AND storage via the single token authority
     accessTokenRef.current = null;
     refreshTokenRef.current = null;
+    await tokenManager.clearTokens();
 
-    await tokenStorage.removeItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
-    await tokenStorage.removeItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
     await AsyncStorage.removeItem(TOKEN_CONFIG.USER_KEY);
     await AsyncStorage.removeItem('courier_profile');
   }, [stopLocationTracking]);
@@ -1265,18 +1165,28 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     logoutRef.current = logout;
   }, [logout]);
 
-  // Mirror tokens rotated by apiClient's own 401-retry refresh path back
-  // into context state/refs so both auth flows stay consistent
+  // Mirror tokenManager events into context state/refs. Rotations — from ANY
+  // refresh path (401-retries, WS token provider, background location task) —
+  // keep React state consistent; a definitive refresh rejection
+  // ('session-dead') routes to the existing logout path.
   useEffect(() => {
-    apiClient.setOnTokensRefreshed((newAccessToken, newRefreshToken) => {
-      accessTokenRef.current = newAccessToken;
-      refreshTokenRef.current = newRefreshToken;
-      setAccessToken(newAccessToken);
-      setRefreshToken(newRefreshToken);
+    const unsubscribe = tokenManager.subscribe((event) => {
+      if (event.type === 'rotated') {
+        // Update refs synchronously so concurrent callers see fresh tokens
+        accessTokenRef.current = event.accessToken;
+        refreshTokenRef.current = event.refreshToken;
+        setAccessToken(event.accessToken);
+        setRefreshToken(event.refreshToken);
+      } else if (event.type === 'session-dead') {
+        logger.warn('[CourierContext] Refresh token rejected by server — logging out');
+        logoutRef.current().catch((error) => {
+          logger.error('[CourierContext] Logout after session death failed:', error);
+        });
+      }
+      // 'cleared' needs no handling: it is only emitted from logout paths
+      // that already reset context state themselves.
     });
-    return () => {
-      apiClient.setOnTokensRefreshed(null);
-    };
+    return unsubscribe;
   }, []);
 
   // Logout from all devices - revokes all refresh tokens
@@ -1326,7 +1236,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           setAccessToken(storedToken);
           setRefreshToken(storedRefresh);
           if (storedRefresh) {
-            apiClient.setTokens(storedToken, storedRefresh);
+            // Prime the token authority's cache (persisting the same values
+            // back is harmless) so every refresh path starts consistent
+            await tokenManager.setTokens(storedToken, storedRefresh);
           }
           setUser(JSON.parse(storedUser));
 
@@ -1459,10 +1371,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setRefreshToken(refreshToken);
         accessTokenRef.current = accessToken;
         refreshTokenRef.current = refreshToken;
-        apiClient.setTokens(accessToken, refreshToken);
-
-        await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, accessToken);
-        await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+        await tokenManager.setTokens(accessToken, refreshToken);
 
         // Fetch courier profile using the new token
         try {
@@ -1584,7 +1493,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setRefreshToken(data.data.refreshToken);
         accessTokenRef.current = data.data.accessToken;
         refreshTokenRef.current = data.data.refreshToken;
-        apiClient.setTokens(data.data.accessToken, data.data.refreshToken);
+        await tokenManager.setTokens(data.data.accessToken, data.data.refreshToken);
         setUser(data.data.user);
         if (data.data.courier) {
           setCourierProfile(data.data.courier);
@@ -1592,8 +1501,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
         hasLoadedInitialData.current = false;
 
-        await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
-        await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
         await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
       }
 
@@ -1653,6 +1560,18 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
     };
   }, [updateCourierStatus]);
+
+  // Keep the reconnect resync handler pointing at the latest closures.
+  // Fired from the WebSocket onConnected path: order events missed during a
+  // socket outage (a cancellation mid-delivery, an offer taken by another
+  // courier) are not replayed by the broker, so pull both lists fresh.
+  useEffect(() => {
+    resyncAfterReconnectRef.current = () => {
+      logger.log('[CourierContext] Resyncing orders after WebSocket (re)connect');
+      fetchOrders().catch(() => {});
+      fetchAvailableOrders().catch(() => {});
+    };
+  }, [fetchOrders, fetchAvailableOrders]);
 
   // Update courier location to server
   const updateLocationOnServer = useCallback(async (
