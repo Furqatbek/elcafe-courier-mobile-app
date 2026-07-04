@@ -2,23 +2,25 @@
  * Formatting utilities for the Courier App
  */
 
-// Currency formatting
-export const formatCurrency = (
-  amount: number,
-  currency: string = 'USD',
-  locale: string = 'en-US'
-): string => {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+import { DEFAULTS } from '@/constants/config';
+
+// Currency formatting — UZS: integer so'm, thousands separators, symbol suffix.
+// Deterministic (not device-locale dependent) so every screen shows the same string.
+export const formatCurrency = (amount: number | null | undefined): string => {
+  const value = Math.round(Number(amount) || 0);
+  const grouped = Math.abs(value)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${value < 0 ? '-' : ''}${grouped} ${DEFAULTS.CURRENCY_SYMBOL}`;
 };
 
-// Simple currency format (for when Intl is not ideal)
-export const formatMoney = (amount: number, symbol: string = '$'): string => {
-  return `${symbol}${amount.toFixed(2)}`;
+// Courier-facing offer/earnings amount: the courier earns delivery fee + tip.
+// Use this everywhere an order's value to the COURIER is shown, so all screens agree.
+export const courierEarnings = (order: {
+  deliveryFee?: number | null;
+  tipAmount?: number | null;
+}): number => {
+  return (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
 };
 
 // Distance formatting

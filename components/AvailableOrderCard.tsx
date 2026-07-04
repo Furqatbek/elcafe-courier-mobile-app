@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { AvailableOrder } from '@/context/CourierContext';
-import { DEFAULTS } from '@/constants/config';
+import { formatCurrency, courierEarnings } from '@/lib/formatting';
 
 interface AvailableOrderCardProps {
   order: AvailableOrder;
@@ -14,10 +14,6 @@ interface AvailableOrderCardProps {
 export function AvailableOrderCard({ order }: AvailableOrderCardProps) {
   const { t } = useTranslation();
   const router = useRouter();
-
-  const formatCurrency = (amount: number | undefined) => {
-    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
 
   const formatDistance = (km: number | undefined) => {
     const value = km ?? 0;
@@ -40,8 +36,8 @@ export function AvailableOrderCard({ order }: AvailableOrderCardProps) {
     router.push(`/available-order/${order.orderId}`);
   };
 
-  // Calculate estimated earnings from delivery fee + tip
-  const estimatedEarnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
+  // Courier-facing offer amount: delivery fee + tip (shared helper)
+  const estimatedEarnings = courierEarnings(order);
 
   return (
     <TouchableOpacity style={styles.card} onPress={handlePress} activeOpacity={0.7}>

@@ -4,9 +4,10 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Phone, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { DEFAULTS, ISSUE_TYPES } from '@/constants/config';
+import { ISSUE_TYPES } from '@/constants/config';
 import { useCourier, OrderStatus, Order, IssueType } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
+import { formatCurrency, courierEarnings } from '@/lib/formatting';
 import { StatusBadge } from '@/components/StatusBadge';
 import OrderMap from '@/components/OrderMap';
 
@@ -62,10 +63,6 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const formatCurrency = (amount: number | undefined) => {
-    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
-
   // Support both flat (new backend) and nested (old interface) field names
   const restaurantName = order.restaurantName ?? order.restaurant?.name ?? '-';
   const restaurantAddress = order.restaurantAddress ?? order.restaurant?.address ?? '-';
@@ -76,7 +73,10 @@ export default function OrderDetailScreen() {
   const deliveryInstructions = order.deliveryInstructions ?? order.deliveryAddress?.instructions ?? null;
   const orderNumber = order.externalOrderNo ?? order.orderNumber ?? '-';
   const itemCount = order.itemCount ?? order.items?.length ?? 0;
-  const totalAmount = order.total ?? order.totalAmount ?? ((order.deliveryFee ?? 0) + (order.tipAmount ?? 0));
+  // Order total (food + fees) — what the customer pays / cash to collect
+  const orderTotal = order.total ?? order.totalAmount ?? 0;
+  // What the COURIER earns on this order: delivery fee + tip (never the order total)
+  const earningsAmount = courierEarnings(order);
 
   const handleSlideComplete = async () => {
     console.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
@@ -93,7 +93,8 @@ export default function OrderDetailScreen() {
           Alert.alert(
             t('order_detail.delivery_complete'),
             t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
-            [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
+            [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }],
+            { cancelable: false }
           );
         }
       } else {
@@ -323,8 +324,10 @@ export default function OrderDetailScreen() {
               )}
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.infoLabel}>{t('order_detail.est_earnings')}</Text>
-              <Text style={styles.earningsValue}>{formatCurrency(totalAmount)}</Text>
+              <Text style={styles.infoLabel}>{t('order_detail.your_earnings', 'Your earnings (fee + tip)')}</Text>
+              <Text style={styles.earningsValue}>{formatCurrency(earningsAmount)}</Text>
+              <Text style={[styles.infoLabel, { marginTop: 8 }]}>{t('order_detail.order_total', 'Order total')}</Text>
+              <Text style={styles.infoValue}>{formatCurrency(orderTotal)}</Text>
             </View>
           </View>
 
@@ -335,7 +338,7 @@ export default function OrderDetailScreen() {
               <View style={styles.divider} />
               <View style={styles.collectCashRow}>
                 <Text style={styles.collectCashLabel}>{t('order_detail.collect_cash')}</Text>
-                <Text style={styles.collectCashValue}>{formatCurrency(order.total ?? totalAmount)}</Text>
+                <Text style={styles.collectCashValue}>{formatCurrency(orderTotal)}</Text>
               </View>
             </>
           )}

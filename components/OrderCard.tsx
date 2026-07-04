@@ -2,8 +2,8 @@ import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { MapPin, Package, CreditCard } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { DEFAULTS } from '@/constants/config';
 import { Order } from '@/context/CourierContext';
+import { formatCurrency, courierEarnings } from '@/lib/formatting';
 import { StatusBadge } from './StatusBadge';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -21,16 +21,14 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
     router.push(`/order/${order.orderId}`);
   };
 
-  const formatCurrency = (amount: number | undefined) => {
-    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
-
   // Support both nested and flat data structures from backend
   const restaurantName = order.restaurant?.name ?? (order as any).restaurantName ?? '-';
   const restaurantAddress = order.restaurant?.address ?? (order as any).restaurantAddress ?? '-';
   const deliveryAddress = order.deliveryAddress?.fullAddress ?? (order as any).deliveryAddress ?? '-';
   const itemCount = order.items?.length ?? (order as any).itemCount ?? 0;
-  const totalAmount = order.totalAmount ?? ((order as any).deliveryFee ?? 0) + ((order as any).tipAmount ?? 0);
+  // In active/history lists the courier cares about THEIR earnings
+  // (delivery fee + tip), never the order total — label it explicitly.
+  const earningsAmount = courierEarnings(order);
 
   return (
     <TouchableOpacity
@@ -68,7 +66,10 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
 
       <View style={styles.footer}>
         <View style={styles.infoItem}>
-          <Text style={styles.amountText}>{formatCurrency(totalAmount)}</Text>
+          <View>
+            <Text style={styles.amountLabel}>{t('orders.earnings_label', 'Earnings')}</Text>
+            <Text style={styles.amountText}>{formatCurrency(earningsAmount)}</Text>
+          </View>
         </View>
         <View style={styles.infoItem}>
           <Package size={14} color={Colors.textLight} />
@@ -152,6 +153,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  amountLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   amountText: {
     fontSize: 16,

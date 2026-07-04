@@ -3,10 +3,9 @@ import { StyleSheet, View, Text, ScrollView, ActivityIndicator, RefreshControl, 
 import { useTranslation } from 'react-i18next';
 import { DollarSign, Banknote, CreditCard, Wallet, Calendar, Package, TrendingUp } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { DEFAULTS } from '@/constants/config';
 import { useCourier } from '@/context/CourierContext';
-import { Button } from '@/components/Button';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
+import { formatCurrency } from '@/lib/formatting';
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -60,12 +59,6 @@ export default function FinanceScreen() {
     setShowDatePicker(false);
     fetchEarnings('CUSTOM', formatDate(start), formatDate(end));
   };
-
-  const formatCurrency = (amount: number) => {
-    return `${(amount || 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
-
-  const canWithdraw = earnings.withdrawableBalance > 0;
 
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="finance">
@@ -236,18 +229,13 @@ export default function FinanceScreen() {
           </View>
         </View>
 
-        {/* Withdraw Button */}
-        <Button
-          title={
-            canWithdraw
-              ? `${t('finance.withdraw_funds')} (${formatCurrency(earnings.withdrawableBalance)})`
-              : t('finance.withdraw_funds')
-          }
-          variant="primary"
-          style={styles.withdrawButton}
-          disabled={!canWithdraw}
-          onPress={() => {}}
-        />
+        {/* Payout info — withdrawals are handled by the platform, not in-app */}
+        <Text style={styles.payoutInfoText}>
+          {t(
+            'finance.payout_info',
+            'Payouts are processed by the platform. Card-payment balances are settled to your registered account.'
+          )}
+        </Text>
       </ScrollView>
     </WithSwipeGesture>
   );
@@ -479,7 +467,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '500',
   },
-  withdrawButton: {
-    marginTop: 8,
+  payoutInfoText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+    marginTop: -12,
+    paddingHorizontal: 4,
   },
 });

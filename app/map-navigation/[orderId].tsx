@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone, Store, User, ExternalLink } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
-import { DEFAULTS } from '@/constants/config';
 import { useCourier, OrderStatus } from '@/context/CourierContext';
+import { formatCurrency } from '@/lib/formatting';
 import OrderMap from '@/components/OrderMap';
 import { SlideButton } from '@/components/SlideButton';
 import { RouteInfo } from '@/lib/routing';
@@ -232,7 +232,8 @@ export default function MapNavigationScreen() {
         Alert.alert(
           t('order_detail.delivery_complete'),
           t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
-          [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }]
+          [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }],
+          { cancelable: false }
         );
       }
     } catch (error) {
@@ -264,10 +265,6 @@ export default function MapNavigationScreen() {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours} ${t('common.hour')} ${mins} ${t('common.min')}`;
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `${(amount ?? 0).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
   };
 
   if (!order) {

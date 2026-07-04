@@ -27,6 +27,7 @@ import { useToast } from '@/components/Toast';
 import { api, AvailableOrder } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
+import { formatCurrency, courierEarnings } from '@/lib/formatting';
 
 export default function AvailableOrdersScreen() {
   const { t } = useTranslation();
@@ -104,10 +105,6 @@ export default function AvailableOrdersScreen() {
     router.push(`/available-order/${orderId}`);
   };
 
-  const formatCurrency = (amount: number) => {
-    return `${(amount / 1000).toFixed(0)}k ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
-
   const formatDistance = (km: number) => {
     if (km < 1) {
       return `${(km * 1000).toFixed(0)} m`;
@@ -123,7 +120,9 @@ export default function AvailableOrdersScreen() {
     const deliveryAddr = item.deliveryAddress ?? item.deliveryAddress?.fullAddress ?? '-';
     const deliveryDistance = item.deliveryDistance ?? item.deliveryAddress?.distance ?? 0;
     const orderNumber = item.externalOrderNo ?? item.orderNumber ?? '-';
-    const earnings = item.deliveryFee ?? item.estimatedEarnings ?? 0;
+    // Courier-facing offer amount: delivery fee + tip — same math as
+    // AvailableOrderCard and the offer flow.
+    const earnings = courierEarnings(item);
     const totalDistance = item.estimatedDistance ?? (restaurantDistance + deliveryDistance);
 
     return (
