@@ -10,9 +10,16 @@ import { CourierProvider, useCourier } from "@/context/CourierContext";
 
 import { ToastProvider, useToast } from "@/components/Toast";
 import { Logo } from "@/components/Logo";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Colors from "@/constants/colors";
+import { initCrashReporting, reportCrash } from "@/lib/crashReporting";
 
 import "@/i18n";
+import logger from '@/lib/logger';
+
+// Install global crash handlers before the first render so early errors
+// are captured too. Idempotent — safe across fast refresh.
+initCrashReporting();
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -173,14 +180,14 @@ function NotificationHandler() {
     // Shared handler for notification taps — used for live responses and the
     // cold-start response (app launched by tapping a notification)
     const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
-      console.log('[Notification] User tapped:', response);
-
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
       const notificationType = data?.type as string | undefined;
+      // Log type/orderId only — the full response contains customer-facing content
+      logger.log('[Notification] User tapped:', { type: notificationType, orderId: data?.orderId });
 
       // Handle NEW_DELIVERY_AVAILABLE tap - navigate to available order
       if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE && data?.orderId) {
-        console.log('[Notification] Navigating to available order:', data.orderId);
+        logger.log('[Notification] Navigating to available order:', data.orderId);
         router.push(`/available-order/${data.orderId}`);
         return;
       }
@@ -202,14 +209,14 @@ function NotificationHandler() {
 
     // Listen for notifications received while app is in foreground
     notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('[Notification] Received:', notification);
-
       const data = notification.request.content.data as Record<string, unknown> | undefined;
       const notificationType = data?.type as string | undefined;
+      // Log type/orderId only — the full notification contains customer-facing content
+      logger.log('[Notification] Received:', { type: notificationType, orderId: data?.orderId });
 
       // Handle NEW_DELIVERY_AVAILABLE - show order offer modal
       if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE) {
-        console.log('[Notification] NEW_DELIVERY_AVAILABLE received:', data);
+        logger.log('[Notification] NEW_DELIVERY_AVAILABLE received:', data?.orderId);
 
         // Only show modal if courier is online
         if (isOnline) {
@@ -246,12 +253,12 @@ function NotificationHandler() {
       Notifications.getLastNotificationResponseAsync()
         .then(response => {
           if (response) {
-            console.log('[Notification] Handling cold-start notification response');
+            logger.log('[Notification] Handling cold-start notification response');
             handleNotificationResponse(response);
           }
         })
         .catch(error => {
-          console.warn('[Notification] Failed to read cold-start notification response:', error);
+          logger.warn('[Notification] Failed to read cold-start notification response:', error);
         });
     }
 
@@ -279,13 +286,13 @@ export default function RootLayout() {
       // GPS Location Permission
       const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
       if (locationStatus !== 'granted') {
-        console.log('Permission to access location was denied');
+        logger.log('Permission to access location was denied');
       }
 
       // Notification Permission
       const { status: notificationStatus } = await Notifications.requestPermissionsAsync();
       if (notificationStatus !== 'granted') {
-        console.log('Permission to send notifications was denied');
+        logger.log('Permission to send notifications was denied');
       }
     })();
   }, []);
@@ -295,10 +302,12 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
           <CourierProvider>
-            <NotificationHandler />
-            <AuthNavigator>
-              <RootLayoutNav />
-            </AuthNavigator>
+            <ErrorBoundary onError={(error) => reportCrash(error, false)}>
+              <NotificationHandler />
+              <AuthNavigator>
+                <RootLayoutNav />
+              </AuthNavigator>
+            </ErrorBoundary>
           </CourierProvider>
         </ToastProvider>
       </GestureHandlerRootView>

@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL, API_ENDPOINTS, APP_CONFIG } from '@/constants/config';
+import logger from '@/lib/logger';
 
 const DEVICE_TOKEN_KEY = 'fcm_device_token';
 
@@ -58,12 +59,12 @@ function getProjectId(): string | undefined {
 export async function getPushTokenResult(): Promise<PushTokenResult> {
   // Skip on web or non-physical devices
   if (Platform.OS === 'web') {
-    console.log('Push notifications not supported on web');
+    logger.log('Push notifications not supported on web');
     return { status: 'unsupported' };
   }
 
   if (!Device.isDevice) {
-    console.log('Push notifications require a physical device');
+    logger.log('Push notifications require a physical device');
     return { status: 'unsupported' };
   }
 
@@ -79,7 +80,7 @@ export async function getPushTokenResult(): Promise<PushTokenResult> {
     }
 
     if (finalStatus !== 'granted') {
-      console.log('Push notification permission denied');
+      logger.log('Push notification permission denied');
       return { status: 'permission-denied' };
     }
 
@@ -89,7 +90,7 @@ export async function getPushTokenResult(): Promise<PushTokenResult> {
     if (!projectId) {
       if (!warnedMissingProjectId) {
         warnedMissingProjectId = true;
-        console.warn(
+        logger.warn(
           '[pushNotification] No EAS projectId found (expoConfig.extra.eas.projectId ' +
           'or EXPO_PUBLIC_PROJECT_ID). Push notifications are DISABLED in this build. ' +
           'Configure the projectId in app config / env to enable push.'
@@ -103,7 +104,7 @@ export async function getPushTokenResult(): Promise<PushTokenResult> {
 
     return { status: 'success', token: tokenData.data };
   } catch (error) {
-    console.error('Failed to get push token:', error);
+    logger.error('Failed to get push token:', error);
     return { status: 'error', error };
   }
 }
@@ -127,16 +128,16 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
     if (tokenResult.status !== 'success') {
       switch (tokenResult.status) {
         case 'misconfigured':
-          console.warn('[pushNotification] Skipping device token registration: build is missing an EAS projectId');
+          logger.warn('[pushNotification] Skipping device token registration: build is missing an EAS projectId');
           break;
         case 'permission-denied':
-          console.log('[pushNotification] Skipping device token registration: notification permission denied');
+          logger.log('[pushNotification] Skipping device token registration: notification permission denied');
           break;
         case 'unsupported':
-          console.log('[pushNotification] Skipping device token registration: unsupported platform/device');
+          logger.log('[pushNotification] Skipping device token registration: unsupported platform/device');
           break;
         default:
-          console.error('[pushNotification] Skipping device token registration: failed to obtain push token');
+          logger.error('[pushNotification] Skipping device token registration: failed to obtain push token');
       }
       return false;
     }
@@ -161,14 +162,14 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
     if (response.ok) {
       // Store the token locally for cleanup on logout
       await AsyncStorage.setItem(DEVICE_TOKEN_KEY, pushToken);
-      console.log('Device token registered successfully');
+      logger.log('Device token registered successfully');
       return true;
     }
 
-    console.error('Failed to register device token:', response.status);
+    logger.error('Failed to register device token:', response.status);
     return false;
   } catch (error) {
-    console.error('Error registering device token:', error);
+    logger.error('Error registering device token:', error);
     return false;
   }
 }
@@ -191,14 +192,14 @@ export async function unregisterDeviceToken(accessToken: string): Promise<boolea
     await AsyncStorage.removeItem(DEVICE_TOKEN_KEY);
 
     if (response.ok) {
-      console.log('All device tokens unregistered successfully');
+      logger.log('All device tokens unregistered successfully');
       return true;
     }
 
-    console.error('Failed to unregister device tokens:', response.status);
+    logger.error('Failed to unregister device tokens:', response.status);
     return false;
   } catch (error) {
-    console.error('Error unregistering device tokens:', error);
+    logger.error('Error unregistering device tokens:', error);
     // Still clear local storage on error
     await AsyncStorage.removeItem(DEVICE_TOKEN_KEY);
     return false;

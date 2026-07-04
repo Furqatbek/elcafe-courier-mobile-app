@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Navigation as NavigationIcon, Clock, MapPin, Phone, Store, User, ExternalLink } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
-import { useCourier, OrderStatus } from '@/context/CourierContext';
+import { useCourier } from '@/context/CourierContext';
 import { formatCurrency } from '@/lib/formatting';
 import OrderMap from '@/components/OrderMap';
 import { SlideButton } from '@/components/SlideButton';
 import { RouteInfo } from '@/lib/routing';
+import logger from '@/lib/logger';
 
 export default function MapNavigationScreen() {
   const { t } = useTranslation();
@@ -28,7 +29,7 @@ export default function MapNavigationScreen() {
   // Keep order in sync with context
   useEffect(() => {
     const updatedOrder = orders.find(o => Number(o.orderId) === numericOrderId);
-    console.log('[MapNavigation] Syncing order from context:', {
+    logger.log('[MapNavigation] Syncing order from context:', {
       orderId: numericOrderId,
       ordersCount: orders.length,
       orderIds: orders.map(o => o.orderId),
@@ -41,10 +42,10 @@ export default function MapNavigationScreen() {
     // COURIER_ASSIGNED — without this, the pickup slide would stay disabled
     // ("Waiting for Restaurant...") forever.
     if (updatedOrder && (updatedOrder.status !== order?.status || updatedOrder.readyAt !== order?.readyAt)) {
-      console.log('[MapNavigation] Order changed! Updating local order state');
+      logger.log('[MapNavigation] Order changed! Updating local order state');
       setOrder(updatedOrder);
     } else if (updatedOrder && !order) {
-      console.log('[MapNavigation] Initial order set');
+      logger.log('[MapNavigation] Initial order set');
       setOrder(updatedOrder);
     }
   }, [orders, numericOrderId]);
@@ -67,7 +68,7 @@ export default function MapNavigationScreen() {
     if (order && !hasOpenedNavigation) {
       // Small delay to let the screen render first
       const timer = setTimeout(() => {
-        console.log('[MapNavigation] Auto-opening navigation to:', isGoingToPickup ? 'pickup' : 'dropoff');
+        logger.log('[MapNavigation] Auto-opening navigation to:', isGoingToPickup ? 'pickup' : 'dropoff');
         openExternalNavigation();
         setHasOpenedNavigation(true);
       }, 500);
@@ -78,7 +79,7 @@ export default function MapNavigationScreen() {
   // Reset navigation flag when status changes to IN_TRANSIT (to trigger new navigation to customer)
   useEffect(() => {
     if (order?.status === 'IN_TRANSIT' || order?.status === 'PICKED_UP') {
-      console.log('[MapNavigation] Status changed to', order?.status, ', resetting navigation flag');
+      logger.log('[MapNavigation] Status changed to', order?.status, ', resetting navigation flag');
       setHasOpenedNavigation(false); // Reset to trigger navigation to customer
     }
   }, [order?.status]);
@@ -89,7 +90,7 @@ export default function MapNavigationScreen() {
 
   // Handle back navigation with fallback
   const handleBack = useCallback(() => {
-    console.log('[MapNavigation] Back button pressed');
+    logger.log('[MapNavigation] Back button pressed');
     // On web, router.back() might not work if there's no history
     // Use replace to go to orders page as fallback
     if (Platform.OS === 'web') {
@@ -101,7 +102,7 @@ export default function MapNavigationScreen() {
 
   // Get destination info based on current status
   const getDestinationInfo = () => {
-    if (!order) return { label: '', address: '', name: '', phone: '', lat: 0, lng: 0 };
+    if (!order) return { label: '', address: '', name: '', phone: null, icon: Store, color: Colors.primary, lat: 0, lng: 0 };
 
     if (isGoingToPickup) {
       return {
@@ -194,18 +195,18 @@ export default function MapNavigationScreen() {
   const handlePickupComplete = async () => {
     if (!order || isUpdatingStatus) return;
 
-    console.log('[MapNavigation] Handling pickup complete for order:', order.orderId);
+    logger.log('[MapNavigation] Handling pickup complete for order:', order.orderId);
     setIsUpdatingStatus(true);
     try {
       // Mark as picked up - backend handles status transition
       await updateOrderStatus(order.orderId, 'PICKED_UP');
-      console.log('[MapNavigation] Status updated to PICKED_UP, triggering route recalculation');
+      logger.log('[MapNavigation] Status updated to PICKED_UP, triggering route recalculation');
 
       // Trigger route recalculation for new destination
       setRecalculateTrigger(prev => prev + 1);
       // Note: hasOpenedNavigation is reset by the useEffect watching order.status
     } catch (error: any) {
-      console.error('[MapNavigation] Error updating pickup status:', error);
+      logger.error('[MapNavigation] Error updating pickup status:', error);
       const msg = error?.message || '';
       if (msg.toLowerCase().includes('not ready for pickup')) {
         Alert.alert(
@@ -237,7 +238,7 @@ export default function MapNavigationScreen() {
         );
       }
     } catch (error) {
-      console.error('[MapNavigation] handleDeliveryComplete error:', error);
+      logger.error('[MapNavigation] handleDeliveryComplete error:', error);
       Alert.alert(t('common.error'), t('order_detail.status_update_failed'));
       throw error; // Re-throw so SlideButton resets
     } finally {

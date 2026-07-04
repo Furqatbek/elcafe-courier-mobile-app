@@ -1,3 +1,5 @@
+
+import logger from '@/lib/logger';
 export interface Coordinate {
   latitude: number;
   longitude: number;
@@ -62,7 +64,7 @@ function getRoutingBaseUrl(): string | null {
 
   if (!warnedMissingRoutingUrl) {
     warnedMissingRoutingUrl = true;
-    console.warn(
+    logger.warn(
       '[routing] EXPO_PUBLIC_ROUTING_URL is not set in this production build. ' +
       'Route lines are disabled — maps will render without polylines. ' +
       'Set EXPO_PUBLIC_ROUTING_URL to a self-hosted OSRM server to enable routing.'
@@ -88,14 +90,15 @@ export async function fetchRoute(start: Coordinate, end: Coordinate): Promise<Ro
     );
 
     if (!response.ok) {
-      console.error('Failed to fetch route', response.status);
+      logger.error('Failed to fetch route', response.status);
       return null;
     }
 
     const data = await response.json();
 
     if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-      console.error('Invalid route data', data);
+      // Log the OSRM status code only — the body contains route coordinates
+      logger.error('Invalid route data, code:', data.code);
       return null;
     }
 
@@ -117,7 +120,7 @@ export async function fetchRoute(start: Coordinate, end: Coordinate): Promise<Ro
       steps,
     };
   } catch (error) {
-    console.error('Error fetching route:', error);
+    logger.error('Error fetching route:', error);
     return null;
   }
 }

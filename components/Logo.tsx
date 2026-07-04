@@ -10,8 +10,6 @@ interface LogoProps {
 }
 
 export function Logo({ size = 100, showText = false, showSubtitle = false }: LogoProps) {
-  const scale = size / 100;
-
   return (
     <View style={[styles.container, { width: size, height: showText ? size * 1.3 : size }]}>
       <Svg width={size} height={showText ? size * 1.3 : size} viewBox={showText ? "0 0 100 130" : "0 0 100 100"}>

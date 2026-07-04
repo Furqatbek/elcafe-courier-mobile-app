@@ -228,11 +228,8 @@ class WebSocketService {
 
     this.client = new Client({
       brokerURL: wsUrl,
-      debug: (str) => {
-        if (__DEV__) {
-          console.log('[STOMP]', str);
-        }
-      },
+      // No STOMP `debug` callback: it dumps entire frames, including the
+      // Authorization header (bearer token) and full message payloads.
       // Exponential backoff: 3s -> 6s -> 12s ... capped at 60s so a down
       // server isn't hammered forever. stompjs resets the delay back to
       // reconnectDelay after every successful connect.
@@ -463,7 +460,7 @@ class WebSocketService {
       return;
     }
 
-    console.log('[WebSocket] Subscribing to:', destination);
+    log('[WebSocket] Subscribing to:', destination);
 
     const subscription = this.client.subscribe(destination, (message: IMessage) => {
       try {
@@ -471,7 +468,7 @@ class WebSocketService {
         const handlers = this.messageHandlers.get(destination);
         handlers?.forEach((handler) => handler(body));
       } catch (error) {
-        console.error('[WebSocket] Failed to parse message:', error);
+        logError('[WebSocket] Failed to parse message:', error);
       }
     });
 
@@ -511,7 +508,7 @@ class WebSocketService {
    */
   send(destination: string, body: Record<string, unknown>): void {
     if (!this.client?.connected) {
-      console.warn('[WebSocket] Cannot send message - not connected');
+      warn('[WebSocket] Cannot send message - not connected');
       return;
     }
 

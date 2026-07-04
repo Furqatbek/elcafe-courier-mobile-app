@@ -2,6 +2,8 @@
  * Error handling utilities for the Courier App
  */
 
+import logger from '@/lib/logger';
+
 // Custom error classes
 export class AppError extends Error {
   code: string;
@@ -137,7 +139,7 @@ export const getErrorMessage = (error: unknown): string => {
 export const logError = (error: unknown, context?: Record<string, unknown>): void => {
   const appError = parseApiError(error);
 
-  console.error('App Error:', {
+  logger.error('App Error:', {
     name: appError.name,
     code: appError.code,
     message: appError.message,

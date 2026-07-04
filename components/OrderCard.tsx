@@ -13,7 +13,7 @@ interface OrderCardProps {
   showActions?: boolean;
 }
 
-export function OrderCard({ order, showActions = true }: OrderCardProps) {
+export const OrderCard = React.memo(function OrderCard({ order, showActions = true }: OrderCardProps) {
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -21,11 +21,10 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
     router.push(`/order/${order.orderId}`);
   };
 
-  // Support both nested and flat data structures from backend
-  const restaurantName = order.restaurant?.name ?? (order as any).restaurantName ?? '-';
-  const restaurantAddress = order.restaurant?.address ?? (order as any).restaurantAddress ?? '-';
-  const deliveryAddress = order.deliveryAddress?.fullAddress ?? (order as any).deliveryAddress ?? '-';
-  const itemCount = order.items?.length ?? (order as any).itemCount ?? 0;
+  const restaurantName = order.restaurantName ?? '-';
+  const restaurantAddress = order.restaurantAddress ?? '-';
+  const deliveryAddress = order.deliveryAddress ?? '-';
+  const itemCount = order.items?.length ?? order.itemCount ?? 0;
   // In active/history lists the courier cares about THEIR earnings
   // (delivery fee + tip), never the order total — label it explicitly.
   const earningsAmount = courierEarnings(order);
@@ -38,7 +37,7 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
     >
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.orderNumber}>{order.orderNumber ?? (order as any).externalOrderNo}</Text>
+          <Text style={styles.orderNumber}>{order.orderNumber ?? order.externalOrderNo}</Text>
           <Text style={styles.restaurantName} numberOfLines={1}>
             {restaurantName}
           </Text>
@@ -84,7 +83,7 @@ export function OrderCard({ order, showActions = true }: OrderCardProps) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

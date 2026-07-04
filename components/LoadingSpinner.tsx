@@ -7,6 +7,7 @@ import {
   Easing,
   ActivityIndicator,
   ViewStyle,
+  DimensionValue,
 } from 'react-native';
 import Colors from '@/constants/colors';
 
@@ -42,24 +43,6 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 
     return () => animation.stop();
   }, []);
-
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  const getSize = () => {
-    switch (size) {
-      case 'small':
-        return 24;
-      case 'medium':
-        return 40;
-      case 'large':
-        return 60;
-      default:
-        return 40;
-    }
-  };
 
   const getActivitySize = () => {
     switch (size) {
@@ -117,7 +100,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
 
 // Skeleton loader for content placeholders
 interface SkeletonProps {
-  width?: number | string;
+  width?: DimensionValue;
   height?: number;
   borderRadius?: number;
   style?: ViewStyle;

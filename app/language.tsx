@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ArrowLeft, Check, Globe } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import logger from '@/lib/logger';
 
 interface Language {
   code: string;
@@ -57,7 +58,7 @@ export default function LanguageScreen() {
       await i18n.changeLanguage(languageCode);
       await AsyncStorage.setItem('user-language', languageCode);
     } catch (error) {
-      console.error('Failed to change language:', error);
+      logger.error('Failed to change language:', error);
       setSelectedLanguage(i18n.language);
     } finally {
       setIsChanging(false);

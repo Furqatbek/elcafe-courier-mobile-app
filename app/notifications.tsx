@@ -22,7 +22,6 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useToast } from '@/components/Toast';
 import { useCourier, Notification } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
@@ -56,7 +55,6 @@ const notificationColors: Record<string, string> = {
 export default function NotificationsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const toast = useToast();
   const {
     notifications,
     unreadCount,
@@ -85,7 +83,7 @@ export default function NotificationsScreen() {
     fetchNotifications();
   }, []);
 
-  const handleNotificationPress = async (notification: Notification) => {
+  const handleNotificationPress = useCallback(async (notification: Notification) => {
     if (!notification.read) {
       await markNotificationAsRead(notification.id);
     }
@@ -95,9 +93,9 @@ export default function NotificationsScreen() {
     if (orderId) {
       router.push(`/order/${orderId}`);
     }
-  };
+  }, [markNotificationAsRead, router]);
 
-  const renderNotificationItem = ({ item }: { item: Notification }) => {
+  const renderNotificationItem = useCallback(({ item }: { item: Notification }) => {
     const Icon = notificationIcons[item.type] || AlertCircle;
     const iconColor = notificationColors[item.type] || Colors.textSecondary;
 
@@ -123,7 +121,7 @@ export default function NotificationsScreen() {
         <ChevronRight size={18} color={Colors.textLight} />
       </TouchableOpacity>
     );
-  };
+  }, [handleNotificationPress]);
 
   return (
     <>

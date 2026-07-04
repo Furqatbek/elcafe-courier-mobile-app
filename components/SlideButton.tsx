@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import * as Haptics from 'expo-haptics';
+import logger from '@/lib/logger';
 
 const BUTTON_HEIGHT = 60;
 const BUTTON_PADDING = 4;
@@ -61,10 +62,10 @@ export function SlideButton({ title, onComplete, isLoading, disabled }: SlideBut
     if (completedRef.current || loadingRef.current) return;
 
     const maxDrag = getMaxDrag();
-    console.log('[SlideButton] triggerCompletion dx:', dx, 'maxDrag:', maxDrag, 'threshold:', maxDrag * SWIPE_THRESHOLD);
+    logger.log('[SlideButton] triggerCompletion dx:', dx, 'maxDrag:', maxDrag, 'threshold:', maxDrag * SWIPE_THRESHOLD);
 
     if (dx > maxDrag * SWIPE_THRESHOLD) {
-      console.log('[SlideButton] Swipe threshold reached, triggering completion');
+      logger.log('[SlideButton] Swipe threshold reached, triggering completion');
       setCompleted(true);
       completedRef.current = true;
 
@@ -75,11 +76,11 @@ export function SlideButton({ title, onComplete, isLoading, disabled }: SlideBut
       translateX.setValue(maxDrag);
 
       try {
-        console.log('[SlideButton] Calling onComplete handler...');
+        logger.log('[SlideButton] Calling onComplete handler...');
         await onCompleteRef.current();
-        console.log('[SlideButton] onComplete resolved successfully');
+        logger.log('[SlideButton] onComplete resolved successfully');
       } catch (error) {
-        console.log('[SlideButton] onComplete failed, resetting slider:', error);
+        logger.log('[SlideButton] onComplete failed, resetting slider:', error);
         resetSlider();
       }
     } else {
@@ -113,7 +114,7 @@ export function SlideButton({ title, onComplete, isLoading, disabled }: SlideBut
 
     const handleMouseUp = () => {
       if (!isDraggingRef.current) return;
-      console.log('[SlideButton] Mouse up, currentDx:', currentDxRef.current);
+      logger.log('[SlideButton] Mouse up, currentDx:', currentDxRef.current);
       isDraggingRef.current = false;
       triggerCompletionRef.current(currentDxRef.current);
       currentDxRef.current = 0;
@@ -133,7 +134,7 @@ export function SlideButton({ title, onComplete, isLoading, disabled }: SlideBut
     if (Platform.OS !== 'web') return;
     if (completedRef.current || loadingRef.current) return;
 
-    console.log('[SlideButton] Press in detected');
+    logger.log('[SlideButton] Press in detected');
     isDraggingRef.current = true;
     // Get clientX from the native event
     const clientX = e.nativeEvent?.pageX || e.nativeEvent?.clientX || 0;
@@ -184,7 +185,7 @@ export function SlideButton({ title, onComplete, isLoading, disabled }: SlideBut
       style={[styles.container, disabled && styles.containerDisabled]}
       onLayout={(e) => {
         widthRef.current = e.nativeEvent.layout.width;
-        console.log('[SlideButton] Layout width:', e.nativeEvent.layout.width);
+        logger.log('[SlideButton] Layout width:', e.nativeEvent.layout.width);
       }}
     >
       <View style={styles.track}>

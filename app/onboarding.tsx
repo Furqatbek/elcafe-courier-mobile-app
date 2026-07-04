@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { Box, BellRing, Navigation as NavigationIcon, TrendingUp, ChevronRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
+import logger from '@/lib/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -82,7 +83,7 @@ export default function OnboardingScreen() {
       await AsyncStorage.setItem(HAS_SEEN_ONBOARDING_KEY, 'true');
     } catch (error) {
       // Non-fatal: onboarding will show again next launch
-      console.error('Failed to persist onboarding flag:', error);
+      logger.error('Failed to persist onboarding flag:', error);
     }
     router.replace('/login');
   };

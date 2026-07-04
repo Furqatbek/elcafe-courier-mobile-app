@@ -1,12 +1,13 @@
 import { Audio, AVPlaybackSource } from 'expo-av';
 import { Platform } from 'react-native';
+import logger from '@/lib/logger';
 
 // Try to load bundled sound, fall back to null if not available
 let NEW_ORDER_SOUND: AVPlaybackSource | null = null;
 try {
   NEW_ORDER_SOUND = require('@/assets/sounds/new-order.mp3');
 } catch {
-  console.log('[SoundService] No bundled sound file found, will use fallback');
+  logger.log('[SoundService] No bundled sound file found, will use fallback');
 }
 
 // Fallback sound URL (free notification sound)
@@ -36,12 +37,12 @@ class SoundService {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
-      console.log('[SoundService] Audio mode configured');
+      logger.log('[SoundService] Audio mode configured');
 
       // Pre-load the sound
       await this.loadNewOrderSound();
     } catch (error) {
-      console.error('[SoundService] Failed to configure audio mode:', error);
+      logger.error('[SoundService] Failed to configure audio mode:', error);
     }
   }
 
@@ -59,9 +60,9 @@ class SoundService {
       });
       this.newOrderSound = sound;
       this.isLoaded = true;
-      console.log('[SoundService] New order sound loaded');
+      logger.log('[SoundService] New order sound loaded');
     } catch (error) {
-      console.error('[SoundService] Failed to load new order sound:', error);
+      logger.error('[SoundService] Failed to load new order sound:', error);
     }
   }
 
@@ -73,7 +74,7 @@ class SoundService {
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioCtx) {
-        console.log('[SoundService] Web Audio API not available');
+        logger.log('[SoundService] Web Audio API not available');
         return;
       }
 
@@ -114,9 +115,9 @@ class SoundService {
       osc2.start(now + 0.2);
       osc2.stop(now + 0.4);
 
-      console.log('[SoundService] Playing web notification tone');
+      logger.log('[SoundService] Playing web notification tone');
     } catch (error) {
-      console.error('[SoundService] Failed to play web sound:', error);
+      logger.error('[SoundService] Failed to play web sound:', error);
     }
   }
 
@@ -138,10 +139,10 @@ class SoundService {
         await this.newOrderSound.setPositionAsync(0);
         await this.newOrderSound.playAsync();
         this.isPlaying = true;
-        console.log('[SoundService] Playing new order sound');
+        logger.log('[SoundService] Playing new order sound');
       }
     } catch (error) {
-      console.error('[SoundService] Failed to play new order sound:', error);
+      logger.error('[SoundService] Failed to play new order sound:', error);
     }
   }
 
@@ -153,10 +154,10 @@ class SoundService {
       if (this.newOrderSound && this.isPlaying) {
         await this.newOrderSound.stopAsync();
         this.isPlaying = false;
-        console.log('[SoundService] Stopped new order sound');
+        logger.log('[SoundService] Stopped new order sound');
       }
     } catch (error) {
-      console.error('[SoundService] Failed to stop new order sound:', error);
+      logger.error('[SoundService] Failed to stop new order sound:', error);
     }
   }
 
@@ -183,7 +184,7 @@ class SoundService {
         }
       });
     } catch (error) {
-      console.error('[SoundService] Failed to play notification beep:', error);
+      logger.error('[SoundService] Failed to play notification beep:', error);
     }
   }
 
@@ -199,7 +200,7 @@ class SoundService {
         this.isPlaying = false;
       }
     } catch (error) {
-      console.error('[SoundService] Failed to cleanup sounds:', error);
+      logger.error('[SoundService] Failed to cleanup sounds:', error);
     }
   }
 }

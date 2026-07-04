@@ -5,6 +5,7 @@ import { Order } from '@/context/CourierContext';
 import Colors from '@/constants/colors';
 import { fetchRoute, Coordinate, RouteInfo } from '@/lib/routing';
 import * as Location from 'expo-location';
+import logger from '@/lib/logger';
 
 interface OrderMapProps {
   order: Order;
@@ -77,7 +78,7 @@ export default function OrderMap({
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          console.log('Location permission denied');
+          logger.log('Location permission denied');
           return;
         }
 
@@ -112,7 +113,7 @@ export default function OrderMap({
           }
         );
       } catch (error) {
-        console.error('Error getting location:', error);
+        logger.error('Error getting location:', error);
       }
     };
 
@@ -128,7 +129,7 @@ export default function OrderMap({
           }
         } catch (e) {
           // Ignore errors on web when cleaning up location subscription
-          console.log('[OrderMap] Location cleanup error (expected on web):', e);
+          logger.log('[OrderMap] Location cleanup error (expected on web):', e);
         }
         locationSubscription.current = null;
       }

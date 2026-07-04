@@ -6,14 +6,13 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Bike, Car, Truck, CheckCircle, AlertCircle } from 'lucide-react-native';
+import { Bike, Car, CheckCircle, AlertCircle } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { VEHICLE_TYPES, VehicleType, DEFAULTS } from '@/constants/config';
+import { VehicleType, DEFAULTS } from '@/constants/config';
 import { useToast } from '@/components/Toast';
 import { api } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
@@ -28,7 +27,7 @@ export default function BecomeCourierScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
-  const { refreshCourierProfile } = useCourier();
+  const { fetchCourierProfile } = useCourier();
 
   const [vehicleType, setVehicleType] = useState<VehicleType>('MOTORCYCLE');
   const [vehicleNumber, setVehicleNumber] = useState('');
@@ -73,7 +72,7 @@ export default function BecomeCourierScreen() {
         preferredRadiusKm: parseInt(preferredRadius),
       });
 
-      await refreshCourierProfile();
+      await fetchCourierProfile();
       toast.success(t('become_courier.success'));
       router.replace('/verification-pending');
     } catch (error: any) {

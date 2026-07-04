@@ -2,9 +2,10 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Car, FileText, Tag, Box, CreditCard, Edit2 } from 'lucide-react-native';
+import { Car, FileText, CreditCard, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
+import logger from '@/lib/logger';
 
 export default function VehicleInfoScreen() {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ export default function VehicleInfoScreen() {
       try {
         await fetchCourierProfile();
       } catch (error) {
-        console.error('Failed to fetch courier profile:', error);
+        logger.error('Failed to fetch courier profile:', error);
       } finally {
         setIsLoading(false);
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -9,9 +9,9 @@ import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
 import { OrderCard } from '@/components/OrderCard';
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
-import { useToast } from '@/components/Toast';
 import { OrderOfferModal } from '@/components/OrderOfferModal';
 import { soundService } from '@/services/soundService';
+import logger from '@/lib/logger';
 
 // Get greeting key based on current hour
 const getGreetingKey = (): string => {
@@ -52,7 +52,6 @@ export default function OrdersScreen() {
     clearNewOrderOffer,
     acceptOrder,
   } = useCourier();
-  const toast = useToast();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
@@ -89,7 +88,7 @@ export default function OrdersScreen() {
 
     // First time seeing orders - just store them, don't notify
     if (!hasInitializedRef.current) {
-      console.log('[Orders] Initial load, storing order IDs:', Array.from(currentOrderIds));
+      logger.log('[Orders] Initial load, storing order IDs:', Array.from(currentOrderIds));
       previousOrderIdsRef.current = currentOrderIds;
       hasInitializedRef.current = true;
       return;
@@ -100,7 +99,7 @@ export default function OrdersScreen() {
       order => !previousOrderIdsRef.current.has(order.orderId)
     );
 
-    console.log('[Orders] Checking for new orders:', {
+    logger.log('[Orders] Checking for new orders:', {
       previous: Array.from(previousOrderIdsRef.current),
       current: Array.from(currentOrderIds),
       newOrders: newOrders.map(o => o.orderId),
@@ -110,7 +109,7 @@ export default function OrdersScreen() {
     // Show order offer modal for the first new order
     if (newOrders.length > 0 && !showOrderOfferModal) {
       const newestOrder = newOrders[0];
-      console.log('[Orders] New order detected! Showing offer modal for:', newestOrder.orderId);
+      logger.log('[Orders] New order detected! Showing offer modal for:', newestOrder.orderId);
       showOrderOffer(newestOrder);
     }
 
@@ -120,7 +119,7 @@ export default function OrdersScreen() {
 
   // Show order offer modal
   const showOrderOffer = useCallback((order: AvailableOrder) => {
-    console.log('[Orders] Showing order offer modal for:', order.orderId);
+    logger.log('[Orders] Showing order offer modal for:', order.orderId);
     setOfferOrder(order);
     setShowOrderOfferModal(true);
   }, []);
@@ -129,11 +128,11 @@ export default function OrdersScreen() {
   useEffect(() => {
     if (newOrderOffer && isOnline && !showOrderOfferModal) {
       try {
-        console.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
+        logger.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
         // Convert WebSocket notification to AvailableOrder format for display
         const wsOrder: AvailableOrder = {
           orderId: newOrderOffer.orderId,
-          externalOrderNo: newOrderOffer.externalOrderNo,
+          externalOrderNo: newOrderOffer.externalOrderNo ?? String(newOrderOffer.orderId),
           restaurantId: newOrderOffer.restaurantId,
           restaurantName: newOrderOffer.restaurantName || 'Restaurant',
           restaurantAddress: newOrderOffer.restaurantAddress || '',
@@ -155,7 +154,7 @@ export default function OrdersScreen() {
         };
         showOrderOffer(wsOrder);
       } catch (error) {
-        console.error('[Orders] Error processing newOrderOffer:', error);
+        logger.error('[Orders] Error processing newOrderOffer:', error);
       }
     }
   }, [newOrderOffer, isOnline, showOrderOfferModal, showOrderOffer]);
@@ -265,13 +264,13 @@ export default function OrdersScreen() {
     </TouchableOpacity>
   );
 
-  const renderAvailableOrder = ({ item }: { item: AvailableOrder }) => (
+  const renderAvailableOrder = useCallback(({ item }: { item: AvailableOrder }) => (
     <AvailableOrderCard order={item} />
-  );
+  ), []);
 
-  const renderActiveOrder = ({ item }: { item: Order }) => (
+  const renderActiveOrder = useCallback(({ item }: { item: Order }) => (
     <OrderCard order={item} />
-  );
+  ), []);
 
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="orders">

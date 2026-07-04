@@ -5,13 +5,6 @@ import Colors from '@/constants/colors';
 const MAX_PARTICLES = 25;
 const PARTICLE_SIZE = 20;
 
-interface Particle {
-  id: number;
-  anim: Animated.Value;
-  position: Animated.ValueXY;
-  scale: Animated.Value;
-}
-
 export function FingerSwipeEffect({ children }: { children: React.ReactNode }) {
   const nextParticleIndex = useRef(0);
   

@@ -95,7 +95,7 @@ export const ErrorFallback: React.FC<ErrorFallbackProps> = ({
 
         <Text style={styles.title}>Oops! Something went wrong</Text>
         <Text style={styles.message}>
-          We're sorry for the inconvenience. Please try again or contact support if the problem
+          We&apos;re sorry for the inconvenience. Please try again or contact support if the problem
           persists.
         </Text>
 

@@ -11,11 +11,9 @@ import {
   Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useRouter } from 'expo-router';
 import {
   MapPin,
   Package,
-  DollarSign,
   Clock,
   Store,
   Navigation,
@@ -24,9 +22,10 @@ import {
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
 import { AvailableOrder } from '@/context/CourierContext';
+import { courierEarnings, hasTip } from '@/lib/formatting';
 import { soundService } from '@/services/soundService';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Default timeout in seconds (can be customized via props)
 const DEFAULT_TIMEOUT = 60;
@@ -39,7 +38,7 @@ interface OrderOfferModalProps {
   timeoutSeconds?: number;
 }
 
-export function OrderOfferModal({
+export const OrderOfferModal = React.memo(function OrderOfferModal({
   visible,
   order,
   onAccept,
@@ -47,7 +46,6 @@ export function OrderOfferModal({
   timeoutSeconds = DEFAULT_TIMEOUT,
 }: OrderOfferModalProps) {
   const { t } = useTranslation();
-  const router = useRouter();
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
   const [isAccepting, setIsAccepting] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -165,7 +163,7 @@ export function OrderOfferModal({
 
     try {
       await onAccept(order.orderId);
-    } catch (error) {
+    } catch {
       setIsAccepting(false);
       // Error handling is done in parent component
     }
@@ -186,7 +184,7 @@ export function OrderOfferModal({
 
   if (!order) return null;
 
-  const earnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
+  const earnings = courierEarnings(order);
   const restaurantName = order.restaurantName ?? 'Restaurant';
   const deliveryAddress = order.deliveryAddress ?? 'Delivery location';
 
@@ -235,7 +233,7 @@ export function OrderOfferModal({
           <View style={styles.earningsSection}>
             <Text style={styles.earningsLabel}>{t('order_offer.estimated_earnings', 'Estimated Earnings')}</Text>
             <Text style={styles.earningsAmount}>{formatCurrency(earnings)}</Text>
-            {(order.tipAmount ?? 0) > 0 && (
+            {hasTip(order) && (
               <View style={styles.tipBadge}>
                 <Text style={styles.tipText}>
                   +{formatCurrency(order.tipAmount)} {t('order_offer.tip', 'tip')}
@@ -326,7 +324,7 @@ export function OrderOfferModal({
       </View>
     </Modal>
   );
-}
+});
 
 const styles = StyleSheet.create({
   overlay: {

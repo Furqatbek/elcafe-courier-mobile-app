@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, View, Text, ViewStyle } from 'react-native';
 import {
   Package,
-  FileText,
   Bell,
   MessageSquare,
   Search,

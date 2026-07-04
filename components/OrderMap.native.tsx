@@ -7,6 +7,7 @@ import * as Location from 'expo-location';
 import Colors from '@/constants/colors';
 import { Order } from '@/context/CourierContext';
 import { fetchRoute, Coordinate, RouteInfo } from '@/lib/routing';
+import logger from '@/lib/logger';
 
 interface OrderMapProps {
   order: Order;
@@ -85,7 +86,7 @@ export default function OrderMap({
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          console.log('Permission to access location was denied');
+          logger.log('Permission to access location was denied');
           return;
         }
 
@@ -111,7 +112,7 @@ export default function OrderMap({
           }
         );
       } catch (error) {
-        console.error('[OrderMap] Error starting location tracking:', error);
+        logger.error('[OrderMap] Error starting location tracking:', error);
       }
     };
 

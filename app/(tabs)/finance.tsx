@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Platform, TextInput } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { DollarSign, Banknote, CreditCard, Wallet, Calendar, Package, TrendingUp } from 'lucide-react-native';
+import { DollarSign, Banknote, CreditCard, Wallet, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';

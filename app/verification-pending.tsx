@@ -25,7 +25,7 @@ import * as Linking from 'expo-linking';
 export default function VerificationPendingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { courierProfile, logout } = useCourier();
+  const { logout } = useCourier();
 
   const handleContactSupport = (method: 'phone' | 'email' | 'chat') => {
     switch (method) {

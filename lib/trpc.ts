@@ -2,6 +2,7 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
 import { BASE_URL, API_ENDPOINTS } from "@/constants/config";
+import logger from '@/lib/logger';
 
 /**
  * Get the full tRPC URL
@@ -10,7 +11,7 @@ import { BASE_URL, API_ENDPOINTS } from "@/constants/config";
 const getTrpcUrl = (): string => {
   if (!BASE_URL) {
     // In development without a configured URL, tRPC calls will fail gracefully
-    console.warn("No BASE_URL configured. tRPC calls will not work.");
+    logger.warn("No BASE_URL configured. tRPC calls will not work.");
     return "";
   }
   return `${BASE_URL}${API_ENDPOINTS.TRPC}`;

@@ -14,21 +14,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
   Star,
-  ThumbsUp,
-  Clock,
-  MapPin,
-  Package,
   CheckCircle,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { useCourier } from '@/context/CourierContext';
-
-interface RatingCategory {
-  id: string;
-  label: string;
-  icon: typeof Star;
-}
 
 export default function OrderRatingScreen() {
   const { t } = useTranslation();
@@ -41,13 +31,6 @@ export default function OrderRatingScreen() {
   const [comment, setComment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-
-  const ratingCategories: RatingCategory[] = [
-    { id: 'navigation', label: t('rating.navigation'), icon: MapPin },
-    { id: 'timing', label: t('rating.timing'), icon: Clock },
-    { id: 'packaging', label: t('rating.packaging'), icon: Package },
-    { id: 'overall', label: t('rating.overall_experience'), icon: ThumbsUp },
-  ];
 
   const positiveTags = [
     t('rating.tags.fast_delivery'),

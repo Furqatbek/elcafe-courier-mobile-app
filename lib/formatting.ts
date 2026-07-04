@@ -23,6 +23,13 @@ export const courierEarnings = (order: {
   return (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
 };
 
+// Whether an order carries a tip worth showing. Guards the tip row/badge in
+// offer and detail screens so a zero/missing tip never renders "+0 so'm"
+// (and a literal 0 never leaks into JSX as a text node).
+export const hasTip = (order: { tipAmount?: number | null }): boolean => {
+  return (order.tipAmount ?? 0) > 0;
+};
+
 // Distance formatting
 export const formatDistance = (meters: number, useMetric: boolean = true): string => {
   if (useMetric) {

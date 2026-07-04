@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { Phone, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { ISSUE_TYPES } from '@/constants/config';
-import { useCourier, OrderStatus, Order, IssueType } from '@/context/CourierContext';
+import { useCourier, Order, IssueType } from '@/context/CourierContext';
 import { SlideButton } from '@/components/SlideButton';
 import { formatCurrency, courierEarnings } from '@/lib/formatting';
 import { StatusBadge } from '@/components/StatusBadge';
 import OrderMap from '@/components/OrderMap';
+import logger from '@/lib/logger';
 
 
 export default function OrderDetailScreen() {
@@ -63,14 +64,13 @@ export default function OrderDetailScreen() {
     );
   }
 
-  // Support both flat (new backend) and nested (old interface) field names
-  const restaurantName = order.restaurantName ?? order.restaurant?.name ?? '-';
-  const restaurantAddress = order.restaurantAddress ?? order.restaurant?.address ?? '-';
-  const restaurantPhone = order.customerPhone ?? order.restaurant?.phone ?? null; // backend uses customerPhone for contact
-  const customerName = order.customerName ?? order.customer?.name ?? '-';
-  const customerPhone = order.customerPhone ?? order.customer?.phone ?? null;
-  const deliveryAddr = order.deliveryAddress ?? order.deliveryAddress?.fullAddress ?? '-';
-  const deliveryInstructions = order.deliveryInstructions ?? order.deliveryAddress?.instructions ?? null;
+  const restaurantName = order.restaurantName ?? '-';
+  const restaurantAddress = order.restaurantAddress ?? '-';
+  const restaurantPhone = order.customerPhone ?? null; // backend uses customerPhone for contact
+  const customerName = order.customerName ?? '-';
+  const customerPhone = order.customerPhone ?? null;
+  const deliveryAddr = order.deliveryAddress ?? '-';
+  const deliveryInstructions = order.deliveryInstructions ?? null;
   const orderNumber = order.externalOrderNo ?? order.orderNumber ?? '-';
   const itemCount = order.itemCount ?? order.items?.length ?? 0;
   // Order total (food + fees) — what the customer pays / cash to collect
@@ -79,16 +79,16 @@ export default function OrderDetailScreen() {
   const earningsAmount = courierEarnings(order);
 
   const handleSlideComplete = async () => {
-    console.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
+    logger.log('[OrderDetail] handleSlideComplete called, order.status:', order.status, 'orderId:', order.orderId);
     try {
       if (order.status === 'COURIER_ASSIGNED' || order.status === 'READY') {
-        console.log('[OrderDetail] Updating status to PICKED_UP...');
+        logger.log('[OrderDetail] Updating status to PICKED_UP...');
         await updateOrderStatus(order.orderId, 'PICKED_UP');
         router.push(`/map-navigation/${order.orderId}`);
       } else if (order.status === 'PICKED_UP' || order.status === 'IN_TRANSIT') {
-        console.log('[OrderDetail] Completing order...');
+        logger.log('[OrderDetail] Completing order...');
         const result = await completeOrder(order.orderId);
-        console.log('[OrderDetail] completeOrder result:', result);
+        logger.log('[OrderDetail] completeOrder result:', result);
         if (result) {
           Alert.alert(
             t('order_detail.delivery_complete'),
@@ -98,10 +98,10 @@ export default function OrderDetailScreen() {
           );
         }
       } else {
-        console.warn('[OrderDetail] Unhandled order status for slide action:', order.status);
+        logger.warn('[OrderDetail] Unhandled order status for slide action:', order.status);
       }
     } catch (error: any) {
-      console.error('[OrderDetail] Error in handleSlideComplete:', error);
+      logger.error('[OrderDetail] Error in handleSlideComplete:', error);
       const msg = error?.message || '';
       if (msg.toLowerCase().includes('not ready for pickup')) {
         Alert.alert(
@@ -128,7 +128,7 @@ export default function OrderDetailScreen() {
       setSelectedIssueType(null);
       setIssueDescription('');
       Alert.alert(t('common.success'), t('order_detail.issue_reported'));
-    } catch (error) {
+    } catch {
       Alert.alert(t('common.error'), t('order_detail.issue_report_failed'));
     } finally {
       setIsSubmittingIssue(false);

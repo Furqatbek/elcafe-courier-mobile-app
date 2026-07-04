@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { User, Mail, Phone, Hash, Briefcase, UserCircle, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
+import logger from '@/lib/logger';
 
 export default function PersonalInfoScreen() {
   const { t } = useTranslation();
@@ -19,7 +20,7 @@ export default function PersonalInfoScreen() {
       try {
         await fetchCourierProfile();
       } catch (error) {
-        console.error('Failed to fetch courier profile:', error);
+        logger.error('Failed to fetch courier profile:', error);
       } finally {
         setIsLoading(false);
       }

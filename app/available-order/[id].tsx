@@ -13,10 +13,8 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
-  MapPin,
   Package,
   DollarSign,
-  Navigation,
   Store,
   User,
   Phone,
@@ -24,6 +22,7 @@ import {
 import Colors from '@/constants/colors';
 import { DEFAULTS } from '@/constants/config';
 import { useCourier } from '@/context/CourierContext';
+import { courierEarnings, hasTip } from '@/lib/formatting';
 import { SlideButton } from '@/components/SlideButton';
 import OrderMap from '@/components/OrderMap';
 
@@ -78,14 +77,6 @@ export default function AvailableOrderDetailScreen() {
 
   const formatCurrency = (amount: number | undefined) => {
     return `${((amount ?? 0)).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
-
-  const formatDistance = (km: number | undefined) => {
-    const value = km ?? 0;
-    if (value < 1) {
-      return `${(value * 1000).toFixed(0)} m`;
-    }
-    return `${value.toFixed(1)} km`;
   };
 
   const handleAcceptOrder = async () => {
@@ -148,7 +139,7 @@ export default function AvailableOrderDetailScreen() {
   const customerPhone = order.customerPhone ?? null;
   const orderNumber = order.externalOrderNo ?? '-';
   const deliveryInstructions = order.deliveryInstructions ?? null;
-  const earnings = (order.deliveryFee ?? 0) + (order.tipAmount ?? 0);
+  const earnings = courierEarnings(order);
 
   // Create a minimal order object for the map
   const mapOrder = {
@@ -258,7 +249,7 @@ export default function AvailableOrderDetailScreen() {
         </View>
 
         {/* Tip Info */}
-        {(order.tipAmount ?? 0) > 0 && (
+        {hasTip(order) && (
           <View style={styles.tipCard}>
             <DollarSign size={20} color={Colors.success} />
             <Text style={styles.tipText}>

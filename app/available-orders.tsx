@@ -7,14 +7,12 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import {
   MapPin,
   Navigation,
-  Clock,
   DollarSign,
   Package,
   ChevronRight,
@@ -28,6 +26,14 @@ import { api, AvailableOrder } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatCurrency, courierEarnings } from '@/lib/formatting';
+import logger from '@/lib/logger';
+
+const formatDistance = (km: number) => {
+  if (km < 1) {
+    return `${(km * 1000).toFixed(0)} m`;
+  }
+  return `${km.toFixed(1)} km`;
+};
 
 export default function AvailableOrdersScreen() {
   const { t } = useTranslation();
@@ -62,7 +68,7 @@ export default function AvailableOrdersScreen() {
       setCurrentLocation(coords);
       return coords;
     } catch (error) {
-      console.error('Failed to get location:', error);
+      logger.error('Failed to get location:', error);
       return null;
     }
   }, [toast, t]);
@@ -100,25 +106,18 @@ export default function AvailableOrdersScreen() {
     }
   }, [isOnline]);
 
-  const handleViewOrderDetails = (orderId: number) => {
+  const handleViewOrderDetails = useCallback((orderId: number) => {
     // Navigate to available order detail screen to see info before accepting
     router.push(`/available-order/${orderId}`);
-  };
+  }, [router]);
 
-  const formatDistance = (km: number) => {
-    if (km < 1) {
-      return `${(km * 1000).toFixed(0)} m`;
-    }
-    return `${km.toFixed(1)} km`;
-  };
-
-  const renderOrderItem = ({ item }: { item: AvailableOrder }) => {
+  const renderOrderItem = useCallback(({ item }: { item: AvailableOrder }) => {
     // Support both flat (new backend) and nested (legacy) structures
     const restaurantName = item.restaurantName ?? item.restaurant?.name ?? '-';
     const restaurantAddress = item.restaurantAddress ?? item.restaurant?.address ?? '-';
     const restaurantDistance = item.restaurantDistance ?? item.restaurant?.distance ?? 0;
-    const deliveryAddr = item.deliveryAddress ?? item.deliveryAddress?.fullAddress ?? '-';
-    const deliveryDistance = item.deliveryDistance ?? item.deliveryAddress?.distance ?? 0;
+    const deliveryAddr = item.deliveryAddress ?? '-';
+    const deliveryDistance = item.deliveryDistance ?? 0;
     const orderNumber = item.externalOrderNo ?? item.orderNumber ?? '-';
     // Courier-facing offer amount: delivery fee + tip — same math as
     // AvailableOrderCard and the offer flow.
@@ -193,7 +192,7 @@ export default function AvailableOrdersScreen() {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [handleViewOrderDetails, t]);
 
   if (!isOnline) {
     return (
@@ -201,7 +200,7 @@ export default function AvailableOrdersScreen() {
         <Stack.Screen options={{ title: t('available_orders.title') }} />
         <View style={styles.offlineContainer}>
           <EmptyState
-            icon={<MapPin size={48} color={Colors.textLight} />}
+            icon={MapPin}
             title={t('available_orders.offline_title')}
             message={t('available_orders.offline_message')}
             actionLabel={t('available_orders.go_online')}
@@ -239,7 +238,7 @@ export default function AvailableOrdersScreen() {
           </View>
         ) : orders.length === 0 ? (
           <EmptyState
-            icon={<Package size={48} color={Colors.textLight} />}
+            icon={Package}
             title={t('available_orders.no_orders_title')}
             message={t('available_orders.no_orders_message')}
             actionLabel={t('available_orders.refresh')}

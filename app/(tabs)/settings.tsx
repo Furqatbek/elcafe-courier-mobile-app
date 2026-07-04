@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useCourier } from '@/context/CourierContext';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
+import logger from '@/lib/logger';
 
 const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
 
@@ -64,7 +65,7 @@ export default function SettingsScreen() {
         }
       })
       .catch((error) => {
-        console.error('Failed to load notifications preference:', error);
+        logger.error('Failed to load notifications preference:', error);
       });
   }, []);
 
@@ -80,7 +81,7 @@ export default function SettingsScreen() {
         }
       }
     } catch (error) {
-      console.error('Failed to update notifications preference:', error);
+      logger.error('Failed to update notifications preference:', error);
     }
   };
 
@@ -122,7 +123,7 @@ export default function SettingsScreen() {
         await logout();
         router.replace('/login');
       } catch (error) {
-        console.error('Logout failed:', error);
+        logger.error('Logout failed:', error);
         router.replace('/login');
       } finally {
         setIsLoggingOut(false);
@@ -150,7 +151,7 @@ export default function SettingsScreen() {
         await logoutAllDevices();
         router.replace('/login');
       } catch (error) {
-        console.error('Logout all devices failed:', error);
+        logger.error('Logout all devices failed:', error);
         if (Platform.OS === 'web') {
           window.alert(t('settings.logout_all_failed'));
         } else {
@@ -198,7 +199,7 @@ export default function SettingsScreen() {
       await logout();
       router.replace('/login');
     } catch (error: any) {
-      console.error('Account deletion failed:', error);
+      logger.error('Account deletion failed:', error);
       const message = error?.message
         ? `${t('settings.delete_account_failed', 'Failed to delete account. Please try again.')}\n\n${error.message}`
         : t('settings.delete_account_failed', 'Failed to delete account. Please try again.');

@@ -16,6 +16,7 @@ import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
+import logger from '@/lib/logger';
 
 // API_ENDPOINTS-style path builder; move into constants/config.ts
 // (API_ENDPOINTS.COURIER.REVIEWS) once that file is free to edit.
@@ -35,17 +36,6 @@ interface Review {
   comment: string;
   tags?: string;
   createdAt: string;
-}
-
-interface ReviewsResponse {
-  success: boolean;
-  data: {
-    content: Review[];
-    page: number;
-    size: number;
-    totalElements: number;
-    totalPages: number;
-  };
 }
 
 const PAGE_SIZE = 20;
@@ -112,7 +102,7 @@ export default function ReviewsScreen() {
       }
       setTotalPages(pages);
     } catch (err) {
-      console.error('[Reviews] Failed to fetch reviews:', err);
+      logger.error('[Reviews] Failed to fetch reviews:', err);
       setError(t('reviews.loading_error'));
     }
   }, [authenticatedFetch, t]);

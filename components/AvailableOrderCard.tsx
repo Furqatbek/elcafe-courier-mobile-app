@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
-import { MapPin, Navigation, Package, Clock, ChevronRight } from 'lucide-react-native';
+import { Navigation, Package, Clock, ChevronRight } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -11,7 +11,7 @@ interface AvailableOrderCardProps {
   order: AvailableOrder;
 }
 
-export function AvailableOrderCard({ order }: AvailableOrderCardProps) {
+export const AvailableOrderCard = React.memo(function AvailableOrderCard({ order }: AvailableOrderCardProps) {
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -28,8 +28,9 @@ export function AvailableOrderCard({ order }: AvailableOrderCardProps) {
     const diffMinutes = Math.floor((now.getTime() - date.getTime()) / 60000);
 
     if (diffMinutes < 1) return t('orders.just_now', 'Just now');
-    if (diffMinutes < 60) return t('orders.minutes_ago', { count: diffMinutes }, `${diffMinutes} min ago`);
-    return t('orders.hours_ago', { count: Math.floor(diffMinutes / 60) }, `${Math.floor(diffMinutes / 60)}h ago`);
+    if (diffMinutes < 60) return t('orders.minutes_ago', { count: diffMinutes, defaultValue: `${diffMinutes} min ago` });
+    const diffHours = Math.floor(diffMinutes / 60);
+    return t('orders.hours_ago', { count: diffHours, defaultValue: `${diffHours}h ago` });
   };
 
   const handlePress = () => {
@@ -98,7 +99,7 @@ export function AvailableOrderCard({ order }: AvailableOrderCardProps) {
       </View>
     </TouchableOpacity>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
