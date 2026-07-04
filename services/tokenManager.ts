@@ -135,6 +135,20 @@ export async function getAccessToken(): Promise<string | null> {
 }
 
 /**
+ * Current token pair — READ-ONLY priming for session restore. Loads from
+ * storage when the cache is cold, but never writes and never clobbers a
+ * newer cache (a concurrent rotation — e.g. the background location task
+ * refreshing during app cold-start — always wins). Session restore must use
+ * this instead of setTokens(): writing the just-read storage values back
+ * would re-persist an already-spent refresh token over a rotated one and
+ * kill the session on the next refresh.
+ */
+export async function getTokens(): Promise<{ accessToken: string | null; refreshToken: string | null }> {
+  await ensureLoaded();
+  return { accessToken: cachedAccessToken, refreshToken: cachedRefreshToken };
+}
+
+/**
  * Persist a new token pair (cache + storage) and notify listeners.
  */
 export async function setTokens(accessToken: string, refreshToken: string): Promise<void> {
@@ -306,6 +320,7 @@ export async function getValidAccessToken(): Promise<string | null> {
 
 const tokenManager = {
   getAccessToken,
+  getTokens,
   getValidAccessToken,
   refresh,
   setTokens,

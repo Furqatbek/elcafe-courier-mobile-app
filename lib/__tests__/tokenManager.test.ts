@@ -108,6 +108,37 @@ describe('tokenManager', () => {
     });
   });
 
+  describe('getTokens — read-only session-restore priming', () => {
+    it('loads the stored pair on a cold cache WITHOUT writing to storage', async () => {
+      seedSession('access-0', 'refresh-0');
+      const { tokenStorage } = require('@/services/api');
+      (tokenStorage.setItem as jest.Mock).mockClear();
+
+      await expect(tokenManager.getTokens()).resolves.toEqual({
+        accessToken: 'access-0',
+        refreshToken: 'refresh-0',
+      });
+      expect(tokenStorage.setItem).not.toHaveBeenCalled();
+      expect(events).toEqual([]);
+    });
+
+    it('never clobbers a rotation that landed before restore consumed it', async () => {
+      // Cold start: storage holds (access-0, refresh-0). A background-task
+      // refresh rotates to (access-1, refresh-1) BEFORE restoreSession reads
+      // through the manager — restore must observe the rotated pair and must
+      // not re-persist the spent one (the old setTokens-based restore did,
+      // killing the session on the next refresh).
+      seedSession('access-0', 'refresh-0');
+      await tokenManager.setTokens('access-1', 'refresh-1');
+
+      await expect(tokenManager.getTokens()).resolves.toEqual({
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+      });
+      expect(mockStore.get(REFRESH_KEY)).toBe('refresh-1');
+    });
+  });
+
   describe('refresh — single-flight', () => {
     it('coalesces N concurrent refresh() calls into ONE network call', async () => {
       seedSession('access-0', 'refresh-0');

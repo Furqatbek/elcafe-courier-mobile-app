@@ -9,7 +9,6 @@ import * as Location from 'expo-location';
 import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '@/lib/backgroundLocation';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
-import { tokenStorage } from '@/services/api';
 import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
 
@@ -1140,14 +1139,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
 
     try {
-      // Call logout API to revoke refresh token
-      if (refreshToken) {
+      // Call logout API to revoke refresh token. Read the token through the
+      // ref AT FETCH TIME, not the closure: unregisterDeviceToken above may
+      // have rotated the pair mid-logout (its token validation refreshes
+      // near-expiry tokens), and revoking the spent closure value would
+      // leave the live refresh token valid server-side.
+      const liveRefreshToken = refreshTokenRef.current ?? refreshToken;
+      if (liveRefreshToken) {
         await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.LOGOUT}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify({ refreshToken: liveRefreshToken }),
         });
       }
     } catch (error) {
@@ -1201,12 +1205,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
 
     try {
-      if (accessToken) {
+      // Same stale-closure hazard as logout(): unregisterDeviceToken may
+      // have rotated the tokens above — authorize with the live value.
+      const liveAccessToken = accessTokenRef.current ?? accessToken;
+      if (liveAccessToken) {
         const response = await fetch(`${BASE_URL}${API_ENDPOINTS.USER.LOGOUT_ALL}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
+            'Authorization': `Bearer ${liveAccessToken}`,
           },
         });
 
@@ -1227,19 +1234,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const storedToken = await tokenStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
+        // READ-ONLY priming through the token authority: getTokens() loads
+        // from storage on a cold cache but never writes. Writing the stored
+        // values back (the previous setTokens approach) could re-persist an
+        // already-spent refresh token over a rotation the background
+        // location task performed during cold start — killing the session
+        // on the next refresh.
+        const { accessToken: storedToken, refreshToken: storedRefresh } = await tokenManager.getTokens();
         const storedUser = await AsyncStorage.getItem(TOKEN_CONFIG.USER_KEY);
-        const storedRefresh = await tokenStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
         const storedProfile = await AsyncStorage.getItem('courier_profile');
 
         if (storedToken && storedUser) {
           setAccessToken(storedToken);
           setRefreshToken(storedRefresh);
-          if (storedRefresh) {
-            // Prime the token authority's cache (persisting the same values
-            // back is harmless) so every refresh path starts consistent
-            await tokenManager.setTokens(storedToken, storedRefresh);
-          }
           setUser(JSON.parse(storedUser));
 
           if (storedProfile) {
