@@ -42,22 +42,61 @@ function getInstruction(step: any): string {
   return `${type} ${modifier || ''} onto ${name}`;
 }
 
-export async function fetchRoute(start: Coordinate, end: Coordinate): Promise<RouteInfo> {
+// Public OSRM demo server — fine for development, but it throttles heavily and
+// leaks courier/customer coordinates to a third party. Never used in production:
+// set EXPO_PUBLIC_ROUTING_URL to a self-hosted OSRM instance for release builds.
+const DEMO_ROUTING_URL = 'https://router.project-osrm.org';
+
+let warnedMissingRoutingUrl = false;
+
+function getRoutingBaseUrl(): string | null {
+  const configured = process.env.EXPO_PUBLIC_ROUTING_URL;
+  if (configured) {
+    // Strip trailing slashes so path concatenation stays predictable
+    return configured.replace(/\/+$/, '');
+  }
+
+  if (__DEV__) {
+    return DEMO_ROUTING_URL;
+  }
+
+  if (!warnedMissingRoutingUrl) {
+    warnedMissingRoutingUrl = true;
+    console.warn(
+      '[routing] EXPO_PUBLIC_ROUTING_URL is not set in this production build. ' +
+      'Route lines are disabled — maps will render without polylines. ' +
+      'Set EXPO_PUBLIC_ROUTING_URL to a self-hosted OSRM server to enable routing.'
+    );
+  }
+  return null;
+}
+
+/**
+ * Fetch a driving route between two coordinates.
+ * Returns null when routing is unavailable (no routing server configured in
+ * production, or the request failed) — callers should render without a polyline.
+ */
+export async function fetchRoute(start: Coordinate, end: Coordinate): Promise<RouteInfo | null> {
+  const baseUrl = getRoutingBaseUrl();
+  if (!baseUrl) {
+    return null;
+  }
+
   try {
     const response = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true`
+      `${baseUrl}/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true`
     );
 
     if (!response.ok) {
       console.error('Failed to fetch route', response.status);
-      return { coordinates: [], distance: 0, duration: 0, steps: [] };
+      return null;
     }
 
     const data = await response.json();
 
     if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
       console.error('Invalid route data', data);
-      return { coordinates: [], distance: 0, duration: 0, steps: [] };
+      return null;
     }
 
     const route = data.routes[0];
@@ -79,6 +118,6 @@ export async function fetchRoute(start: Coordinate, end: Coordinate): Promise<Ro
     };
   } catch (error) {
     console.error('Error fetching route:', error);
-    return { coordinates: [], distance: 0, duration: 0, steps: [] };
+    return null;
   }
 }

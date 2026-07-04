@@ -5,6 +5,7 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL, API_ENDPOINTS, APP_CONFIG } from '@/constants/config';
@@ -20,6 +21,17 @@ export interface DeviceTokenRequest {
 }
 
 /**
+ * Typed result so callers can distinguish "user denied permission" from
+ * "this build is misconfigured (no EAS projectId)".
+ */
+export type PushTokenResult =
+  | { status: 'success'; token: string }
+  | { status: 'unsupported' }         // web or non-physical device
+  | { status: 'permission-denied' }
+  | { status: 'misconfigured' }       // no EAS projectId in this build
+  | { status: 'error'; error: unknown };
+
+/**
  * Get the device type based on platform
  */
 function getDeviceType(): DeviceType {
@@ -28,19 +40,31 @@ function getDeviceType(): DeviceType {
   return 'WEB';
 }
 
+let warnedMissingProjectId = false;
+
 /**
- * Request notification permissions and get push token
+ * Resolve the EAS projectId for this build. Required by
+ * Notifications.getExpoPushTokenAsync in production builds.
  */
-export async function getPushToken(): Promise<string | null> {
+function getProjectId(): string | undefined {
+  return Constants.expoConfig?.extra?.eas?.projectId ?? process.env.EXPO_PUBLIC_PROJECT_ID;
+}
+
+/**
+ * Request notification permissions and get push token.
+ * Returns a typed result so callers can distinguish "no permission"
+ * from "misconfigured build".
+ */
+export async function getPushTokenResult(): Promise<PushTokenResult> {
   // Skip on web or non-physical devices
   if (Platform.OS === 'web') {
     console.log('Push notifications not supported on web');
-    return null;
+    return { status: 'unsupported' };
   }
 
   if (!Device.isDevice) {
     console.log('Push notifications require a physical device');
-    return null;
+    return { status: 'unsupported' };
   }
 
   try {
@@ -56,19 +80,41 @@ export async function getPushToken(): Promise<string | null> {
 
     if (finalStatus !== 'granted') {
       console.log('Push notification permission denied');
-      return null;
+      return { status: 'permission-denied' };
+    }
+
+    // The projectId is mandatory for push tokens in standalone builds — a
+    // missing one means push is silently dead in production, so fail loudly.
+    const projectId = getProjectId();
+    if (!projectId) {
+      if (!warnedMissingProjectId) {
+        warnedMissingProjectId = true;
+        console.warn(
+          '[pushNotification] No EAS projectId found (expoConfig.extra.eas.projectId ' +
+          'or EXPO_PUBLIC_PROJECT_ID). Push notifications are DISABLED in this build. ' +
+          'Configure the projectId in app config / env to enable push.'
+        );
+      }
+      return { status: 'misconfigured' };
     }
 
     // Get the push token (FCM on Android, APNs on iOS)
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: process.env.EXPO_PUBLIC_PROJECT_ID,
-    });
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
 
-    return tokenData.data;
+    return { status: 'success', token: tokenData.data };
   } catch (error) {
     console.error('Failed to get push token:', error);
-    return null;
+    return { status: 'error', error };
   }
+}
+
+/**
+ * Legacy convenience wrapper: resolves to the token string or null.
+ * Prefer getPushTokenResult() when the failure reason matters.
+ */
+export async function getPushToken(): Promise<string | null> {
+  const result = await getPushTokenResult();
+  return result.status === 'success' ? result.token : null;
 }
 
 /**
@@ -76,12 +122,26 @@ export async function getPushToken(): Promise<string | null> {
  */
 export async function registerDeviceToken(accessToken: string): Promise<boolean> {
   try {
-    const pushToken = await getPushToken();
+    const tokenResult = await getPushTokenResult();
 
-    if (!pushToken) {
-      console.log('No push token available to register');
+    if (tokenResult.status !== 'success') {
+      switch (tokenResult.status) {
+        case 'misconfigured':
+          console.warn('[pushNotification] Skipping device token registration: build is missing an EAS projectId');
+          break;
+        case 'permission-denied':
+          console.log('[pushNotification] Skipping device token registration: notification permission denied');
+          break;
+        case 'unsupported':
+          console.log('[pushNotification] Skipping device token registration: unsupported platform/device');
+          break;
+        default:
+          console.error('[pushNotification] Skipping device token registration: failed to obtain push token');
+      }
       return false;
     }
+
+    const pushToken = tokenResult.token;
 
     const payload: DeviceTokenRequest = {
       deviceToken: pushToken,
@@ -181,6 +241,7 @@ export function addNotificationResponseListener(
 
 export default {
   getPushToken,
+  getPushTokenResult,
   registerDeviceToken,
   unregisterDeviceToken,
   setupNotificationHandlers,

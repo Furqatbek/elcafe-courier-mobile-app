@@ -16,16 +16,22 @@ import { Phone, ArrowLeft, ArrowRight } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { APP_CONFIG } from '@/constants/config';
 import { useToast } from '@/components/Toast';
-import { api } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
 
 type Step = 'phone' | 'otp';
+
+// The UI shows a fixed +998 prefix; normalize whatever the user typed into a
+// full E.164-style number for the backend.
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  return digits.startsWith('998') ? `+${digits}` : `+998${digits}`;
+}
 
 export default function LoginOtpScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
-  const { loginWithOtp } = useCourier();
+  const { requestOtp, verifyOtp } = useCourier();
 
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
@@ -58,7 +64,11 @@ export default function LoginOtpScreen() {
 
     setIsLoading(true);
     try {
-      await api.auth.requestOtp({ phone });
+      const result = await requestOtp(normalizePhone(phone));
+      if (!result.success) {
+        toast.error(result.message || t('login_otp.otp_request_failed'));
+        return;
+      }
       setStep('otp');
       setResendTimer(APP_CONFIG.OTP_RESEND_DELAY);
       toast.success(t('login_otp.otp_sent'));
@@ -108,7 +118,11 @@ export default function LoginOtpScreen() {
 
     setIsLoading(true);
     try {
-      await loginWithOtp(phone, otpCode);
+      const result = await verifyOtp(normalizePhone(phone), otpCode);
+      if (!result.success || !result.data) {
+        toast.error(result.message || t('login_otp.verification_failed'));
+        return;
+      }
       router.replace('/(tabs)/orders');
     } catch (error: any) {
       toast.error(error.message || t('login_otp.verification_failed'));
@@ -122,7 +136,11 @@ export default function LoginOtpScreen() {
 
     setIsLoading(true);
     try {
-      await api.auth.requestOtp({ phone });
+      const result = await requestOtp(normalizePhone(phone));
+      if (!result.success) {
+        toast.error(result.message || t('login_otp.otp_request_failed'));
+        return;
+      }
       setResendTimer(APP_CONFIG.OTP_RESEND_DELAY);
       setOtp(['', '', '', '', '', '']);
       toast.success(t('login_otp.otp_resent'));
@@ -194,7 +212,7 @@ export default function LoginOtpScreen() {
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
-                  ref={(ref) => (otpInputRefs.current[index] = ref)}
+                  ref={(ref) => { otpInputRefs.current[index] = ref; }}
                   style={[styles.otpInput, digit && styles.otpInputFilled]}
                   value={digit}
                   onChangeText={(value) => handleOtpChange(value, index)}

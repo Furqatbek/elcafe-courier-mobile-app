@@ -160,51 +160,19 @@ function NotificationHandler() {
   const router = useRouter();
   const toast = useToast();
   const { fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline } = useCourier();
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+  // Cold-start taps must be processed exactly once, even though the effect
+  // re-runs when its dependencies (e.g. isOnline) change
+  const hasHandledColdStartResponse = useRef(false);
 
   useEffect(() => {
     // Skip notification listeners on web - not fully supported
     if (Platform.OS === 'web') return;
 
-    // Listen for notifications received while app is in foreground
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.log('[Notification] Received:', notification);
-
-      const data = notification.request.content.data as Record<string, unknown> | undefined;
-      const notificationType = data?.type as string | undefined;
-
-      // Handle NEW_DELIVERY_AVAILABLE - show order offer modal
-      if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE) {
-        console.log('[Notification] NEW_DELIVERY_AVAILABLE received:', data);
-
-        // Only show modal if courier is online
-        if (isOnline) {
-          handleNewOrderPush({
-            orderId: data?.orderId as string | number | undefined,
-            orderNumber: data?.orderNumber as string | undefined,
-            restaurantName: data?.restaurantName as string | undefined,
-          });
-        } else {
-          // Show toast if offline
-          const title = notification.request.content.title || 'New Delivery';
-          const body = notification.request.content.body || '';
-          toast.show(`${title}: ${body}`, 'info');
-        }
-        return;
-      }
-
-      // For other notification types, refresh list and show toast
-      fetchNotifications();
-      fetchUnreadCount();
-
-      const title = notification.request.content.title || 'New Notification';
-      const body = notification.request.content.body || '';
-      toast.show(`${title}: ${body}`, 'info');
-    });
-
-    // Listen for notification taps (user interaction)
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+    // Shared handler for notification taps — used for live responses and the
+    // cold-start response (app launched by tapping a notification)
+    const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
       console.log('[Notification] User tapped:', response);
 
       const data = response.notification.request.content.data as Record<string, unknown> | undefined;
@@ -230,15 +198,69 @@ function NotificationHandler() {
         // Default: go to notifications screen
         router.push('/notifications');
       }
+    };
+
+    // Listen for notifications received while app is in foreground
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('[Notification] Received:', notification);
+
+      const data = notification.request.content.data as Record<string, unknown> | undefined;
+      const notificationType = data?.type as string | undefined;
+
+      // Handle NEW_DELIVERY_AVAILABLE - show order offer modal
+      if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE) {
+        console.log('[Notification] NEW_DELIVERY_AVAILABLE received:', data);
+
+        // Only show modal if courier is online
+        if (isOnline) {
+          handleNewOrderPush({
+            orderId: data?.orderId as string | number | undefined,
+            orderNumber: data?.orderNumber as string | undefined,
+            restaurantName: data?.restaurantName as string | undefined,
+          });
+        } else {
+          // Show toast if offline
+          const title = notification.request.content.title || 'New Delivery';
+          const body = notification.request.content.body || '';
+          toast.info(title, body);
+        }
+        return;
+      }
+
+      // For other notification types, refresh list and show toast
+      fetchNotifications();
+      fetchUnreadCount();
+
+      const title = notification.request.content.title || 'New Notification';
+      const body = notification.request.content.body || '';
+      toast.info(title, body);
     });
 
+    // Listen for notification taps (user interaction)
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+
+    // Handle the cold-start case: the app was launched by tapping a
+    // notification, which fires before any listener is registered
+    if (!hasHandledColdStartResponse.current) {
+      hasHandledColdStartResponse.current = true;
+      Notifications.getLastNotificationResponseAsync()
+        .then(response => {
+          if (response) {
+            console.log('[Notification] Handling cold-start notification response');
+            handleNotificationResponse(response);
+          }
+        })
+        .catch(error => {
+          console.warn('[Notification] Failed to read cold-start notification response:', error);
+        });
+    }
+
     return () => {
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
+      // SDK 54: subscriptions are removed via subscription.remove()
+      notificationListener.current?.remove();
+      notificationListener.current = null;
+      responseListener.current?.remove();
+      responseListener.current = null;
     };
   }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline, router, toast]);
 

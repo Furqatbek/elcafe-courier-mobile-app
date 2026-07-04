@@ -15,6 +15,18 @@ interface OrderMapProps {
   recalculateTrigger?: number;
 }
 
+// 0/undefined/NaN coordinates mean "unknown" — never render a marker in the
+// Gulf of Guinea or feed undefined into coordinate math.
+function isValidCoordinate(lat?: number, lng?: number): boolean {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
 export default function OrderMap({
   order,
   navigationMode = false,
@@ -27,13 +39,17 @@ export default function OrderMap({
   const [userLocation, setUserLocation] = useState<Coordinate | null>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
-  // Support both flat (new backend) and nested (old interface) field names
-  const restaurantLat = order.restaurantLat ?? order.restaurant?.latitude ?? 0;
-  const restaurantLng = order.restaurantLng ?? order.restaurant?.longitude ?? 0;
-  const deliveryLat = order.deliveryLat ?? order.deliveryAddress?.latitude ?? 0;
-  const deliveryLng = order.deliveryLng ?? order.deliveryAddress?.longitude ?? 0;
-  const restaurantName = order.restaurantName ?? order.restaurant?.name ?? 'Restaurant';
-  const customerName = order.customerName ?? order.customer?.name ?? 'Customer';
+  // The real Order/AvailableOrder shape is flat: restaurantLat/restaurantLng,
+  // deliveryLat/deliveryLng, restaurantName, customerName.
+  const restaurantLat = order?.restaurantLat ?? 0;
+  const restaurantLng = order?.restaurantLng ?? 0;
+  const deliveryLat = order?.deliveryLat ?? 0;
+  const deliveryLng = order?.deliveryLng ?? 0;
+  const restaurantName = order?.restaurantName ?? 'Restaurant';
+  const customerName = order?.customerName ?? 'Customer';
+
+  const hasPickup = isValidCoordinate(restaurantLat, restaurantLng);
+  const hasDropoff = isValidCoordinate(deliveryLat, deliveryLng);
 
   // Derive pickup and dropoff locations
   const pickupLocation = useMemo(() => ({
@@ -47,8 +63,9 @@ export default function OrderMap({
   }), [deliveryLat, deliveryLng]);
 
   // Determine destination based on order status in navigation mode
-  const isGoingToPickup = order.status === 'COURIER_ASSIGNED' || order.status === 'READY';
+  const isGoingToPickup = order?.status === 'COURIER_ASSIGNED' || order?.status === 'READY';
   const destination = isGoingToPickup ? pickupLocation : dropoffLocation;
+  const hasDestination = isGoingToPickup ? hasPickup : hasDropoff;
 
   // Get user location
   useEffect(() => {
@@ -122,24 +139,24 @@ export default function OrderMap({
   useEffect(() => {
     let mounted = true;
     const loadRoute = async () => {
-      let routeInfo: RouteInfo;
+      let routeInfo: RouteInfo | null = null;
 
-      if (navigationMode && userLocation) {
+      if (navigationMode && userLocation && hasDestination) {
         // Navigation mode: route from user location to destination
         routeInfo = await fetchRoute(userLocation, destination);
-      } else {
+      } else if (!navigationMode && hasPickup && hasDropoff) {
         // Preview mode: route from pickup to dropoff
         routeInfo = await fetchRoute(pickupLocation, dropoffLocation);
       }
 
-      if (mounted && routeInfo.coordinates.length > 0) {
+      if (mounted && routeInfo && routeInfo.coordinates.length > 0) {
         setRouteCoordinates(routeInfo.coordinates);
         onRouteUpdate?.(routeInfo);
       }
     };
     loadRoute();
     return () => { mounted = false; };
-  }, [pickupLocation, dropoffLocation, userLocation, navigationMode, destination, recalculateTrigger, order.status]);
+  }, [pickupLocation, dropoffLocation, userLocation, navigationMode, destination, hasDestination, hasPickup, hasDropoff, recalculateTrigger, order?.status]);
 
   // Safe guard for native - though this file should only be loaded on web
   if (Platform.OS !== 'web') {
@@ -231,13 +248,16 @@ export default function OrderMap({
             attribution: '&copy; OpenStreetMap contributors'
           }).addTo(map);
 
-          // Data
-          const pickup = [${pickupLocation.latitude}, ${pickupLocation.longitude}];
-          const dropoff = [${dropoffLocation.latitude}, ${dropoffLocation.longitude}];
+          // Data — invalid (0/unknown) coordinates come through as null so no
+          // marker is rendered instead of pinning [0, 0]
+          const pickup = ${hasPickup ? `[${pickupLocation.latitude}, ${pickupLocation.longitude}]` : 'null'};
+          const dropoff = ${hasDropoff ? `[${dropoffLocation.latitude}, ${dropoffLocation.longitude}]` : 'null'};
           const route = ${JSON.stringify(routeCoordinates.map(c => [c.latitude, c.longitude]))};
           const userLoc = ${userLocation ? `[${userLocation.latitude}, ${userLocation.longitude}]` : 'null'};
           const navigationMode = ${navigationMode};
           const isGoingToPickup = ${isGoingToPickup};
+          // Fallback center (Tashkent) when no coordinates are known at all
+          const fallbackCenter = [41.2995, 69.2401];
 
           // User location marker (courier)
           const userIcon = L.divIcon({
@@ -273,14 +293,18 @@ export default function OrderMap({
             // Current destination (pickup or dropoff)
             const destPoint = isGoingToPickup ? pickup : dropoff;
             const destName = isGoingToPickup ? "${restaurantName.replace(/'/g, "\\'")}" : "${customerName.replace(/'/g, "\\'")}";
-            L.marker(destPoint, { icon: destinationIcon, zIndexOffset: 500 }).addTo(map)
-              .bindPopup("<b>" + (isGoingToPickup ? "Pickup" : "Dropoff") + "</b><br>" + destName);
+            if (destPoint) {
+              L.marker(destPoint, { icon: destinationIcon, zIndexOffset: 500 }).addTo(map)
+                .bindPopup("<b>" + (isGoingToPickup ? "Pickup" : "Dropoff") + "</b><br>" + destName);
+            }
 
             // Secondary point (shown smaller)
             const secPoint = isGoingToPickup ? dropoff : pickup;
             const secName = isGoingToPickup ? "${customerName.replace(/'/g, "\\'")}" : "${restaurantName.replace(/'/g, "\\'")}";
-            L.marker(secPoint, { icon: secondaryIcon }).addTo(map)
-              .bindPopup("<b>" + (isGoingToPickup ? "Dropoff" : "Pickup") + "</b><br>" + secName);
+            if (secPoint) {
+              L.marker(secPoint, { icon: secondaryIcon }).addTo(map)
+                .bindPopup("<b>" + (isGoingToPickup ? "Dropoff" : "Pickup") + "</b><br>" + secName);
+            }
 
             // Route from user to destination
             if (route.length > 0) {
@@ -293,10 +317,15 @@ export default function OrderMap({
             }
 
             // Fit bounds to show user and destination
-            const boundsPoints = [userLoc, destPoint];
+            const boundsPoints = [userLoc];
+            if (destPoint) boundsPoints.push(destPoint);
             if (route.length > 0) boundsPoints.push(...route);
-            const bounds = L.latLngBounds(boundsPoints);
-            map.fitBounds(bounds, { padding: [60, 60] });
+            if (boundsPoints.length > 1) {
+              const bounds = L.latLngBounds(boundsPoints);
+              map.fitBounds(bounds, { padding: [60, 60] });
+            } else {
+              map.setView(userLoc, 15);
+            }
 
           } else {
             // Preview mode: show pickup, dropoff, and optional user location
@@ -315,11 +344,15 @@ export default function OrderMap({
               iconAnchor: [7, 7]
             });
 
-            L.marker(pickup, { icon: pickupIcon }).addTo(map)
-              .bindPopup("<b>Pickup</b><br>${restaurantName.replace(/'/g, "\\'")}");
+            if (pickup) {
+              L.marker(pickup, { icon: pickupIcon }).addTo(map)
+                .bindPopup("<b>Pickup</b><br>${restaurantName.replace(/'/g, "\\'")}");
+            }
 
-            L.marker(dropoff, { icon: dropoffIcon }).addTo(map)
-              .bindPopup("<b>Dropoff</b><br>${customerName.replace(/'/g, "\\'")}");
+            if (dropoff) {
+              L.marker(dropoff, { icon: dropoffIcon }).addTo(map)
+                .bindPopup("<b>Dropoff</b><br>${customerName.replace(/'/g, "\\'")}");
+            }
 
             // User location if available
             if (userLoc) {
@@ -337,11 +370,19 @@ export default function OrderMap({
               }).addTo(map);
             }
 
-            // Fit bounds
-            const boundsPoints = [pickup, dropoff, ...route];
+            // Fit bounds to whatever points are known
+            const boundsPoints = [...route];
+            if (pickup) boundsPoints.push(pickup);
+            if (dropoff) boundsPoints.push(dropoff);
             if (userLoc) boundsPoints.push(userLoc);
-            const bounds = L.latLngBounds(boundsPoints);
-            map.fitBounds(bounds, { padding: [40, 40] });
+            if (boundsPoints.length > 1) {
+              const bounds = L.latLngBounds(boundsPoints);
+              map.fitBounds(bounds, { padding: [40, 40] });
+            } else if (boundsPoints.length === 1) {
+              map.setView(boundsPoints[0], 15);
+            } else {
+              map.setView(fallbackCenter, 12);
+            }
           }
 
           // Force resize to ensure correct rendering

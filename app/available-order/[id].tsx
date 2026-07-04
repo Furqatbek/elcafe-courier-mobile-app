@@ -38,6 +38,7 @@ export default function AvailableOrderDetailScreen() {
     clearOrderTakenEvent,
     fetchAvailableOrders,
     currentLocation,
+    courierProfile,
   } = useCourier();
   const orderId = Number(id);
 
@@ -46,13 +47,21 @@ export default function AvailableOrderDetailScreen() {
 
   const [isAccepting, setIsAccepting] = React.useState(false);
 
-  // Watch for ORDER_TAKEN event for this specific order
+  // Watch for ORDER_TAKEN event for this specific order. The backend
+  // broadcasts ORDER_TAKEN for OUR OWN accept too — ignore events carrying
+  // our courierId (and anything arriving while our accept is in flight),
+  // otherwise the courier who just accepted sees "taken by another courier".
   React.useEffect(() => {
     if (orderTakenEvent && orderTakenEvent.orderId === orderId) {
+      const myCourierId = courierProfile?.id;
+      if (isAccepting || (myCourierId != null && Number(orderTakenEvent.courierId) === Number(myCourierId))) {
+        clearOrderTakenEvent();
+        return;
+      }
       const courierName = orderTakenEvent.courierName || t('available_orders.another_courier');
       Alert.alert(
         t('available_orders.order_taken_title', 'Order No Longer Available'),
-        t('available_orders.order_taken_message', { courierName }, `This order was taken by ${courierName}`),
+        t('available_orders.order_taken_message', 'This order was taken by {{courierName}}', { courierName }),
         [
           {
             text: t('common.ok', 'OK'),
@@ -65,7 +74,7 @@ export default function AvailableOrderDetailScreen() {
         { cancelable: false }
       );
     }
-  }, [orderTakenEvent, orderId, clearOrderTakenEvent, router, t]);
+  }, [orderTakenEvent, orderId, isAccepting, courierProfile, clearOrderTakenEvent, router, t]);
 
   const formatCurrency = (amount: number | undefined) => {
     return `${((amount ?? 0)).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
@@ -235,13 +244,13 @@ export default function AvailableOrderDetailScreen() {
               <Text style={styles.locationLabel}>{t('available_orders.dropoff')}</Text>
               <Text style={styles.locationName}>{customerName}</Text>
               <Text style={styles.locationAddress}>{deliveryAddr}</Text>
-              {customerPhone && (
+              {!!customerPhone && (
                 <View style={styles.phoneRow}>
                   <Phone size={14} color={Colors.primary} />
                   <Text style={styles.phoneText}>{customerPhone}</Text>
                 </View>
               )}
-              {deliveryInstructions && (
+              {!!deliveryInstructions && (
                 <Text style={styles.instructionsText}>{deliveryInstructions}</Text>
               )}
             </View>
@@ -249,7 +258,7 @@ export default function AvailableOrderDetailScreen() {
         </View>
 
         {/* Tip Info */}
-        {order.tipAmount && order.tipAmount > 0 && (
+        {(order.tipAmount ?? 0) > 0 && (
           <View style={styles.tipCard}>
             <DollarSign size={20} color={Colors.success} />
             <Text style={styles.tipText}>

@@ -235,7 +235,7 @@ export function OrderOfferModal({
           <View style={styles.earningsSection}>
             <Text style={styles.earningsLabel}>{t('order_offer.estimated_earnings', 'Estimated Earnings')}</Text>
             <Text style={styles.earningsAmount}>{formatCurrency(earnings)}</Text>
-            {order.tipAmount && order.tipAmount > 0 && (
+            {(order.tipAmount ?? 0) > 0 && (
               <View style={styles.tipBadge}>
                 <Text style={styles.tipText}>
                   +{formatCurrency(order.tipAmount)} {t('order_offer.tip', 'tip')}
