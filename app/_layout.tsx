@@ -1,10 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import { Stack, useRouter, useSegments, useRootNavigationState, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 
@@ -162,16 +161,85 @@ const PUSH_TYPES = {
   NEW_DELIVERY_AVAILABLE: 'NEW_DELIVERY_AVAILABLE',
 } as const;
 
+// Screens where a buffered notification tap must NOT be flushed yet: either
+// the user is mid-auth (AuthNavigator is about to router.replace and would
+// wipe our push) or still on the index redirect screen.
+const NON_NAVIGABLE_SEGMENTS = [
+  'login', 'login-otp', 'register', 'become-courier',
+  'forgot-password', 'onboarding', 'verification-pending',
+];
+
 // Component to handle notification events (native only)
 function NotificationHandler() {
   const router = useRouter();
   const toast = useToast();
-  const { fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline } = useCourier();
+  const segments = useSegments();
+  const navigationState = useRootNavigationState();
+  const {
+    fetchNotifications,
+    fetchUnreadCount,
+    handleNewOrderPush,
+    isOnline,
+    isAuthenticated,
+    isSessionLoading,
+  } = useCourier();
   const notificationListener = useRef<Notifications.Subscription | null>(null);
   const responseListener = useRef<Notifications.Subscription | null>(null);
   // Cold-start taps must be processed exactly once, even though the effect
   // re-runs when its dependencies (e.g. isOnline) change
   const hasHandledColdStartResponse = useRef(false);
+
+  // Notification tap that arrived before the app could navigate (cold start,
+  // session still restoring, auth redirect in flight). Held here and flushed
+  // once the router is ready AND the session is loaded AND the user is
+  // authenticated and inside the main app.
+  const pendingRouteRef = useRef<Href | null>(null);
+
+  // Navigating is safe only when the router is mounted, the session finished
+  // loading, the user is authenticated, and AuthNavigator has settled them in
+  // the main app (pushing while it is about to router.replace would either
+  // throw or get wiped by the redirect).
+  const canNavigateNow =
+    !!navigationState?.key &&
+    !isSessionLoading &&
+    isAuthenticated &&
+    segments[0] !== undefined &&
+    !NON_NAVIGABLE_SEGMENTS.includes(segments[0] as string);
+  // Session resolved to logged-out: the tap target is stale — drop it rather
+  // than surprise-navigate after a later login.
+  const shouldDropPending = !!navigationState?.key && !isSessionLoading && !isAuthenticated;
+
+  // Mirror the gate into a ref so listener callbacks always read the latest
+  // value without having to re-register on every auth/navigation change.
+  const navGateRef = useRef({ canNavigate: false, drop: false });
+  navGateRef.current = { canNavigate: canNavigateNow, drop: shouldDropPending };
+
+  const navigateWhenReady = useCallback((route: Href) => {
+    const { canNavigate, drop } = navGateRef.current;
+    if (canNavigate) {
+      router.push(route);
+    } else if (drop) {
+      logger.log('[Notification] Ignoring notification tap — user not authenticated');
+    } else {
+      // Buffer until the flush effect below sees the app become ready
+      logger.log('[Notification] App not ready to navigate — buffering notification tap');
+      pendingRouteRef.current = route;
+    }
+  }, [router]);
+
+  // Flush (or drop) a buffered notification tap once the gate state changes
+  useEffect(() => {
+    if (pendingRouteRef.current === null) return;
+    if (canNavigateNow) {
+      const route = pendingRouteRef.current;
+      pendingRouteRef.current = null;
+      logger.log('[Notification] Flushing buffered notification navigation');
+      router.push(route);
+    } else if (shouldDropPending) {
+      pendingRouteRef.current = null;
+      logger.log('[Notification] Dropping buffered notification navigation — user not authenticated');
+    }
+  }, [canNavigateNow, shouldDropPending, router]);
 
   useEffect(() => {
     // Skip notification listeners on web - not fully supported
@@ -188,22 +256,22 @@ function NotificationHandler() {
       // Handle NEW_DELIVERY_AVAILABLE tap - navigate to available order
       if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE && data?.orderId) {
         logger.log('[Notification] Navigating to available order:', data.orderId);
-        router.push(`/available-order/${data.orderId}`);
+        navigateWhenReady(`/available-order/${data.orderId}`);
         return;
       }
 
       // Navigate based on notification data
       if (data?.orderId) {
-        router.push(`/order/${data.orderId}`);
+        navigateWhenReady(`/order/${data.orderId}`);
       } else if (data?.actionUrl) {
         // Handle actionUrl like /orders/27
         const match = String(data.actionUrl).match(/\/orders\/(\d+)/);
         if (match) {
-          router.push(`/order/${match[1]}`);
+          navigateWhenReady(`/order/${match[1]}`);
         }
       } else {
         // Default: go to notifications screen
-        router.push('/notifications');
+        navigateWhenReady('/notifications');
       }
     };
 
@@ -269,7 +337,7 @@ function NotificationHandler() {
       responseListener.current?.remove();
       responseListener.current = null;
     };
-  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline, router, toast]);
+  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline, navigateWhenReady, router, toast]);
 
   return null;
 }
@@ -278,23 +346,14 @@ export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
 
-    // Set up notification channels
+    // Set up notification channels (creating channels never prompts the user)
     setupNotificationChannel();
 
-    // Request permissions on app open
-    (async () => {
-      // GPS Location Permission
-      const { status: locationStatus } = await Location.requestForegroundPermissionsAsync();
-      if (locationStatus !== 'granted') {
-        logger.log('Permission to access location was denied');
-      }
-
-      // Notification Permission
-      const { status: notificationStatus } = await Notifications.requestPermissionsAsync();
-      if (notificationStatus !== 'granted') {
-        logger.log('Permission to send notifications was denied');
-      }
-    })();
+    // Deliberately NO permission requests at cold start (Google Play
+    // prominent-disclosure policy): location permission is only requested
+    // from the go-online flow after the user accepts the
+    // LocationDisclosureModal, and notification permission is requested
+    // after login/session restore by registerDeviceToken().
   }, []);
 
   return (

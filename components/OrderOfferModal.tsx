@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { ORDER_CONFIG } from '@/constants/config';
 import { AvailableOrder } from '@/context/CourierContext';
 import { courierEarnings, hasTip, formatCurrency } from '@/lib/formatting';
 import { soundService } from '@/services/soundService';
@@ -27,7 +28,7 @@ import { soundService } from '@/services/soundService';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Default timeout in seconds (can be customized via props)
-const DEFAULT_TIMEOUT = 60;
+const DEFAULT_TIMEOUT = ORDER_CONFIG.OFFER_TIMEOUT_SECONDS ?? 60;
 
 interface OrderOfferModalProps {
   visible: boolean;
@@ -61,6 +62,19 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
     }
     return `${value.toFixed(1)} km`;
   };
+
+  const cleanup = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (vibrationRef.current) {
+      clearInterval(vibrationRef.current);
+      vibrationRef.current = null;
+    }
+    Vibration.cancel();
+    soundService.stopNewOrderSound();
+  }, []);
 
   // Start animations and sounds when modal becomes visible
   useEffect(() => {
@@ -124,30 +138,28 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
       }, 1000);
 
       return () => {
+        // Runs when the effect re-fires (e.g. a different order arrives while
+        // visible) and when `visible` flips false — clears the countdown and
+        // the repeating vibration interval so they never outlive the modal
         pulseAnimation.stop();
+        cleanup();
       };
     }
   }, [visible, order, timeoutSeconds]);
 
-  // Cleanup on unmount or when modal closes
+  // Safety net: stop timers/vibration/sound whenever the modal is hidden
+  useEffect(() => {
+    if (!visible) {
+      cleanup();
+    }
+  }, [visible, cleanup]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanup();
     };
-  }, []);
-
-  const cleanup = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    if (vibrationRef.current) {
-      clearInterval(vibrationRef.current);
-      vibrationRef.current = null;
-    }
-    Vibration.cancel();
-    soundService.stopNewOrderSound();
-  }, []);
+  }, [cleanup]);
 
   const handleAccept = async () => {
     if (!order || isAccepting) return;

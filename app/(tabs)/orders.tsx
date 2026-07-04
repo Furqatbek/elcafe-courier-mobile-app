@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Alert, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
 import { OrderCard } from '@/components/OrderCard';
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { OrderOfferModal } from '@/components/OrderOfferModal';
+import { LocationDisclosureModal, LOCATION_DISCLOSURE_ACCEPTED_KEY } from '@/components/LocationDisclosureModal';
 import { soundService } from '@/services/soundService';
 import logger from '@/lib/logger';
 
@@ -51,6 +53,9 @@ export default function OrdersScreen() {
     newOrderOffer,
     clearNewOrderOffer,
     acceptOrder,
+    orderTakenEvent,
+    clearOrderTakenEvent,
+    courierProfile,
   } = useCourier();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -61,6 +66,11 @@ export default function OrdersScreen() {
   const [offerOrder, setOfferOrder] = useState<AvailableOrder | null>(null);
   const previousOrderIdsRef = useRef<Set<number>>(new Set());
   const hasInitializedRef = useRef(false);
+
+  // Location prominent disclosure (Google Play policy): location permission
+  // may only be requested after the user accepts this disclosure once.
+  const [showLocationDisclosure, setShowLocationDisclosure] = useState(false);
+  const disclosureAcceptedRef = useRef<boolean | null>(null); // null = not read yet
 
   // Initialize sound service
   useEffect(() => {
@@ -198,6 +208,105 @@ export default function OrdersScreen() {
     clearNewOrderOffer();
   }, [clearNewOrderOffer]);
 
+  // Close the offer modal if the displayed order gets taken by another
+  // courier while it is still on screen. Our own accept also broadcasts
+  // ORDER_TAKEN — ignore events carrying our courierId (handleAcceptOrder
+  // already closes the modal on success).
+  useEffect(() => {
+    if (!orderTakenEvent || !offerOrder || orderTakenEvent.orderId !== offerOrder.orderId) {
+      return;
+    }
+    const myCourierId = courierProfile?.id;
+    if (myCourierId != null && Number(orderTakenEvent.courierId) === Number(myCourierId)) {
+      return;
+    }
+    logger.log('[Orders] Offered order taken by another courier, closing modal:', orderTakenEvent.orderId);
+    setShowOrderOfferModal(false);
+    setOfferOrder(null);
+    clearNewOrderOffer();
+    clearOrderTakenEvent();
+  }, [orderTakenEvent, offerOrder, courierProfile, clearNewOrderOffer, clearOrderTakenEvent]);
+
+  // Read the persisted disclosure acceptance lazily (first toggle wins)
+  const isDisclosureAccepted = useCallback(async (): Promise<boolean> => {
+    if (disclosureAcceptedRef.current !== null) {
+      return disclosureAcceptedRef.current;
+    }
+    try {
+      const value = await AsyncStorage.getItem(LOCATION_DISCLOSURE_ACCEPTED_KEY);
+      disclosureAcceptedRef.current = value === 'true';
+    } catch (error) {
+      logger.warn('[Orders] Failed to read location disclosure flag:', error);
+      disclosureAcceptedRef.current = false;
+    }
+    return disclosureAcceptedRef.current;
+  }, []);
+
+  // Run the actual online/offline toggle and surface failures to the user.
+  // The Switch is controlled by isOnline, which only flips after the server
+  // accepts the status change — so on failure it simply stays where it was.
+  const performToggleOnline = useCallback(async () => {
+    try {
+      await toggleOnline();
+    } catch (error: any) {
+      const message: string = error?.message || '';
+      if (message.includes('Location permission denied')) {
+        Alert.alert(
+          t('orders.location_permission_title', 'Location Permission Needed'),
+          t('orders.location_permission_message', 'Going online requires location access so we can send you nearby orders and share your position during deliveries. Please enable location for this app in your device settings.'),
+          [
+            { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+            {
+              text: t('orders.open_settings', 'Open Settings'),
+              onPress: () => {
+                Linking.openSettings().catch((settingsError) => {
+                  logger.warn('[Orders] Failed to open settings:', settingsError);
+                });
+              },
+            },
+          ]
+        );
+      } else {
+        logger.error('[Orders] Failed to toggle online status:', error);
+        Alert.alert(
+          t('common.error', 'Error'),
+          t('orders.toggle_online_failed', 'Could not update your status. Please check your connection and try again.')
+        );
+      }
+    }
+  }, [toggleOnline, t]);
+
+  // Switch handler: going online the first time shows the location
+  // disclosure; the OS permission prompt only ever follows "Agree".
+  const handleToggleOnline = useCallback(async () => {
+    if (isOnline) {
+      // Going offline never needs the disclosure
+      await performToggleOnline();
+      return;
+    }
+    if (await isDisclosureAccepted()) {
+      await performToggleOnline();
+    } else {
+      setShowLocationDisclosure(true);
+    }
+  }, [isOnline, isDisclosureAccepted, performToggleOnline]);
+
+  const handleDisclosureAgree = useCallback(async () => {
+    setShowLocationDisclosure(false);
+    disclosureAcceptedRef.current = true;
+    try {
+      await AsyncStorage.setItem(LOCATION_DISCLOSURE_ACCEPTED_KEY, 'true');
+    } catch (error) {
+      logger.warn('[Orders] Failed to persist location disclosure acceptance:', error);
+    }
+    await performToggleOnline();
+  }, [performToggleOnline]);
+
+  const handleDisclosureNotNow = useCallback(() => {
+    // Toggle stays off: isOnline was never changed
+    setShowLocationDisclosure(false);
+  }, []);
+
   // Fetch order history when tab changes to history
   useEffect(() => {
     if (activeTab === 'history' && orderHistory.length === 0) {
@@ -281,7 +390,14 @@ export default function OrdersScreen() {
         order={offerOrder}
         onAccept={handleAcceptOrder}
         onDecline={handleDeclineOrder}
-        timeoutSeconds={60}
+      />
+
+      {/* Prominent location disclosure — must be accepted before the OS
+          location permission prompt is ever shown */}
+      <LocationDisclosureModal
+        visible={showLocationDisclosure}
+        onAgree={handleDisclosureAgree}
+        onNotNow={handleDisclosureNotNow}
       />
 
       <View style={styles.header}>
@@ -312,7 +428,7 @@ export default function OrdersScreen() {
           </TouchableOpacity>
           <Switch
             value={isOnline}
-            onValueChange={toggleOnline}
+            onValueChange={handleToggleOnline}
             trackColor={{ false: Colors.border, true: Colors.online }}
             thumbColor={Colors.surface}
           />
