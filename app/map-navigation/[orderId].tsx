@@ -36,8 +36,12 @@ export default function MapNavigationScreen() {
       status: updatedOrder?.status,
       previousStatus: order?.status
     });
-    if (updatedOrder && updatedOrder.status !== order?.status) {
-      console.log('[MapNavigation] Status changed! Updating local order state');
+    // Re-sync on readyAt changes too: the restaurant marking the order ready
+    // arrives as an OrderDto with readyAt set while status stays
+    // COURIER_ASSIGNED — without this, the pickup slide would stay disabled
+    // ("Waiting for Restaurant...") forever.
+    if (updatedOrder && (updatedOrder.status !== order?.status || updatedOrder.readyAt !== order?.readyAt)) {
+      console.log('[MapNavigation] Order changed! Updating local order state');
       setOrder(updatedOrder);
     } else if (updatedOrder && !order) {
       console.log('[MapNavigation] Initial order set');

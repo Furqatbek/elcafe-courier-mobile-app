@@ -140,6 +140,9 @@ class WebSocketService {
   private accessToken: string | null = null;
   private reconnectAttempts: number = 0;
   private isConnecting: boolean = false;
+  // True while a live STOMP session exists; lets close/disconnect handlers
+  // notify exactly once per lost connection
+  private wasConnected: boolean = false;
   private messageHandlers: Map<string, Set<WebSocketMessageHandler<unknown>>> = new Map();
 
   // Event callbacks
@@ -204,14 +207,33 @@ class WebSocketService {
         console.log('[WebSocket] Connected successfully');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
+        this.wasConnected = true;
         this.resubscribeAll();
         this.onConnectedCallback?.();
       },
 
+      // Fires only on graceful STOMP disconnect (client.deactivate()) —
+      // NOT on network drops. Abrupt losses are handled by onWebSocketClose.
       onDisconnect: () => {
-        console.log('[WebSocket] Disconnected');
+        console.log('[WebSocket] Disconnected (graceful)');
         this.isConnecting = false;
-        this.onDisconnectedCallback?.();
+        if (this.wasConnected) {
+          this.wasConnected = false;
+          this.onDisconnectedCallback?.();
+        }
+      },
+
+      // Fires on EVERY socket close, including abrupt network drops,
+      // heartbeat timeouts and server restarts — the cases where the backend
+      // auto-flips the courier OFFLINE. Guarded so repeated closes during a
+      // reconnect loop only notify once per lost connection.
+      onWebSocketClose: () => {
+        this.isConnecting = false;
+        if (this.wasConnected) {
+          console.log('[WebSocket] Connection lost');
+          this.wasConnected = false;
+          this.onDisconnectedCallback?.();
+        }
       },
 
       onStompError: (frame) => {
@@ -241,6 +263,9 @@ class WebSocketService {
     if (this.client) {
       console.log('[WebSocket] Disconnecting...');
       this.subscriptions.clear();
+      // Intentional disconnect (logout/token change): suppress the
+      // lost-connection notification so no re-assert or auto-offline fires
+      this.wasConnected = false;
       this.client.deactivate();
       this.client = null;
       this.accessToken = null;

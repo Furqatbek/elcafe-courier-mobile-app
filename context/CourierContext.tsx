@@ -333,11 +333,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const isOnlineRef = useRef(false);
   const courierProfileRef = useRef<CourierProfile | null>(null);
   // The status the courier *wants* (set by user actions). The backend flips
-  // couriers to OFFLINE when the WebSocket drops, so after every reconnect we
-  // re-assert this intent — otherwise the courier silently stops receiving
-  // targeted order pushes while the UI still says "online".
+  // couriers to OFFLINE when the WebSocket drops, so after every (re)connect
+  // we re-assert this intent — otherwise the courier silently stops receiving
+  // targeted order pushes while the UI still says "online". Null (first
+  // connect after login, or after logout) means nothing to re-assert.
   const intendedStatusRef = useRef<CourierStatus | null>(null);
-  const wasDisconnectedRef = useRef(false);
   const reassertStatusRef = useRef<(() => void) | null>(null);
 
   // Keep refs in sync with state
@@ -759,19 +759,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       console.log('[CourierContext] WebSocket connected');
       setIsWebSocketConnected(true);
 
-      // The backend flips couriers to OFFLINE when the socket drops. After a
-      // reconnect, re-assert the courier's intended status so they keep
-      // receiving targeted order pushes.
-      if (wasDisconnectedRef.current) {
-        wasDisconnectedRef.current = false;
-        reassertStatusRef.current?.();
-      }
+      // The backend flips couriers to OFFLINE when the socket drops. Re-assert
+      // the courier's intended status on every (re)connect — on the first
+      // connect after login intent is null, so this is a no-op then.
+      reassertStatusRef.current?.();
     });
 
+    // Fires on both graceful disconnects and abrupt connection losses
+    // (network drop, heartbeat timeout, server restart) — the service routes
+    // onWebSocketClose here, since stompjs onDisconnect alone only covers
+    // graceful deactivation.
     websocketService.onDisconnected(() => {
       console.log('[CourierContext] WebSocket disconnected');
       setIsWebSocketConnected(false);
-      wasDisconnectedRef.current = true;
 
       // Reflect server truth: backend auto-flips AVAILABLE/ON_BREAK to OFFLINE
       // on disconnect. Intent is preserved in intendedStatusRef for re-assert.
@@ -1070,6 +1070,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     // Disconnect WebSocket
     disconnectWebSocket();
+
+    // Clear status intent — it belongs to the ending session. Without this,
+    // the next login (possibly a different courier on the same device) would
+    // re-assert the previous user's AVAILABLE/BUSY on first connect.
+    intendedStatusRef.current = null;
 
     setUser(null);
     setCourierProfile(null);
@@ -1410,7 +1415,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Update courier status (OFFLINE/AVAILABLE/BUSY/ON_BREAK)
   const updateCourierStatus = useCallback(async (status: CourierStatus) => {
     // Record intent first so a reconnect re-asserts it even if this call races
-    // with a connection drop
+    // with a connection drop; keep the previous value to revert on rejection
+    const previousIntent = intendedStatusRef.current;
     intendedStatusRef.current = status;
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.UPDATE_STATUS, {
@@ -1419,12 +1425,23 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       });
 
       const data = await response.json();
-      if (data.success) {
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to update courier status');
+      }
+      // Intent may have moved while this request was in flight (e.g. the
+      // courier accepted an order -> BUSY during a reconnect re-assert of
+      // AVAILABLE). Never let a stale response overwrite the newer state.
+      if (intendedStatusRef.current === status) {
         setCourierProfile(prev => prev ? { ...prev, status } : null);
         setIsOnline(status === 'AVAILABLE' || status === 'BUSY');
       }
     } catch (error) {
       console.error('Failed to update courier status:', error);
+      // Revert intent only if nothing newer replaced it meanwhile — a
+      // server-rejected transition must not keep poisoning future re-asserts
+      if (intendedStatusRef.current === status) {
+        intendedStatusRef.current = previousIntent;
+      }
       throw error;
     }
   }, [authenticatedFetch]);
@@ -1535,6 +1552,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Accept an available order
   const acceptOrder = useCallback(async (orderId: number | string) => {
+    // Distinguishes a definitive server rejection (order taken/cancelled)
+    // from a transport failure where the accept may have succeeded server-side
+    let serverRejected = false;
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.ACCEPT(orderId), {
         method: 'POST',
@@ -1563,19 +1583,27 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
         return acceptedOrder;
       } else {
+        serverRejected = true;
         throw new Error(data.message || 'Failed to accept order');
       }
     } catch (error) {
       console.error('Failed to accept order:', error);
-      // The order may have been taken by another courier or auto-cancelled by
-      // the no-courier timeout. Drop it locally and refresh the list so the
-      // courier sees current reality instead of a stale offer.
-      setAvailableOrders(prev => prev.filter(o => o.orderId !== Number(orderId)));
-      setNewOrderOffer(prev => (prev && prev.orderId === Number(orderId) ? null : prev));
-      fetchAvailableOrders().catch(() => {});
+      if (serverRejected) {
+        // Definitive: taken by another courier or auto-cancelled. Drop the
+        // stale offer and refresh the list.
+        setAvailableOrders(prev => prev.filter(o => o.orderId !== Number(orderId)));
+        setNewOrderOffer(prev => (prev && prev.orderId === Number(orderId) ? null : prev));
+        fetchAvailableOrders().catch(() => {});
+      } else {
+        // Ambiguous transport failure (timeout/dropped response): the accept
+        // may have landed server-side. Sync both lists so a silently-assigned
+        // order surfaces instead of the courier looking free while assigned.
+        fetchOrders().catch(() => {});
+        fetchAvailableOrders().catch(() => {});
+      }
       throw error;
     }
-  }, [authenticatedFetch, fetchAvailableOrders]);
+  }, [authenticatedFetch, fetchAvailableOrders, fetchOrders]);
 
   const updateOrderStatus = async (orderId: number | string, status: OrderStatus) => {
     const numericOrderId = Number(orderId);
@@ -1632,17 +1660,26 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         const remainingActive = orders.filter(o =>
           o.orderId !== orderId && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
         );
-        if (remainingActive.length === 0) {
+        // Flip back to AVAILABLE only if the courier hadn't explicitly chosen
+        // otherwise mid-delivery (e.g. toggled OFFLINE to stop after this job).
+        // Null intent (restored session) keeps the old flip but records nothing.
+        const intentAfterDelivery = intendedStatusRef.current;
+        if (remainingActive.length === 0 && (intentAfterDelivery === 'BUSY' || intentAfterDelivery === null)) {
           setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
-          intendedStatusRef.current = 'AVAILABLE';
+          if (intentAfterDelivery === 'BUSY') {
+            intendedStatusRef.current = 'AVAILABLE';
+          }
         }
       }
 
       console.log('[CourierContext] updateOrderStatus completed successfully');
     } catch (error) {
       console.error('[CourierContext] Failed to update order status on server:', error);
-      // Revert optimistic update on error
+      // Revert optimistic update on error. Also re-sync the courier profile:
+      // a CANCELLED frame may have flipped us AVAILABLE based on the
+      // optimistic DELIVERED state that just got reverted.
       await fetchOrders();
+      fetchCourierProfile().catch(() => {});
       throw error;
     }
   };
@@ -1679,9 +1716,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         const remainingActive = orders.filter(o =>
           o.orderId !== orderId && o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
         );
-        if (remainingActive.length === 0) {
+        // Flip back to AVAILABLE only if the courier hadn't explicitly chosen
+        // otherwise mid-delivery (e.g. toggled OFFLINE to stop after this job).
+        // Null intent (restored session) keeps the old flip but records nothing.
+        const intentAfterDelivery = intendedStatusRef.current;
+        if (remainingActive.length === 0 && (intentAfterDelivery === 'BUSY' || intentAfterDelivery === null)) {
           setCourierProfile(prev => prev ? { ...prev, status: 'AVAILABLE' } : null);
-          intendedStatusRef.current = 'AVAILABLE';
+          if (intentAfterDelivery === 'BUSY') {
+            intendedStatusRef.current = 'AVAILABLE';
+          }
         }
 
         return result.data;
@@ -1691,11 +1734,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
     } catch (error) {
       console.error('[CourierContext] Failed to complete order:', error);
-      // Revert optimistic update on error
+      // Revert optimistic update on error. Also re-sync the courier profile:
+      // a CANCELLED frame may have flipped us AVAILABLE based on the
+      // optimistic DELIVERED state that just got reverted.
       await fetchOrders();
+      fetchCourierProfile().catch(() => {});
       throw error;
     }
-  }, [authenticatedFetch, fetchStats, fetchOrders, orders]);
+  }, [authenticatedFetch, fetchStats, fetchOrders, fetchCourierProfile, orders]);
 
   // Report an issue with an order
   const reportOrderIssue = useCallback(async (
