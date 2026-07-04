@@ -17,10 +17,17 @@ runs the build.
 |---|---|
 | `GOOGLE_MAPS_API_KEY` | Android Google Maps SDK key, injected into `android.config.googleMaps.apiKey` |
 | `EAS_PROJECT_ID` | EAS project UUID, injected into `extra.eas.projectId` |
+| `GOOGLE_SERVICES_JSON` | **REQUIRED for Android push.** Path to `google-services.json` (upload as an EAS *file* secret). If unset, `app.config.ts` falls back to `./google-services.json` in the repo root. When neither exists the config still evaluates (local dev convenience) but prints a warning and the build ships with **Android push notifications completely dead** — treat the warning as a release blocker. `eas.json` cannot carry comments, so this table is the canonical reminder. |
 
 ### Runtime client vars (`EXPO_PUBLIC_*`, inlined into the JS bundle)
 
 Set per profile in `eas.json` — replace every `REPLACE_ME_*` value before building.
+
+> **Guard:** `constants/config.ts` now throws at app startup in production
+> builds if ANY consumed `EXPO_PUBLIC_*` value still contains `REPLACE_ME`
+> (case-insensitive). A production build made from an unedited `eas.json`
+> crashes immediately with the offending variable names instead of shipping
+> with every network call silently pointed at a placeholder.
 
 | Variable | Used in | Purpose |
 |---|---|---|
@@ -31,6 +38,12 @@ Set per profile in `eas.json` — replace every `REPLACE_ME_*` value before buil
 | `EXPO_PUBLIC_ROUTING_URL` | `lib/routing.ts` | Routing service (OSRM-compatible) base URL |
 | `EXPO_PUBLIC_TERMS_URL` | `app/register.tsx`, `app/help-center.tsx` | Public Terms of Service URL |
 | `EXPO_PUBLIC_PRIVACY_URL` | `app/register.tsx`, `app/onboarding.tsx`, `app/help-center.tsx` | Public Privacy Policy URL |
+| `EXPO_PUBLIC_CRASH_ENDPOINT` | `lib/crashReporting.ts` | Optional. HTTPS endpoint receiving fire-and-forget crash POSTs (`{ message, stack, platform, appVersion }`). Not in `eas.json` by default — without it (and without Sentry, see the file header's upgrade path) production crash visibility is logcat/os_log only. |
+
+All URL-valued vars share one TLS policy: production builds upgrade `http://`
+to `https://` and `ws://` to `wss://` (`enforceSecureTransport` in
+`constants/config.ts`, also applied in `lib/routing.ts` and
+`lib/crashReporting.ts`).
 
 ## 2. Google Maps (Android)
 
@@ -42,18 +55,34 @@ Set per profile in `eas.json` — replace every `REPLACE_ME_*` value before buil
 4. iOS uses Apple Maps via `react-native-maps` default provider — no key required
    unless the Google provider is explicitly enabled on iOS.
 
-## 3. Push notifications (FCM / APNs)
+## 3. Push notifications (FCM / APNs) — **RELEASE BLOCKER until done**
+
+`app.config.ts` is already wired: it sets `android.googleServicesFile` to
+`process.env.GOOGLE_SERVICES_JSON` (falling back to `./google-services.json`)
+**only when that file actually exists**, so local dev without the secret still
+works. The flip side: nothing fails the build when it's missing — the config
+evaluation prints a `[app.config] ... Android push notifications will NOT
+work` warning and the resulting Android binary has **zero push**. For a
+courier app whose core loop is "get alerted to a new order with the phone in
+your pocket", do not ship a build that printed that warning.
 
 1. Create a Firebase project, add an Android app with package `app.zbr.courier`,
    and download `google-services.json`.
-2. Either commit it to the repo root and add `"googleServicesFile": "./google-services.json"`
-   under `android` in `app.config.ts`, or upload it as an EAS file secret and
-   reference `process.env.GOOGLE_SERVICES_JSON` as the path.
+2. Provide the file to the build — either:
+   - upload it as an EAS **file** secret named `GOOGLE_SERVICES_JSON`
+     (`eas env:create --scope project --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json`), or
+   - commit `google-services.json` to the repo root (it contains no private
+     keys, only project identifiers — committing is Google's documented default).
 3. Upload the FCM V1 service-account key to Expo: `eas credentials` → Android →
    Push Notifications (required for `expo-notifications` delivery via FCM).
 4. iOS: `eas credentials` provisions the APNs key automatically during the first
    production build; make sure Push Notifications capability is enabled on the
-   App ID.
+   App ID. `ITSAppUsesNonExemptEncryption: false` is declared in
+   `app.config.ts` so App Store Connect skips the export-compliance prompt.
+5. **Backend contract check:** the app registers an `ExponentPushToken[...]`
+   at `POST /api/v1/device-tokens` — the Spring backend must send via Expo's
+   Push API, not raw FCM/APNs. See `docs/BACKEND_VERIFICATION.md` item on
+   device tokens before launch.
 
 ## 4. EAS project ID
 
@@ -82,6 +111,37 @@ eas submit --platform android
 `appVersionSource: remote` + `autoIncrement` in `eas.json` bump
 `ios.buildNumber` / `android.versionCode` automatically on production builds
 (the values in `app.config.ts` are the initial baseline).
+
+## 6a. OTA updates (EAS Update) — explicit pre-launch decision required
+
+**Current state: OTA is NOT available.** `expo-updates` is not installed, and
+the `channel` keys that previously sat in `eas.json` build profiles have been
+removed — without the package they were inert metadata that made it look like
+OTA was configured when it wasn't. Consequence: **every JS fix ships as a full
+store build + review cycle.** For a v1 launch to real couriers, that means a
+bad-payload crash or locale bug stays live for however long store review takes.
+
+Decide before launch, and record the decision here:
+
+- **Option A — launch without OTA (current state).** Zero native-config risk.
+  Accept store-review latency for every hotfix. Nothing to do.
+- **Option B — adopt EAS Update.** Install path (do this BEFORE the final
+  store builds — it changes native config, so it cannot be added via OTA
+  itself):
+  1. `npx expo install expo-updates`
+  2. `eas update:configure` (writes `updates.url` + `runtimeVersion` policy
+     into `app.config.ts`)
+  3. Re-add `"channel": "development" | "preview" | "production"` to the
+     matching build profiles in `eas.json`.
+  4. Rebuild all profiles (the runtime version / updates URL are baked into
+     the binary), then publish with `eas update --channel production`.
+  5. Set a `runtimeVersion` policy of `"appVersion"` (safest with bare
+     workflow-adjacent native deps like react-native-maps) so an OTA bundle
+     never lands on an incompatible binary.
+
+Do **not** install `expo-updates` casually right before submission: it adds
+native modules on both platforms and changes startup behavior (update checks),
+which deserves at least one full QA pass on physical devices.
 
 ## 7. Permissions rationale (store review)
 

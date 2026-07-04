@@ -22,7 +22,7 @@
  */
 
 import { Platform } from 'react-native';
-import { APP_CONFIG } from '@/constants/config';
+import { APP_CONFIG, enforceSecureTransport } from '@/constants/config';
 import logger from '@/lib/logger';
 
 type GlobalErrorHandler = (error: unknown, isFatal?: boolean) => void;
@@ -47,8 +47,11 @@ export function reportCrash(err: unknown, isFatal?: boolean): void {
     e.stack ?? '(no stack)'
   );
 
-  const endpoint = process.env.EXPO_PUBLIC_CRASH_ENDPOINT;
-  if (!endpoint) return;
+  const rawEndpoint = process.env.EXPO_PUBLIC_CRASH_ENDPOINT;
+  if (!rawEndpoint) return;
+  // Same TLS policy as every other consumed URL: production upgrades http://
+  // to https:// so crash payloads (stack traces) never travel in plaintext.
+  const endpoint = enforceSecureTransport(rawEndpoint);
 
   try {
     // Fire-and-forget: a crash reporter must never crash (or block) the app
@@ -96,7 +99,9 @@ export function initCrashReporting(): void {
   // Native: ErrorUtils is a React Native global
   const errorUtils = (globalThis as { ErrorUtils?: ErrorUtilsLike }).ErrorUtils;
   if (!errorUtils) {
-    logger.warn('[crashReporting] ErrorUtils not available; global handler not installed');
+    // logger.error, not warn: this means crash reporting is silently OFF —
+    // it must be visible in production logs (warn is dev-only).
+    logger.error('[crashReporting] ErrorUtils not available; global handler not installed');
     return;
   }
 

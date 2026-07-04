@@ -1,4 +1,5 @@
 
+import { enforceSecureTransport } from '@/constants/config';
 import logger from '@/lib/logger';
 export interface Coordinate {
   latitude: number;
@@ -54,8 +55,10 @@ let warnedMissingRoutingUrl = false;
 function getRoutingBaseUrl(): string | null {
   const configured = process.env.EXPO_PUBLIC_ROUTING_URL;
   if (configured) {
-    // Strip trailing slashes so path concatenation stays predictable
-    return configured.replace(/\/+$/, '');
+    // Same TLS policy as the API/WS URLs (http:// upgraded to https:// in
+    // production), and strip trailing slashes so path concatenation stays
+    // predictable.
+    return enforceSecureTransport(configured).replace(/\/+$/, '');
   }
 
   if (__DEV__) {
@@ -64,7 +67,9 @@ function getRoutingBaseUrl(): string | null {
 
   if (!warnedMissingRoutingUrl) {
     warnedMissingRoutingUrl = true;
-    logger.warn(
+    // logger.error, not warn: misconfiguration must be visible in production
+    // logs (warn is dev-only).
+    logger.error(
       '[routing] EXPO_PUBLIC_ROUTING_URL is not set in this production build. ' +
       'Route lines are disabled — maps will render without polylines. ' +
       'Set EXPO_PUBLIC_ROUTING_URL to a self-hosted OSRM server to enable routing.'

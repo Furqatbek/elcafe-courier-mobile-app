@@ -3,12 +3,72 @@
 // Dev builds fall back to localhost; production builds MUST provide the API
 // origin via EXPO_PUBLIC_RORK_API_BASE_URL and are forced onto TLS
 // (http:// is upgraded to https://, ws:// to wss://).
-const enforceSecureTransport = (url: string): string => {
+
+/**
+ * Upgrade plaintext transport schemes to their TLS equivalents
+ * (http:// → https://, ws:// → wss://).
+ * Pure (no __DEV__ dependency) so it is directly unit-testable.
+ */
+export const upgradeToSecureTransport = (url: string): string =>
+  url.replace(/^http:\/\//i, 'https://').replace(/^ws:\/\//i, 'wss://');
+
+/**
+ * Production builds are forced onto TLS; dev builds pass through unchanged
+ * (localhost over plain http/ws is fine there).
+ *
+ * Exported so every module that consumes an EXPO_PUBLIC_* URL directly
+ * (lib/routing.ts, lib/crashReporting.ts) applies the same policy as the
+ * API/WS URLs resolved here.
+ */
+export const enforceSecureTransport = (url: string): string => {
   if (__DEV__) {
     return url;
   }
-  return url.replace(/^http:\/\//i, 'https://').replace(/^ws:\/\//i, 'wss://');
+  return upgradeToSecureTransport(url);
 };
+
+/**
+ * True when an env value still carries an unreplaced eas.json placeholder
+ * (e.g. "REPLACE_ME_PROD_API_BASE_URL"). Placeholders are truthy strings, so
+ * plain `if (!value)` guards never catch them — this check does.
+ */
+export const containsReplaceMePlaceholder = (value: string | undefined): boolean =>
+  typeof value === 'string' && value.toUpperCase().includes('REPLACE_ME');
+
+/**
+ * Names of the env entries whose values still contain a REPLACE_ME
+ * placeholder. Pure and testable — the module-load guard below feeds it the
+ * real process.env values.
+ */
+export const findPlaceholderVars = (
+  env: Record<string, string | undefined>
+): string[] => Object.keys(env).filter((name) => containsReplaceMePlaceholder(env[name]));
+
+// Every EXPO_PUBLIC_* variable the app consumes, listed literally — Expo
+// inlines `process.env.EXPO_PUBLIC_X` at bundle time, so dynamic
+// `process.env[name]` lookups do NOT work here.
+const CONSUMED_EXPO_PUBLIC_ENV: Record<string, string | undefined> = {
+  EXPO_PUBLIC_RORK_API_BASE_URL: process.env.EXPO_PUBLIC_RORK_API_BASE_URL,
+  EXPO_PUBLIC_WS_URL: process.env.EXPO_PUBLIC_WS_URL,
+  EXPO_PUBLIC_WS_SOCKJS_URL: process.env.EXPO_PUBLIC_WS_SOCKJS_URL,
+  EXPO_PUBLIC_PROJECT_ID: process.env.EXPO_PUBLIC_PROJECT_ID,
+  EXPO_PUBLIC_ROUTING_URL: process.env.EXPO_PUBLIC_ROUTING_URL,
+  EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL,
+  EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
+  EXPO_PUBLIC_CRASH_ENDPOINT: process.env.EXPO_PUBLIC_CRASH_ENDPOINT,
+};
+
+// Fail LOUDLY at startup instead of shipping a build where every network
+// call silently targets a "REPLACE_ME_*" origin (see docs/PRODUCTION.md §1).
+if (!__DEV__) {
+  const placeholderVars = findPlaceholderVars(CONSUMED_EXPO_PUBLIC_ENV);
+  if (placeholderVars.length > 0) {
+    throw new Error(
+      `Production build has unreplaced REPLACE_ME placeholder(s) in: ${placeholderVars.join(', ')}. ` +
+      'Replace them with real values in eas.json before building (docs/PRODUCTION.md, section 1).'
+    );
+  }
+}
 
 const resolveBaseUrl = (): string => {
   const envBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
@@ -25,9 +85,6 @@ export const BASE_URL = resolveBaseUrl();
 
 // API Endpoints - Based on courier-app-api.md documentation
 export const API_ENDPOINTS = {
-  // tRPC endpoint for type-safe API calls
-  TRPC: '/api/trpc',
-
   // Authentication endpoints
   AUTH: {
     LOGIN: '/api/v1/auth/login',
@@ -227,6 +284,7 @@ export const ORDER_CONFIG = {
   REFRESH_INTERVAL: 30000, // 30 seconds
   MAX_ACTIVE_ORDERS: 3,
   NEW_ORDER_TIMEOUT: 300000, // 5 minutes to accept
+  OFFER_TIMEOUT_SECONDS: 60, // client-side countdown on the new-order offer modal
 } as const;
 
 // Default Values
