@@ -16,7 +16,11 @@ import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
-import { BASE_URL } from '@/constants/config';
+
+// API_ENDPOINTS-style path builder; move into constants/config.ts
+// (API_ENDPOINTS.COURIER.REVIEWS) once that file is free to edit.
+const REVIEWS_ENDPOINT = (page: number, size: number) =>
+  `/api/v1/couriers/me/reviews?page=${page}&size=${size}`;
 
 interface Review {
   id: number | string;
@@ -64,7 +68,7 @@ function StarRating({ rating }: { rating: number }) {
 export default function ReviewsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user, courierProfile, accessToken } = useCourier();
+  const { authenticatedFetch } = useCourier();
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [page, setPage] = useState(0);
@@ -75,19 +79,9 @@ export default function ReviewsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchReviews = useCallback(async (pageNum: number, refresh = false) => {
-    if (!accessToken) return;
-
     try {
       setError(null);
-      const response = await fetch(
-        `${BASE_URL}/api/v1/couriers/me/reviews?page=${pageNum}&size=${PAGE_SIZE}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        }
-      );
+      const response = await authenticatedFetch(REVIEWS_ENDPOINT(pageNum, PAGE_SIZE));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -121,7 +115,7 @@ export default function ReviewsScreen() {
       console.error('[Reviews] Failed to fetch reviews:', err);
       setError(t('reviews.loading_error'));
     }
-  }, [accessToken, t]);
+  }, [authenticatedFetch, t]);
 
   // Initial load
   useEffect(() => {

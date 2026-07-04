@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Lock, Mail, User, Phone, Eye, EyeOff } from 'lucide-react-native';
@@ -7,6 +7,11 @@ import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { BASE_URL, API_ENDPOINTS } from '@/constants/config';
 import { Logo } from '@/components/Logo';
+
+// Terms/Privacy only render as links when their URLs are configured;
+// otherwise they show as plain text (no dead links).
+const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL;
+const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL;
 
 // Field error state type
 interface FieldErrors {
@@ -292,7 +297,18 @@ export default function RegisterScreen() {
               <ErrorText error={errors.confirmPassword} />
 
               <Text style={styles.termsText}>
-                {t('register.by_signing_up')} <Text style={styles.linkText}>{t('register.terms')}</Text> {t('register.and')} <Text style={styles.linkText}>{t('register.privacy')}</Text>
+                {t('register.by_signing_up')}{' '}
+                {TERMS_URL ? (
+                  <Text style={styles.linkText} onPress={() => Linking.openURL(TERMS_URL)}>{t('register.terms')}</Text>
+                ) : (
+                  <Text>{t('register.terms')}</Text>
+                )}{' '}
+                {t('register.and')}{' '}
+                {PRIVACY_URL ? (
+                  <Text style={styles.linkText} onPress={() => Linking.openURL(PRIVACY_URL)}>{t('register.privacy')}</Text>
+                ) : (
+                  <Text>{t('register.privacy')}</Text>
+                )}
               </Text>
 
               <Button

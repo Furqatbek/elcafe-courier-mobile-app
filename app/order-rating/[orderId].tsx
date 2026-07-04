@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
+import { useCourier } from '@/context/CourierContext';
 
 interface RatingCategory {
   id: string;
@@ -33,6 +34,7 @@ export default function OrderRatingScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { authenticatedFetch } = useCourier();
 
   const [overallRating, setOverallRating] = useState(0);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -82,15 +84,42 @@ export default function OrderRatingScreen() {
 
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await authenticatedFetch(
+        `/api/v1/couriers/me/orders/${orderId}/rating`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            rating: overallRating,
+            tags: selectedTags,
+            comment: comment.trim() || undefined,
+          }),
+        }
+      );
 
-      // In production, submit rating to API
-      // await api.submitRating({ orderId, overallRating, selectedTags, comment });
+      if (!response.ok) {
+        let message = '';
+        try {
+          const data = await response.json();
+          message = data?.message || '';
+        } catch {
+          // Non-JSON error body — fall through to generic message
+        }
+        throw new Error(message || `HTTP ${response.status}`);
+      }
 
       setIsSubmitted(true);
     } catch (err: any) {
-      Alert.alert(t('common.error_title'), err.message || t('rating.submit_failed'));
+      // The rating was NOT saved — say so, and never trap the courier here.
+      Alert.alert(
+        t('common.error_title'),
+        err?.message
+          ? `${t('rating.submit_failed')}\n\n${err.message}`
+          : t('rating.submit_failed'),
+        [
+          { text: t('common.retry', 'Retry'), style: 'default' },
+          { text: t('rating.skip'), style: 'cancel', onPress: handleClose },
+        ]
+      );
     } finally {
       setIsLoading(false);
     }
@@ -222,6 +251,14 @@ export default function OrderRatingScreen() {
           isLoading={isLoading}
           style={styles.submitButton}
         />
+
+        <TouchableOpacity
+          style={styles.skipButton}
+          onPress={handleClose}
+          disabled={isLoading}
+        >
+          <Text style={styles.skipButtonText}>{t('rating.skip')}</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -346,6 +383,15 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 8,
+  },
+  skipButton: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  skipButtonText: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    fontWeight: '600',
   },
   // Success state
   successContainer: {

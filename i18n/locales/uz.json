@@ -26,7 +26,8 @@
     "this_week": "Bu hafta",
     "month": "Oy",
     "min": "daq",
-    "hour": "s"
+    "hour": "s",
+    "retry": "Qayta urinish"
   },
   "login": {
     "app_subtitle": "Tezroq yetkazing, ko'proq daromad oling.",
@@ -180,7 +181,13 @@
     "logout_all_confirm": "Barcha qurilmalardan chiqishni xohlaysizmi? Har bir qurilmada qayta kirish kerak bo'ladi.",
     "logout_all_failed": "Barcha qurilmalardan chiqib bo'lmadi. Qaytadan urinib ko'ring.",
     "version": "Versiya {{version}}",
-    "reviews": "Mening sharhlarim"
+    "reviews": "Mening sharhlarim",
+    "delete_account": "Hisobni o'chirish",
+    "delete_account_subtitle": "Hisobingiz va ma'lumotlaringizni butunlay o'chirish",
+    "delete_account_title": "Hisobni o'chirish",
+    "delete_account_confirm": "Hisobingiz, profilingiz va yetkazib berish tarixingiz butunlay o'chiriladi. Bu amalni bekor qilib bo'lmaydi. Hisobingizni o'chirishga ishonchingiz komilmi?",
+    "delete_account_button": "O'chirish",
+    "delete_account_failed": "Hisobni o'chirib bo'lmadi. Qayta urinib ko'ring."
   },
   "reviews": {
     "title": "Mening sharhlarim",
@@ -274,7 +281,10 @@
     "resend_email": "Email olmadingizmi? Qayta yuborish",
     "email_resent": "Email muvaffaqiyatli yuborildi!",
     "resend_failed": "Qayta yuborib bo'lmadi.",
-    "back_to_login": "Kirishga qaytish"
+    "back_to_login": "Kirishga qaytish",
+    "no_email_reset": "Parolni elektron pochta orqali tiklash hozircha mavjud emas. Telefoningizga yuborilgan bir martalik kod yordamida parolsiz kirishingiz mumkin.",
+    "login_with_phone": "Telefon kodi bilan kirish",
+    "contact_support": "Qo'llab-quvvatlash bilan bog'lanish"
   },
   "edit_profile": {
     "title": "Profilni tahrirlash",
@@ -392,11 +402,11 @@
       "vehicle_requirements": "Transportga qanday talablar bor?",
       "vehicle_requirements_answer": "Transportingiz yaxshi holatda bo'lishi, sug'urta qilingan bo'lishi va mahalliy qoidalarga mos kelishi kerak. Talablar transport turiga qarab farq qiladi.",
       "reset_password": "Parolni qanday tiklash mumkin?",
-      "reset_password_answer": "Kirish ekranida \"Parolni unutdingizmi?\" ni bosing va emailni kiriting. Yangi parol yaratish uchun havola olasiz.",
+      "reset_password_answer": "Parolni elektron pochta orqali tiklash hozircha mavjud emas. Kirish ekranida \"Parolni unutdingizmi?\" ni bosing va telefoningizga yuborilgan bir martalik kod bilan kiring.",
       "update_profile": "Profilni qanday yangilayman?",
       "update_profile_answer": "Sozlamalar > Shaxsiy ma'lumotlar > Tahrirlash ga o'ting. Ma'lumotlarni yangilang va o'zgarishlarni saqlang.",
       "delete_account": "Hisobni qanday o'chiraman?",
-      "delete_account_answer": "Sozlamalar > Xavfsizlik > Hisobni o'chirish ga o'ting. Bu amal qaytarib bo'lmasligini unutmang."
+      "delete_account_answer": "Sozlamalarga o'ting va \"Hisobni o'chirish\" tugmasini bosing. Bu amal qaytarib bo'lmasligini unutmang."
     }
   },
   "language": {
@@ -481,7 +491,14 @@
     "otp_sent": "Kod telefoningizga yuborildi",
     "otp_failed": "Kod yuborib bo'lmadi. Qayta urinib ko'ring.",
     "verification_failed": "Noto'g'ri kod. Qayta urinib ko'ring.",
-    "use_email": "Email bilan kirish"
+    "use_email": "Email bilan kirish",
+    "enter_complete_otp": "Tasdiqlash kodini to'liq kiriting",
+    "enter_phone": "Telefon raqamingizni kiriting",
+    "otp_request_failed": "Kod yuborib bo'lmadi. Qayta urinib ko'ring.",
+    "otp_resent": "Tasdiqlash kodi qayta yuborildi!",
+    "resend_code": "Kodni qayta yuborish",
+    "send_code": "Kod yuborish",
+    "verify": "Tasdiqlash"
   },
   "become_courier": {
     "title": "Kuryer bo'lish",
@@ -518,7 +535,17 @@
     },
     "success_title": "Ariza yuborildi!",
     "success_message": "Arizangiz ko'rib chiqilmoqda. Tez orada siz bilan bog'lanamiz.",
-    "error_message": "Ariza yuborib bo'lmadi. Qayta urinib ko'ring."
+    "error_message": "Ariza yuborib bo'lmadi. Qayta urinib ko'ring.",
+    "error": "Arizani yuborib bo'lmadi. Qayta urinib ko'ring.",
+    "header": "Jamoamizga qo'shiling",
+    "license_invalid": "Haqiqiy guvohnoma raqamini kiriting",
+    "license_required": "Haydovchilik guvohnomasi raqami majburiy",
+    "radius_hint": "Ushbu radius ichidagi buyurtmalar sizga birinchi navbatda ko'rsatiladi",
+    "radius_invalid": "To'g'ri radius kiriting (1–50 km)",
+    "success": "Ariza muvaffaqiyatli yuborildi!",
+    "vehicle_number_invalid": "Haqiqiy transport raqamini kiriting",
+    "vehicle_number_required": "Transport vositasi raqami majburiy",
+    "verification_note": "Arizangiz jamoamiz tomonidan ko'rib chiqiladi. Bu odatda 1–2 ish kunini oladi. Tasdiqlangandan so'ng bildirishnoma olasiz."
   },
   "available_orders": {
     "title": "Mavjud buyurtmalar",
@@ -551,7 +578,13 @@
     "order_taken_title": "Buyurtma endi mavjud emas",
     "order_taken_message": "Bu buyurtma {{courierName}} tomonidan qabul qilindi",
     "order_already_taken": "Bu buyurtma boshqa kuryer tomonidan allaqachon qabul qilingan.",
-    "another_courier": "boshqa kuryer"
+    "another_courier": "boshqa kuryer",
+    "accept_error": "Buyurtmani qabul qilib bo'lmadi. Qayta urinib ko'ring.",
+    "go_online": "Onlayn bo'lish",
+    "loading": "Yaqin atrofdagi buyurtmalar qidirilmoqda...",
+    "no_orders_title": "Mavjud buyurtmalar yo'q",
+    "offline_message": "Buyurtmalarni qabul qilishni boshlash uchun onlayn bo'ling",
+    "offline_title": "Siz oflaynsiz"
   },
   "order_offer": {
     "new_order": "Yangi buyurtma!",
@@ -610,7 +643,23 @@
     "validation": {
       "issue_type_required": "Muammo turini tanlang",
       "description_required": "Muammo tavsifini kiriting"
-    }
+    },
+    "accident": "Avariya",
+    "camera_permission": "Kameraga ruxsat talab qilinadi",
+    "choose_photo": "Galereya",
+    "customer_unavailable": "Mijoz mavjud emas",
+    "enter_description": "Muammoni tavsiflab bering",
+    "error": "Hisobotni yuborib bo'lmadi. Qayta urinib ko'ring.",
+    "header": "Muammo haqida xabar berish",
+    "max_photos": "Ko'pi bilan 3 ta rasm mumkin",
+    "other": "Boshqa",
+    "photos_optional": "Rasmlar (ixtiyoriy)",
+    "restaurant_delay": "Restoran kechikishi",
+    "select_issue": "Muammo turini tanlang",
+    "success": "Muammo haqida xabar yuborildi!",
+    "take_photo": "Kamera",
+    "vehicle_issue": "Transport bilan muammo",
+    "wrong_address": "Noto'g'ri manzil"
   },
   "notifications": {
     "title": "Bildirishnomalar",
@@ -671,6 +720,31 @@
     "unknown_error": "Xatolik yuz berdi. Qayta urinib ko'ring.",
     "timeout": "Kutish vaqti tugadi. Qayta urinib ko'ring.",
     "location_permission_denied": "Joylashuvga ruxsat berilmadi.",
-    "location_unavailable": "Joylashuvni aniqlab bo'lmadi."
+    "location_unavailable": "Joylashuvni aniqlab bo'lmadi.",
+    "api": {
+      "400": "Noto'g'ri so'rov",
+      "401": "Davom etish uchun tizimga kiring",
+      "403": "Sizda bunga ruxsat yo'q",
+      "404": "Topilmadi",
+      "409": "Amallar to'qnashuvi",
+      "422": "Tekshiruv xatosi",
+      "429": "So'rovlar juda ko'p",
+      "500": "Server xatosi",
+      "courier_not_available": "Buyurtmalarni qabul qilish uchun onlayn bo'lishingiz kerak",
+      "courier_not_verified": "Onlayn bo'lishdan oldin hisobingiz tasdiqlanishi kerak",
+      "order_already_assigned": "Bu buyurtma allaqachon boshqa kuryer tomonidan olingan",
+      "order_not_ready": "Bu buyurtma hali olib ketishga tayyor emas",
+      "order_not_yours": "Bu buyurtma sizga biriktirilmagan"
+    },
+    "auth": "Sessiya muddati tugadi. Qaytadan kiring.",
+    "bad_gateway": "Xizmat vaqtincha mavjud emas.",
+    "bad_request": "Noto'g'ri so'rov. Qayta urinib ko'ring.",
+    "conflict": "Bu amal joriy holatga zid.",
+    "network": "Tarmoq xatosi. Internet aloqasini tekshiring.",
+    "rate_limit": "So'rovlar juda ko'p. Biroz kuting.",
+    "server": "Server xatosi. Keyinroq urinib ko'ring.",
+    "service_unavailable": "Xizmat hozircha mavjud emas.",
+    "unknown": "Kutilmagan xato yuz berdi.",
+    "validation": "Kiritilgan ma'lumotlarni tekshirib, qayta urinib ko'ring."
   }
 }

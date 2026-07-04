@@ -1,162 +1,87 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  TouchableWithoutFeedback,
-  Keyboard,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Mail, ArrowLeft, CheckCircle } from 'lucide-react-native';
+import { ArrowLeft, KeyRound, Mail } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
-import { validateEmail } from '@/lib/validation';
+import { APP_CONFIG } from '@/constants/config';
+
+// Only offer "Contact support" when a real support email is configured —
+// the default courierapp.com address is a placeholder.
+const SUPPORT_EMAIL: string = APP_CONFIG.SUPPORT_EMAIL;
+const hasRealSupportEmail =
+  !!SUPPORT_EMAIL && !SUPPORT_EMAIL.toLowerCase().includes('courierapp.com');
 
 export default function ForgotPasswordScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [error, setError] = useState('');
 
-  const handleSubmit = async () => {
-    setError('');
-
-    const emailValidation = validateEmail(email);
-    if (!emailValidation.isValid) {
-      setError(emailValidation.error || '');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      // Simulate API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // In production, call your password reset API here
-      // await api.requestPasswordReset(email);
-
-      setIsSubmitted(true);
-    } catch (err: any) {
-      Alert.alert(
-        t('common.error_title'),
-        err.message || t('forgot_password.request_failed')
-      );
-    } finally {
-      setIsLoading(false);
-    }
+  const handlePhoneLogin = () => {
+    router.replace('/login-otp');
   };
 
-  const handleResend = async () => {
-    setIsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      Alert.alert(t('common.success'), t('forgot_password.email_resent'));
-    } catch (err) {
-      Alert.alert(t('common.error_title'), t('forgot_password.resend_failed'));
-    } finally {
-      setIsLoading(false);
-    }
+  const handleContactSupport = () => {
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
   };
 
-  if (isSubmitted) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.successContent}>
-          <View style={styles.successIconContainer}>
-            <CheckCircle size={64} color={Colors.primary} />
+  return (
+    <View style={styles.container}>
+      <View style={styles.content}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
+          <ArrowLeft size={24} color={Colors.text} />
+        </TouchableOpacity>
+
+        <View style={styles.header}>
+          <View style={styles.iconContainer}>
+            <KeyRound size={40} color={Colors.primary} />
           </View>
-          <Text style={styles.successTitle}>{t('forgot_password.check_email')}</Text>
-          <Text style={styles.successMessage}>
-            {t('forgot_password.email_sent_message', { email })}
+          <Text style={styles.title}>{t('forgot_password.title')}</Text>
+          <Text style={styles.subtitle}>
+            {t(
+              'forgot_password.no_email_reset',
+              'Password reset by email is not available yet. You can log in without a password using a one-time code sent to your phone.'
+            )}
           </Text>
+        </View>
 
-          <View style={styles.successActions}>
-            <Button
-              title={t('forgot_password.open_email')}
-              onPress={() => {}}
-              style={styles.successButton}
-            />
-            <TouchableOpacity onPress={handleResend} disabled={isLoading}>
-              <Text style={styles.resendText}>
-                {isLoading ? t('common.loading') : t('forgot_password.resend_email')}
+        <View style={styles.actions}>
+          <Button
+            title={t('forgot_password.login_with_phone', 'Log in with phone code')}
+            onPress={handlePhoneLogin}
+            style={styles.phoneButton}
+          />
+
+          {hasRealSupportEmail && (
+            <TouchableOpacity
+              style={styles.supportButton}
+              onPress={handleContactSupport}
+            >
+              <Mail size={18} color={Colors.primary} />
+              <Text style={styles.supportButtonText}>
+                {t('forgot_password.contact_support', 'Contact support')}
               </Text>
             </TouchableOpacity>
-          </View>
+          )}
+        </View>
 
-          <TouchableOpacity
-            style={styles.backToLoginLink}
-            onPress={() => router.replace('/login')}
-          >
-            <ArrowLeft size={20} color={Colors.primary} />
-            <Text style={styles.backToLoginText}>{t('forgot_password.back_to_login')}</Text>
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>{t('forgot_password.remember_password')}</Text>
+          <TouchableOpacity onPress={() => router.replace('/login')}>
+            <Text style={styles.linkText}>{t('login.login_button')}</Text>
           </TouchableOpacity>
         </View>
       </View>
-    );
-  }
-
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.content}
-        >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <ArrowLeft size={24} color={Colors.text} />
-          </TouchableOpacity>
-
-          <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <Mail size={40} color={Colors.primary} />
-            </View>
-            <Text style={styles.title}>{t('forgot_password.title')}</Text>
-            <Text style={styles.subtitle}>{t('forgot_password.subtitle')}</Text>
-          </View>
-
-          <View style={styles.form}>
-            <Input
-              label={t('forgot_password.email_label')}
-              placeholder={t('login.email_placeholder')}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setError('');
-              }}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              icon={Mail}
-              error={error}
-            />
-
-            <Button
-              title={t('forgot_password.send_link')}
-              onPress={handleSubmit}
-              isLoading={isLoading}
-              style={styles.submitButton}
-            />
-          </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>{t('forgot_password.remember_password')}</Text>
-            <TouchableOpacity onPress={() => router.replace('/login')}>
-              <Text style={styles.linkText}>{t('login.login_button')}</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </TouchableWithoutFeedback>
+    </View>
   );
 }
 
@@ -211,16 +136,28 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 20,
   },
-  form: {
+  actions: {
     marginBottom: 32,
   },
-  submitButton: {
-    marginTop: 8,
+  phoneButton: {
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
+  },
+  supportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  supportButtonText: {
+    color: Colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
@@ -237,60 +174,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
     marginLeft: 4,
-  },
-  // Success state styles
-  successContent: {
-    flex: 1,
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  successIconContainer: {
-    width: 120,
-    height: 120,
-    backgroundColor: '#ECFDF5',
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  successMessage: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    paddingHorizontal: 20,
-    marginBottom: 32,
-  },
-  successActions: {
-    width: '100%',
-    alignItems: 'center',
-  },
-  successButton: {
-    width: '100%',
-    marginBottom: 16,
-  },
-  resendText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backToLoginLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 40,
-  },
-  backToLoginText: {
-    color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
   },
 });

@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, ScrollView, Pressable, Switch, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { User, Star, Bell, HelpCircle, LogOut, ChevronRight, Car, Globe, Smartphone } from 'lucide-react-native';
+import { User, Star, Bell, HelpCircle, LogOut, ChevronRight, Car, Globe, Smartphone, Trash2 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { useCourier } from '@/context/CourierContext';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
+import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
+
+const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -46,9 +50,39 @@ const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { user, courierProfile, logout, logoutAllDevices } = useCourier();
+  const { user, courierProfile, logout, logoutAllDevices, accessToken, authenticatedFetch } = useCourier();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Initialize the notifications toggle from persisted preference
+  useEffect(() => {
+    AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY)
+      .then((stored) => {
+        if (stored !== null) {
+          setNotificationsEnabled(stored === 'true');
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load notifications preference:', error);
+      });
+  }, []);
+
+  const handleToggleNotifications = async (enabled: boolean) => {
+    setNotificationsEnabled(enabled);
+    try {
+      await AsyncStorage.setItem(NOTIFICATIONS_ENABLED_KEY, String(enabled));
+      if (accessToken) {
+        if (enabled) {
+          await registerDeviceToken(accessToken);
+        } else {
+          await unregisterDeviceToken(accessToken);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update notifications preference:', error);
+    }
+  };
 
   // Get display name from courierProfile or user
   const displayName = courierProfile?.userName ||
@@ -128,6 +162,56 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    const confirmDelete = Platform.OS === 'web'
+      ? window.confirm(t('settings.delete_account_confirm', 'This will permanently delete your account, profile and delivery history. This action cannot be undone. Are you sure you want to delete your account?'))
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            t('settings.delete_account_title', 'Delete Account'),
+            t('settings.delete_account_confirm', 'This will permanently delete your account, profile and delivery history. This action cannot be undone. Are you sure you want to delete your account?'),
+            [
+              { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+              { text: t('settings.delete_account_button', 'Delete'), style: 'destructive', onPress: () => resolve(true) },
+            ]
+          );
+        });
+
+    if (!confirmDelete) return;
+
+    setIsDeletingAccount(true);
+    try {
+      const response = await authenticatedFetch('/api/v1/users/me', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        let message = '';
+        try {
+          const data = await response.json();
+          message = data?.message || '';
+        } catch {
+          // Non-JSON error body — fall through to generic message
+        }
+        throw new Error(message || `HTTP ${response.status}`);
+      }
+
+      await logout();
+      router.replace('/login');
+    } catch (error: any) {
+      console.error('Account deletion failed:', error);
+      const message = error?.message
+        ? `${t('settings.delete_account_failed', 'Failed to delete account. Please try again.')}\n\n${error.message}`
+        : t('settings.delete_account_failed', 'Failed to delete account. Please try again.');
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert(t('common.error'), message);
+      }
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="settings">
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -179,7 +263,7 @@ export default function SettingsScreen() {
           rightElement={
             <Switch
               value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
+              onValueChange={handleToggleNotifications}
               trackColor={{ false: '#E2E8F0', true: Colors.primary }}
               thumbColor={'#FFFFFF'}
             />
@@ -227,6 +311,22 @@ export default function SettingsScreen() {
             <Text style={styles.logoutButtonSubtitle}>{t('settings.logout_all_subtitle')}</Text>
           </View>
           {isLoggingOut && <ActivityIndicator size="small" color={Colors.danger} />}
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.logoutButton,
+            pressed && styles.logoutButtonPressed,
+          ]}
+          onPress={handleDeleteAccount}
+          disabled={isDeletingAccount || isLoggingOut}
+        >
+          <Trash2 size={20} color={Colors.danger} />
+          <View style={styles.logoutButtonText}>
+            <Text style={styles.logoutButtonTitle}>{t('settings.delete_account', 'Delete Account')}</Text>
+            <Text style={styles.logoutButtonSubtitle}>{t('settings.delete_account_subtitle', 'Permanently delete your account and data')}</Text>
+          </View>
+          {isDeletingAccount && <ActivityIndicator size="small" color={Colors.danger} />}
         </Pressable>
       </View>
       

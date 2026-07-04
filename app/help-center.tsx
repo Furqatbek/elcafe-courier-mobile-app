@@ -17,7 +17,6 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  MessageCircle,
   Phone,
   Mail,
   HelpCircle,
@@ -28,6 +27,19 @@ import {
   FileText,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { APP_CONFIG } from '@/constants/config';
+
+// Contact details come from config; rows whose configured value is still a
+// known placeholder are hidden so we never point users at dead contacts.
+const SUPPORT_PHONE: string = APP_CONFIG.SUPPORT_PHONE;
+const SUPPORT_EMAIL: string = APP_CONFIG.SUPPORT_EMAIL;
+const hasRealSupportPhone = !!SUPPORT_PHONE && SUPPORT_PHONE !== '+1234567890';
+const hasRealSupportEmail =
+  !!SUPPORT_EMAIL && !SUPPORT_EMAIL.toLowerCase().includes('courierapp.com');
+
+// Legal documents are only linked when their URLs are configured.
+const TERMS_URL = process.env.EXPO_PUBLIC_TERMS_URL;
+const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL;
 
 interface FAQItem {
   question: string;
@@ -124,37 +136,34 @@ export default function HelpCenterScreen() {
   ];
 
   const contactOptions = [
-    {
-      id: 'chat',
-      title: t('help.live_chat'),
-      subtitle: t('help.live_chat_sub'),
-      icon: MessageCircle,
-      color: '#3B82F6',
-      onPress: () => {
-        // Open live chat
-        router.push('/chat?type=support');
-      },
-    },
-    {
-      id: 'phone',
-      title: t('help.call_support'),
-      subtitle: t('help.call_support_sub'),
-      icon: Phone,
-      color: '#10B981',
-      onPress: () => {
-        Linking.openURL('tel:+1234567890');
-      },
-    },
-    {
-      id: 'email',
-      title: t('help.email_support'),
-      subtitle: t('help.email_support_sub'),
-      icon: Mail,
-      color: '#F59E0B',
-      onPress: () => {
-        Linking.openURL('mailto:support@courierapp.com');
-      },
-    },
+    ...(hasRealSupportPhone
+      ? [
+          {
+            id: 'phone',
+            title: t('help.call_support'),
+            subtitle: t('help.call_support_sub'),
+            icon: Phone,
+            color: '#10B981',
+            onPress: () => {
+              Linking.openURL(`tel:${SUPPORT_PHONE}`);
+            },
+          },
+        ]
+      : []),
+    ...(hasRealSupportEmail
+      ? [
+          {
+            id: 'email',
+            title: t('help.email_support'),
+            subtitle: t('help.email_support_sub'),
+            icon: Mail,
+            color: '#F59E0B',
+            onPress: () => {
+              Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+            },
+          },
+        ]
+      : []),
   ];
 
   const toggleCategory = (categoryId: string) => {
@@ -205,6 +214,7 @@ export default function HelpCenterScreen() {
         </View>
 
         {/* Contact Options */}
+        {contactOptions.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('help.contact_us')}</Text>
           <View style={styles.contactGrid}>
@@ -226,6 +236,7 @@ export default function HelpCenterScreen() {
             })}
           </View>
         </View>
+        )}
 
         {/* FAQ Section */}
         <View style={styles.section}>
@@ -293,21 +304,33 @@ export default function HelpCenterScreen() {
         </View>
 
         {/* Legal Links */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('help.legal')}</Text>
+        {(TERMS_URL || PRIVACY_URL) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('help.legal')}</Text>
 
-          <TouchableOpacity style={styles.legalItem}>
-            <FileText size={20} color={Colors.textSecondary} />
-            <Text style={styles.legalText}>{t('help.terms_of_service')}</Text>
-            <ChevronRight size={20} color={Colors.textLight} />
-          </TouchableOpacity>
+            {TERMS_URL && (
+              <TouchableOpacity
+                style={styles.legalItem}
+                onPress={() => Linking.openURL(TERMS_URL)}
+              >
+                <FileText size={20} color={Colors.textSecondary} />
+                <Text style={styles.legalText}>{t('help.terms_of_service')}</Text>
+                <ChevronRight size={20} color={Colors.textLight} />
+              </TouchableOpacity>
+            )}
 
-          <TouchableOpacity style={styles.legalItem}>
-            <FileText size={20} color={Colors.textSecondary} />
-            <Text style={styles.legalText}>{t('help.privacy_policy')}</Text>
-            <ChevronRight size={20} color={Colors.textLight} />
-          </TouchableOpacity>
-        </View>
+            {PRIVACY_URL && (
+              <TouchableOpacity
+                style={styles.legalItem}
+                onPress={() => Linking.openURL(PRIVACY_URL)}
+              >
+                <FileText size={20} color={Colors.textSecondary} />
+                <Text style={styles.legalText}>{t('help.privacy_policy')}</Text>
+                <ChevronRight size={20} color={Colors.textLight} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

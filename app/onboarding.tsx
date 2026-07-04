@@ -14,9 +14,16 @@ import {
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Box, BellRing, Navigation as NavigationIcon, TrendingUp, ChevronRight } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 
 const { width, height } = Dimensions.get('window');
+
+// Keep in sync with app/index.tsx, which reads this flag to skip onboarding
+const HAS_SEEN_ONBOARDING_KEY = 'hasSeenOnboarding';
+
+// Only show the privacy policy link when a real URL is configured
+const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL;
 
 export default function OnboardingScreen() {
   const { t } = useTranslation();
@@ -70,13 +77,20 @@ export default function OnboardingScreen() {
     handleFinish();
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    try {
+      await AsyncStorage.setItem(HAS_SEEN_ONBOARDING_KEY, 'true');
+    } catch (error) {
+      // Non-fatal: onboarding will show again next launch
+      console.error('Failed to persist onboarding flag:', error);
+    }
     router.replace('/login');
   };
 
   const handlePrivacyPolicy = () => {
-    // Placeholder for privacy policy link
-    Linking.openURL('https://google.com');
+    if (PRIVACY_URL) {
+      Linking.openURL(PRIVACY_URL);
+    }
   };
 
   const renderItem = ({ item }: { item: typeof slides[0] }) => {
@@ -147,9 +161,11 @@ export default function OnboardingScreen() {
                 <ChevronRight size={20} color={Colors.surface} />
               </TouchableOpacity>
               
-              <TouchableOpacity onPress={handlePrivacyPolicy} style={styles.privacyButton}>
-                <Text style={styles.privacyText}>{t('onboarding.privacy_policy')}</Text>
-              </TouchableOpacity>
+              {PRIVACY_URL && (
+                <TouchableOpacity onPress={handlePrivacyPolicy} style={styles.privacyButton}>
+                  <Text style={styles.privacyText}>{t('onboarding.privacy_policy')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <View style={styles.navigationButtons}>

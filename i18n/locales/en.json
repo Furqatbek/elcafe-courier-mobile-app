@@ -26,7 +26,8 @@
     "this_week": "This Week",
     "month": "Month",
     "min": "min",
-    "hour": "h"
+    "hour": "h",
+    "retry": "Retry"
   },
   "login": {
     "app_subtitle": "Deliver faster, earn more.",
@@ -180,7 +181,13 @@
     "logout_all_confirm": "Are you sure you want to log out from all devices? You will need to log in again on each device.",
     "logout_all_failed": "Failed to log out from all devices. Please try again.",
     "version": "Version {{version}}",
-    "reviews": "My Reviews"
+    "reviews": "My Reviews",
+    "delete_account": "Delete Account",
+    "delete_account_subtitle": "Permanently delete your account and data",
+    "delete_account_title": "Delete Account",
+    "delete_account_confirm": "This will permanently delete your account, profile and delivery history. This action cannot be undone. Are you sure you want to delete your account?",
+    "delete_account_button": "Delete",
+    "delete_account_failed": "Failed to delete account. Please try again."
   },
   "reviews": {
     "title": "My Reviews",
@@ -274,7 +281,10 @@
     "resend_email": "Didn't receive the email? Resend",
     "email_resent": "Reset email sent successfully!",
     "resend_failed": "Failed to resend email. Please try again.",
-    "back_to_login": "Back to Login"
+    "back_to_login": "Back to Login",
+    "no_email_reset": "Password reset by email is not available yet. You can log in without a password using a one-time code sent to your phone.",
+    "login_with_phone": "Log in with phone code",
+    "contact_support": "Contact support"
   },
   "edit_profile": {
     "title": "Edit Profile",
@@ -392,11 +402,11 @@
       "vehicle_requirements": "What are the vehicle requirements?",
       "vehicle_requirements_answer": "Your vehicle must be in good working condition, properly insured, and meet local regulations. Specific requirements vary by vehicle type.",
       "reset_password": "How do I reset my password?",
-      "reset_password_answer": "On the login screen, tap 'Forgot Password?' and enter your email. You'll receive a link to create a new password.",
+      "reset_password_answer": "Password reset by email is not available yet. On the login screen, tap 'Forgot Password?' and log in with a one-time code sent to your phone instead.",
       "update_profile": "How do I update my profile?",
       "update_profile_answer": "Go to Settings > Personal Information > Edit. Update your details and save your changes.",
       "delete_account": "How do I delete my account?",
-      "delete_account_answer": "Go to Settings > Security > Delete Account. Note that this action is permanent and cannot be undone."
+      "delete_account_answer": "Go to Settings and tap 'Delete Account'. Note that this action is permanent and cannot be undone."
     }
   },
   "language": {
