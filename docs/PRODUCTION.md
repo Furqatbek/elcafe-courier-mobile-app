@@ -88,10 +88,9 @@ eas submit --platform android
 - **iOS location strings** (`app.config.ts` → `ios.infoPlist`): explain
   foreground map/route usage and on-shift background delivery tracking.
   `UIBackgroundModes: ["location"]` is declared intentionally.
-- **Android `ACCESS_BACKGROUND_LOCATION`**: declared intentionally and KEPT —
-  background delivery tracking ships in wave 2. Play Console requires a
-  background-location declaration form and a short demo video showing the
-  in-app disclosure before approval.
+- **Android `ACCESS_BACKGROUND_LOCATION`**: declared intentionally and USED —
+  background delivery tracking is implemented (`lib/backgroundLocation.ts`).
+  See section 10 for the store review notes.
 - Removed as unused: `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`.
 - `LSApplicationQueriesSchemes` (`comgooglemaps`, `waze`, `maps`) allows the
   external-navigation handoff to probe installed map apps via `canOpenURL`.
@@ -111,13 +110,48 @@ strong justification.
 
 ## 9. Known gaps / follow-ups
 
-- **Background location tracking** is not implemented yet — arrives in a later
-  change (wave 2). The permissions/entitlements above are already in place for it.
 - **`expo-av` is deprecated** (removal expected in a future SDK); migrate sound
   playback to `expo-audio` before the next SDK upgrade.
-- `favicon.svg` at the repo root and `assets/images/icon.svg` / `zbr-logo.svg`
-  are no longer referenced by the build; keep as design sources or delete.
+- `favicon.svg` at the repo root is no longer referenced by the build; keep as
+  a design source or delete. (`assets/images/icon.svg` / `zbr-logo.svg` were
+  unreferenced too and have been deleted.)
 - Replace the generated placeholder brand assets in `assets/images/`
   (`icon.png`, `adaptive-icon.png`, `splash.png`, `favicon.png`) with final
   marketing-approved artwork before launch if design provides one — sizes:
   1024x1024, 1024x1024 (transparent fg, ~66% safe zone), 1284x2778, 48x48.
+
+## 10. Background location — store review notes
+
+Background tracking is implemented in `lib/backgroundLocation.ts`
+(`expo-task-manager` task `courier-location-task`, started/stopped from
+`context/CourierContext.tsx` when the courier goes on/off shift). Both stores
+review background location strictly:
+
+### Google Play Console
+
+- Complete the **background location declaration** (App content → Sensitive
+  app permissions → Location). Declared feature: *real-time tracking of an
+  on-shift delivery courier so dispatch and customers can follow active
+  deliveries*. Tracking runs only while the courier has toggled themselves
+  online and stops when they go offline or log out.
+- Provide a **short demo video** (YouTube link) showing: the in-app prominent
+  disclosure, the permission prompts (foreground then "Allow all the time"),
+  the courier going online, and the persistent foreground-service notification
+  ("ZBR Courier is on shift") while the app is backgrounded.
+- The foreground service uses `FOREGROUND_SERVICE_LOCATION` (Android 14+
+  requirement) — already declared in `app.config.ts`.
+
+### App Store review
+
+- In the App Review notes, justify `UIBackgroundModes: ["location"]` with
+  something like: *"ZBR Courier is a delivery-driver app. While a courier is
+  on shift, dispatch and customers track the delivery in real time. Couriers
+  routinely hand off to external navigation apps (Google/Yandex/Apple Maps)
+  mid-delivery, which backgrounds this app — location must keep flowing during
+  that window. Tracking starts only when the courier taps 'Go online' and
+  stops when they go offline or log out."*
+- Provide a demo account with a way to go on shift so the reviewer can see
+  the flow; `showsBackgroundLocationIndicator` is enabled so iOS shows the
+  blue status-bar indicator while backgrounded.
+- If background permission ("Always") is denied, the app degrades to
+  foreground-only tracking — it never blocks the courier from working.

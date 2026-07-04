@@ -2,7 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, WEBSOCKET_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { Platform } from 'react-native';
 import * as Location from 'expo-location';
+// Importing this module registers the background location task at startup
+// (TaskManager.defineTask must run at module scope, before any OS delivery)
+import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '@/lib/backgroundLocation';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import { apiClient, tokenStorage } from '@/services/api';
@@ -571,7 +575,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }));
       }
     } catch (error) {
-      console.error('Failed to fetch earnings:', error);
+      logger.error('Failed to fetch earnings:', error);
     } finally {
       setIsLoadingEarnings(false);
     }
@@ -625,7 +629,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         });
       }
     } catch (error) {
-      console.error('Failed to fetch order history:', error);
+      logger.error('Failed to fetch order history:', error);
     } finally {
       setIsLoadingHistory(false);
     }
@@ -648,7 +652,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch order details:', error);
+      logger.error('Failed to fetch order details:', error);
       return null;
     }
   }, [authenticatedFetch]);
@@ -692,7 +696,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       const unread = transformedNotifications.filter((n) => !n.read).length;
       setUnreadCount(unread);
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+      logger.error('Failed to fetch notifications:', error);
     } finally {
       setIsLoadingNotifications(false);
     }
@@ -710,7 +714,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setUnreadCount(data.unreadCount);
       }
     } catch (error) {
-      console.error('Failed to fetch unread count:', error);
+      logger.error('Failed to fetch unread count:', error);
     }
   }, [authenticatedFetch]);
 
@@ -727,13 +731,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
         // Sync isOnline state from backend status
         const backendIsOnline = profile.status === 'AVAILABLE' || profile.status === 'BUSY';
-        console.log('[CourierContext] Syncing status from backend:', profile.status, '-> isOnline:', backendIsOnline);
+        logger.log('[CourierContext] Syncing status from backend:', profile.status, '-> isOnline:', backendIsOnline);
         setIsOnline(backendIsOnline);
 
         return profile;
       }
     } catch (error) {
-      console.error('Failed to fetch courier profile:', error);
+      logger.error('Failed to fetch courier profile:', error);
     }
     return null;
   }, [authenticatedFetch]);
@@ -752,7 +756,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      logger.error('Failed to mark notification as read:', error);
     }
   }, [authenticatedFetch]);
 
@@ -776,7 +780,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setUnreadCount(0);
       }
     } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
+      logger.error('Failed to mark all notifications as read:', error);
     }
   }, [authenticatedFetch, unreadCount, user, courierProfile]);
 
@@ -802,7 +806,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setAvailableOrders(data.data);
       }
     } catch (error) {
-      console.error('Failed to fetch available orders:', error);
+      logger.error('Failed to fetch available orders:', error);
     } finally {
       setIsLoadingAvailableOrders(false);
     }
@@ -829,11 +833,17 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
       } catch (e) {
         // Ignore errors on web when cleaning up location subscription
-        console.log('[CourierContext] Location cleanup error (expected on web):', e);
+        logger.log('[CourierContext] Location cleanup error (expected on web):', e);
       }
       locationSubscriptionRef.current = null;
     }
     watcherHasActiveOrdersRef.current = null;
+    // Also stop OS-level background updates (no-op on web / when not running)
+    try {
+      await stopBackgroundLocationUpdates();
+    } catch (e) {
+      logger.warn('[CourierContext] Failed to stop background location updates:', e);
+    }
     setIsLocationTracking(false);
   }, []);
 
@@ -878,21 +888,21 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // onWebSocketClose here, since stompjs onDisconnect alone only covers
     // graceful deactivation.
     websocketService.onDisconnected(() => {
-      console.log('[CourierContext] WebSocket disconnected');
+      logger.log('[CourierContext] WebSocket disconnected');
       setIsWebSocketConnected(false);
 
       // Reflect server truth: backend auto-flips AVAILABLE/ON_BREAK to OFFLINE
       // on disconnect. Intent is preserved in intendedStatusRef for re-assert.
       const status = courierProfileRef.current?.status;
       if (status === 'AVAILABLE' || status === 'ON_BREAK') {
-        console.log('[CourierContext] Reflecting server auto-offline after disconnect (was', status, ')');
+        logger.log('[CourierContext] Reflecting server auto-offline after disconnect (was', status, ')');
         setCourierProfile(prev => prev ? { ...prev, status: 'OFFLINE' } : null);
         setIsOnline(false);
       }
     });
 
     websocketService.onError((error) => {
-      console.error('[CourierContext] WebSocket error:', error);
+      logger.error('[CourierContext] WebSocket error:', error);
       setIsWebSocketConnected(false);
     });
 
@@ -948,7 +958,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         };
         return [newOrder, ...prev];
       } catch (innerError) {
-        console.error('[CourierContext] Error in setAvailableOrders callback:', innerError);
+        logger.error('[CourierContext] Error in setAvailableOrders callback:', innerError);
         return prev;
       }
     });
@@ -956,14 +966,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Helper: handle ORDER_TAKEN — remove from available list and dismiss offer
   const handleOrderTaken = useCallback((takenNotification: OrderTakenNotification) => {
-    console.log('[CourierContext] ORDER_TAKEN received:', takenNotification.orderId, 'by courier:', takenNotification.courierName);
+    logger.log('[CourierContext] ORDER_TAKEN received:', takenNotification.orderId);
 
     setOrderTakenEvent(takenNotification);
 
     setAvailableOrders((prev) => {
       const filtered = prev.filter((o) => o.orderId !== takenNotification.orderId);
       if (filtered.length !== prev.length) {
-        console.log('[CourierContext] Removed order', takenNotification.orderId, 'from available orders');
+        logger.log('[CourierContext] Removed order', takenNotification.orderId, 'from available orders');
       }
       return filtered;
     });
@@ -983,21 +993,21 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       if ((message as any).type === 'ORDER_TAKEN') {
         handleOrderTaken(message as OrderTakenNotification);
       } else {
-        console.log('[CourierContext] Broadcast new order received:', (message as NewOrderNotification).orderId);
+        logger.log('[CourierContext] Broadcast new order received:', (message as NewOrderNotification).orderId);
         addNewOrderToState(message as NewOrderNotification);
       }
     } catch (error) {
-      console.error('[CourierContext] Error handling available-orders message:', error);
+      logger.error('[CourierContext] Error handling available-orders message:', error);
     }
   }, [addNewOrderToState, handleOrderTaken]);
 
   // Handler for targeted new-order messages (topic 2 — only new orders, no ORDER_TAKEN)
   const handleNewOrderMessage = useCallback((notification: NewOrderNotification) => {
     try {
-      console.log('[CourierContext] Targeted new order received:', notification.orderId);
+      logger.log('[CourierContext] Targeted new order received:', notification.orderId);
       addNewOrderToState(notification);
     } catch (error) {
-      console.error('[CourierContext] Error handling new order message:', error);
+      logger.error('[CourierContext] Error handling new order message:', error);
     }
   }, [addNewOrderToState]);
 
@@ -1064,7 +1074,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     if (courierId) {
       wsUnsubscribeRefs.current.push(
         websocketService.subscribeToLocationConfirmation(courierId, (confirmation) => {
-          console.log('[CourierContext] Location confirmed:', confirmation.lat, confirmation.lng);
+          logger.log('[CourierContext] Location update confirmed by server');
         })
       );
     }
@@ -1081,7 +1091,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // reacts by pulling the courier off the job.
     unsubs.push(
       websocketService.subscribeToOrderUpdates(orderId, (orderDto) => {
-        console.log('[CourierContext] Order update:', orderDto.id, 'status:', orderDto.status);
+        logger.log('[CourierContext] Order update:', orderDto.id, 'status:', orderDto.status);
         setOrders((prev) => {
           const updated = prev.map((order) =>
             order.orderId === orderDto.id
@@ -1142,13 +1152,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     restaurantName?: string;
   }) => {
     if (!data.orderId) {
-      console.log('[CourierContext] Push notification missing orderId');
+      logger.log('[CourierContext] Push notification missing orderId');
       return;
     }
 
     const orderId = typeof data.orderId === 'string' ? parseInt(data.orderId, 10) : data.orderId;
 
-    console.log('[CourierContext] Handling NEW_DELIVERY_AVAILABLE push:', orderId);
+    logger.log('[CourierContext] Handling NEW_DELIVERY_AVAILABLE push:', orderId);
 
     // Create a minimal NewOrderNotification to trigger the modal
     const notification: NewOrderNotification = {
@@ -1225,7 +1235,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       try {
         await unregisterDeviceToken(accessToken);
       } catch (error) {
-        console.warn('Failed to unregister FCM token:', error);
+        logger.warn('Failed to unregister FCM token:', error);
       }
     }
 
@@ -1241,7 +1251,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         });
       }
     } catch (error) {
-      console.error('Logout API call failed:', error);
+      logger.error('Logout API call failed:', error);
       // Continue with local logout even if API call fails
     }
 
@@ -1276,7 +1286,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       try {
         await unregisterDeviceToken(accessToken);
       } catch (error) {
-        console.warn('Failed to unregister FCM token:', error);
+        logger.warn('Failed to unregister FCM token:', error);
       }
     }
 
@@ -1295,7 +1305,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
       }
     } catch (error) {
-      console.error('Logout all devices API call failed:', error);
+      logger.error('Logout all devices API call failed:', error);
       throw error;
     }
 
@@ -1326,17 +1336,17 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
             // Set initial isOnline from stored profile (will be refreshed from backend)
             const storedIsOnline = profile.status === 'AVAILABLE' || profile.status === 'BUSY';
-            console.log('[CourierContext] Initial status from storage:', profile.status, '-> isOnline:', storedIsOnline);
+            logger.log('[CourierContext] Initial status from storage:', profile.status, '-> isOnline:', storedIsOnline);
             setIsOnline(storedIsOnline);
           }
 
           // Register FCM device token on app start
           registerDeviceToken(storedToken).catch(err =>
-            console.warn('Failed to register FCM token on restore:', err)
+            logger.warn('Failed to register FCM token on restore:', err)
           );
         }
       } catch (e) {
-        console.error('Failed to restore session', e);
+        logger.error('Failed to restore session', e);
       } finally {
         setIsSessionLoading(false);
       }
@@ -1435,7 +1445,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       try {
         data = JSON.parse(text);
       } catch (e) {
-        console.error('Failed to parse login response:', text);
+        // Do not log the raw body — it can contain tokens/PII
+        logger.error('Failed to parse login response, status:', response.status);
         throw new Error(`Invalid server response: ${text.substring(0, 100)}`);
       }
 
@@ -1507,7 +1518,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
             await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(user));
           }
         } catch (profileError) {
-          console.error('Failed to fetch courier profile:', profileError);
+          logger.error('Failed to fetch courier profile:', profileError);
           // Fallback: use login response data
           const nameParts = (data.data.fullName || '').split(' ');
           const user: User = {
@@ -1529,13 +1540,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
         // Register FCM device token for push notifications
         registerDeviceToken(accessToken).catch(err =>
-          console.warn('Failed to register FCM token:', err)
+          logger.warn('Failed to register FCM token:', err)
         );
       } else {
         throw new Error(data.message || 'Login failed');
       }
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       throw error;
     }
   };
@@ -1552,7 +1563,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Request OTP error:', error);
+      logger.error('Request OTP error:', error);
       throw error;
     }
   };
@@ -1588,7 +1599,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
       return data;
     } catch (error) {
-      console.error('Verify OTP error:', error);
+      logger.error('Verify OTP error:', error);
       throw error;
     }
   };
@@ -1617,7 +1628,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         setIsOnline(status === 'AVAILABLE' || status === 'BUSY');
       }
     } catch (error) {
-      console.error('Failed to update courier status:', error);
+      logger.error('Failed to update courier status:', error);
       // Revert intent only if nothing newer replaced it meanwhile — a
       // server-rejected transition must not keep poisoning future re-asserts
       if (intendedStatusRef.current === status) {
@@ -1635,9 +1646,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     reassertStatusRef.current = () => {
       const intended = intendedStatusRef.current;
       if (intended && intended !== 'OFFLINE') {
-        console.log('[CourierContext] Re-asserting courier status after reconnect:', intended);
+        logger.log('[CourierContext] Re-asserting courier status after reconnect:', intended);
         updateCourierStatus(intended).catch((error) => {
-          console.error('[CourierContext] Failed to re-assert status after reconnect:', error);
+          logger.error('[CourierContext] Failed to re-assert status after reconnect:', error);
         });
       }
     };
@@ -1664,7 +1675,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       });
       setCurrentLocation({ latitude, longitude });
     } catch (error) {
-      console.error('Failed to update location:', error);
+      logger.error('Failed to update location:', error);
     }
   }, [authenticatedFetch]);
 
@@ -1684,7 +1695,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
       } catch (e) {
         // Ignore errors on web when cleaning up location subscription
-        console.log('[CourierContext] Location cleanup error (expected on web):', e);
+        logger.log('[CourierContext] Location cleanup error (expected on web):', e);
       }
       locationSubscriptionRef.current = null;
     }
@@ -1715,6 +1726,27 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         );
       }
     );
+
+    // Background tracking (native only): keeps the position flowing while the
+    // app is backgrounded — e.g. after handing the courier off to an external
+    // navigation app mid-delivery. Background permission can only be requested
+    // AFTER foreground permission is granted. Denied background permission
+    // degrades gracefully to foreground-only tracking (no error thrown).
+    if (Platform.OS !== 'web') {
+      try {
+        let { status: bgStatus, canAskAgain } = await Location.getBackgroundPermissionsAsync();
+        if (bgStatus !== 'granted' && canAskAgain) {
+          ({ status: bgStatus } = await Location.requestBackgroundPermissionsAsync());
+        }
+        if (bgStatus === 'granted') {
+          await startBackgroundLocationUpdates();
+        } else {
+          logger.warn('[CourierContext] Background location permission not granted — foreground-only tracking');
+        }
+      } catch (bgError) {
+        logger.warn('[CourierContext] Failed to start background location updates:', bgError);
+      }
+    }
 
     setIsLocationTracking(true);
   }, [updateLocationOnServer, orders]);
@@ -1781,7 +1813,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           ...data.data,
           status: (data.data.status || 'COURIER_ASSIGNED') as OrderStatus,
         };
-        console.log('[CourierContext] Adding accepted order with status:', acceptedOrder.status);
+        logger.log('[CourierContext] Adding accepted order with status:', acceptedOrder.status);
         setOrders(prev => [acceptedOrder, ...prev]);
 
         // Update courier status to BUSY since they have an active order.
@@ -1796,7 +1828,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         throw new Error(data.message || 'Failed to accept order');
       }
     } catch (error) {
-      console.error('Failed to accept order:', error);
+      logger.error('Failed to accept order:', error);
       if (serverRejected) {
         // Definitive: taken by another courier or auto-cancelled. Drop the
         // stale offer and refresh the list.
@@ -1816,18 +1848,18 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   const updateOrderStatus = async (orderId: number | string, status: OrderStatus) => {
     const numericOrderId = Number(orderId);
-    console.log('[CourierContext] updateOrderStatus called:', { orderId, numericOrderId, status });
+    logger.log('[CourierContext] updateOrderStatus called:', { orderId, numericOrderId, status });
 
     // Optimistically update local state
     setOrders(prev => {
       const updated = prev.map(o => {
         const matches = Number(o.orderId) === numericOrderId;
         if (matches) {
-          console.log('[CourierContext] Found matching order, updating status from', o.status, 'to', status);
+          logger.log('[CourierContext] Found matching order, updating status from', o.status, 'to', status);
         }
         return matches ? { ...o, status } : o;
       });
-      console.log('[CourierContext] Orders updated locally, new statuses:', updated.map(o => ({ id: o.orderId, status: o.status })));
+      logger.log('[CourierContext] Orders updated locally, new statuses:', updated.map(o => ({ id: o.orderId, status: o.status })));
       return updated;
     });
 
@@ -1851,12 +1883,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           break;
       }
 
-      console.log('[CourierContext] Calling API:', { endpoint, method });
+      logger.log('[CourierContext] Calling API:', { endpoint, method });
 
       if (endpoint) {
         const response = await authenticatedFetch(endpoint, { method });
         const result = await response.json();
-        console.log('[CourierContext] API response:', { status: response.status, result });
+        logger.log('[CourierContext] API response:', { status: response.status, success: result.success });
         if (result.success === false) {
           throw new Error(result.message || 'Failed to update order status');
         }
@@ -1881,9 +1913,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
       }
 
-      console.log('[CourierContext] updateOrderStatus completed successfully');
+      logger.log('[CourierContext] updateOrderStatus completed successfully');
     } catch (error) {
-      console.error('[CourierContext] Failed to update order status on server:', error);
+      logger.error('[CourierContext] Failed to update order status on server:', error);
       // Revert optimistic update on error. Also re-sync the courier profile:
       // a CANCELLED frame may have flipped us AVAILABLE based on the
       // optimistic DELIVERED state that just got reverted.
@@ -1899,19 +1931,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     data?: { deliveryPhoto?: string; deliveryNotes?: string }
   ): Promise<{ orderId: number; status: string; earnings: number; message: string } | null> => {
     const numericOrderId = Number(orderId);
-    console.log('[CourierContext] completeOrder called with orderId:', orderId, 'numericOrderId:', numericOrderId);
-    console.log('[CourierContext] Endpoint:', API_ENDPOINTS.ORDERS.COMPLETE(orderId));
+    logger.log('[CourierContext] completeOrder called with orderId:', orderId, 'numericOrderId:', numericOrderId);
+    logger.log('[CourierContext] Endpoint:', API_ENDPOINTS.ORDERS.COMPLETE(orderId));
 
     // Optimistically update local state
     setOrders(prev => prev.map(o => Number(o.orderId) === numericOrderId ? { ...o, status: 'DELIVERED' as OrderStatus } : o));
 
     try {
-      console.log('[CourierContext] Making API call to complete order...');
+      logger.log('[CourierContext] Making API call to complete order...');
       const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.COMPLETE(orderId), {
         method: 'POST',
         body: data ? JSON.stringify(data) : undefined,
       });
-      console.log('[CourierContext] API response status:', response.status);
+      logger.log('[CourierContext] API response status:', response.status);
 
       const result = await response.json();
       // Don't dump the full payload — it can carry customer PII
@@ -1939,11 +1971,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
         return result.data;
       } else {
-        console.error('[CourierContext] API returned error:', result.message);
+        logger.error('[CourierContext] API returned error:', result.message);
         throw new Error(result.message || 'Failed to complete order');
       }
     } catch (error) {
-      console.error('[CourierContext] Failed to complete order:', error);
+      logger.error('[CourierContext] Failed to complete order:', error);
       // Revert optimistic update on error. Also re-sync the courier profile:
       // a CANCELLED frame may have flipped us AVAILABLE based on the
       // optimistic DELIVERED state that just got reverted.
@@ -1979,7 +2011,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         throw new Error(result.message || 'Failed to report issue');
       }
     } catch (error) {
-      console.error('Failed to report issue:', error);
+      logger.error('Failed to report issue:', error);
       throw error;
     }
   }, [authenticatedFetch, fetchOrders]);
