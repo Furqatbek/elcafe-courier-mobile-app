@@ -5,6 +5,7 @@ const Colors = {
   secondary: '#1E293B', // Slate 800
   accent: '#F59E0B', // Amber 500
   danger: '#EF4444', // Red 500
+  warning: '#F59E0B', // Amber 500
   success: '#10B981', // Emerald 500
   background: '#F1F5F9', // Slate 100
   surface: '#FFFFFF',
