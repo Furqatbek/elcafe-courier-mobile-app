@@ -20,9 +20,8 @@ import {
   Phone,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { DEFAULTS } from '@/constants/config';
 import { useCourier } from '@/context/CourierContext';
-import { courierEarnings, hasTip } from '@/lib/formatting';
+import { courierEarnings, hasTip, formatCurrency } from '@/lib/formatting';
 import { SlideButton } from '@/components/SlideButton';
 import OrderMap from '@/components/OrderMap';
 
@@ -74,10 +73,6 @@ export default function AvailableOrderDetailScreen() {
       );
     }
   }, [orderTakenEvent, orderId, isAccepting, courierProfile, clearOrderTakenEvent, router, t]);
-
-  const formatCurrency = (amount: number | undefined) => {
-    return `${((amount ?? 0)).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
 
   const handleAcceptOrder = async () => {
     if (!order) return;

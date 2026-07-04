@@ -21,10 +21,16 @@ import { useCourier } from '@/context/CourierContext';
 type Step = 'phone' | 'otp';
 
 // The UI shows a fixed +998 prefix; normalize whatever the user typed into a
-// full E.164-style number for the backend.
+// full E.164-style number for the backend. Uzbek numbers are 9 digits after
+// the country code — disambiguate by LENGTH, not prefix: a 9-digit local
+// number on the "99" operator code (e.g. 998123456) must not be mistaken
+// for an already-prefixed 12-digit number.
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '');
-  return digits.startsWith('998') ? `+${digits}` : `+998${digits}`;
+  if (digits.length === 12 && digits.startsWith('998')) {
+    return `+${digits}`;
+  }
+  return `+998${digits}`;
 }
 
 export default function LoginOtpScreen() {

@@ -33,17 +33,25 @@ import { error as logError } from '@/lib/logger';
  */
 const isSecureStoreAvailable = Platform.OS !== 'web';
 
+// AFTER_FIRST_UNLOCK: the background location task must be able to read the
+// access token while the phone is locked in the courier's pocket. The iOS
+// default (WHEN_UNLOCKED) makes every Keychain read fail on a locked device,
+// silently killing background location updates.
+const SECURE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
 export const tokenStorage = {
   async getItem(key: string): Promise<string | null> {
     if (!isSecureStoreAvailable) {
       return AsyncStorage.getItem(key);
     }
-    let value = await SecureStore.getItemAsync(key);
+    let value = await SecureStore.getItemAsync(key, SECURE_STORE_OPTIONS);
     if (value == null) {
       // One-time migration from legacy AsyncStorage persistence
       const legacy = await AsyncStorage.getItem(key);
       if (legacy != null) {
-        await SecureStore.setItemAsync(key, legacy);
+        await SecureStore.setItemAsync(key, legacy, SECURE_STORE_OPTIONS);
         await AsyncStorage.removeItem(key);
         value = legacy;
       }
@@ -56,7 +64,7 @@ export const tokenStorage = {
       await AsyncStorage.setItem(key, value);
       return;
     }
-    await SecureStore.setItemAsync(key, value);
+    await SecureStore.setItemAsync(key, value, SECURE_STORE_OPTIONS);
   },
 
   async removeItem(key: string): Promise<void> {

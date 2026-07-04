@@ -99,7 +99,7 @@ export default function OrderRatingScreen() {
           ? `${t('rating.submit_failed')}\n\n${err.message}`
           : t('rating.submit_failed'),
         [
-          { text: t('common.retry', 'Retry'), style: 'default' },
+          { text: t('common.retry', 'Retry'), style: 'default', onPress: () => handleSubmit() },
           { text: t('rating.skip'), style: 'cancel', onPress: handleClose },
         ]
       );

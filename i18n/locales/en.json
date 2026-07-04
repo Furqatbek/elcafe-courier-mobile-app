@@ -103,7 +103,8 @@
     "accept_failed": "Failed to accept order",
     "new_order_available": "New Order Available!",
     "tap_to_view": "Tap to view details",
-    "view": "View"
+    "view": "View",
+    "earnings_label": "Earnings"
   },
   "notifications_page": {
     "title": "Notifications",
@@ -148,7 +149,8 @@
     "card_payments_available": "Card payments available for withdrawal",
     "from": "From",
     "to": "To",
-    "apply": "Apply"
+    "apply": "Apply",
+    "payout_info": "Payouts are processed by the platform. Card-payment balances are settled to your registered account."
   },
   "settings": {
     "title": "Settings",
@@ -244,7 +246,9 @@
     "issue_accident": "Accident",
     "issue_vehicle": "Vehicle Issue",
     "issue_other": "Other",
-    "no_phone": "Phone number not available"
+    "no_phone": "Phone number not available",
+    "your_earnings": "Your earnings (fee + tip)",
+    "order_total": "Order total"
   },
   "personal_info": {
     "title": "Personal Information",

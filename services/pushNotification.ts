@@ -118,11 +118,28 @@ export async function getPushToken(): Promise<string | null> {
   return result.status === 'success' ? result.token : null;
 }
 
+// Preference key written by the Settings notifications toggle. Checked here
+// centrally so login/session-restore registration also honors an explicit
+// opt-out — otherwise the toggle would be silently undone on every restart.
+const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
+
+export async function isNotificationsPreferenceEnabled(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY)) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Register device token with the backend
  */
 export async function registerDeviceToken(accessToken: string): Promise<boolean> {
   try {
+    if (!(await isNotificationsPreferenceEnabled())) {
+      logger.log('[pushNotification] Skipping device token registration: notifications disabled in settings');
+      return false;
+    }
     const tokenResult = await getPushTokenResult();
 
     if (tokenResult.status !== 'success') {

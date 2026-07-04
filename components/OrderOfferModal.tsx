@@ -20,9 +20,8 @@ import {
   X,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { DEFAULTS } from '@/constants/config';
 import { AvailableOrder } from '@/context/CourierContext';
-import { courierEarnings, hasTip } from '@/lib/formatting';
+import { courierEarnings, hasTip, formatCurrency } from '@/lib/formatting';
 import { soundService } from '@/services/soundService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -53,11 +52,6 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
   const progressAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const vibrationRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Format currency
-  const formatCurrency = (amount: number | undefined) => {
-    return `${((amount ?? 0)).toLocaleString()} ${DEFAULTS.CURRENCY_SYMBOL}`;
-  };
 
   // Format distance
   const formatDistance = (km: number | undefined) => {

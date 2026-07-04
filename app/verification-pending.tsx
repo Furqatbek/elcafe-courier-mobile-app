@@ -15,7 +15,6 @@ import {
   FileText,
   Phone,
   Mail,
-  MessageCircle,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { APP_CONFIG } from '@/constants/config';
@@ -27,16 +26,13 @@ export default function VerificationPendingScreen() {
   const router = useRouter();
   const { logout } = useCourier();
 
-  const handleContactSupport = (method: 'phone' | 'email' | 'chat') => {
+  const handleContactSupport = (method: 'phone' | 'email') => {
     switch (method) {
       case 'phone':
         Linking.openURL(`tel:${APP_CONFIG.SUPPORT_PHONE}`);
         break;
       case 'email':
         Linking.openURL(`mailto:${APP_CONFIG.SUPPORT_EMAIL}?subject=Courier Verification`);
-        break;
-      case 'chat':
-        router.push('/chat?type=support');
         break;
     }
   };
@@ -135,13 +131,6 @@ export default function VerificationPendingScreen() {
           >
             <Mail size={20} color={Colors.primary} />
             <Text style={styles.supportButtonText}>{t('verification_pending.email')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.supportButton}
-            onPress={() => handleContactSupport('chat')}
-          >
-            <MessageCircle size={20} color={Colors.primary} />
-            <Text style={styles.supportButtonText}>{t('verification_pending.chat')}</Text>
           </TouchableOpacity>
         </View>
       </View>

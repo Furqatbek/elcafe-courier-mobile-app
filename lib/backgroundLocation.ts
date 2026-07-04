@@ -26,6 +26,74 @@ export const BACKGROUND_LOCATION_TASK = 'courier-location-task';
 
 const isNative = Platform.OS !== 'web';
 
+// Serializes refresh attempts within this JS context so a burst of queued
+// fixes can't double-spend one rotated refresh token.
+let backgroundRefreshInFlight: Promise<string | null> | null = null;
+
+/**
+ * Access tokens are short-lived; on long background stints (external nav app,
+ * phone in pocket) the stored token expires while nothing in the foreground
+ * refresh path is running. Without this, every subsequent fix 401s silently
+ * and the courier's position goes dark until the app foregrounds.
+ *
+ * Definitive rejection returns null WITHOUT clearing stored tokens — session
+ * teardown is a foreground decision, not a background task's.
+ */
+async function refreshAccessTokenInBackground(): Promise<string | null> {
+  if (backgroundRefreshInFlight) {
+    return backgroundRefreshInFlight;
+  }
+  backgroundRefreshInFlight = (async () => {
+    try {
+      const refreshToken = await tokenStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
+      if (!refreshToken) {
+        return null;
+      }
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json();
+      const newAccess = data?.data?.accessToken ?? data?.accessToken;
+      const newRefresh = data?.data?.refreshToken ?? data?.refreshToken;
+      if (!newAccess) {
+        return null;
+      }
+      await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, newAccess);
+      if (newRefresh) {
+        await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, newRefresh);
+      }
+      return newAccess as string;
+    } catch {
+      return null;
+    } finally {
+      backgroundRefreshInFlight = null;
+    }
+  })();
+  return backgroundRefreshInFlight;
+}
+
+function putLocation(token: string, latest: Location.LocationObject): Promise<Response> {
+  return fetch(`${BASE_URL}${API_ENDPOINTS.COURIER.UPDATE_LOCATION}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      latitude: latest.coords.latitude,
+      longitude: latest.coords.longitude,
+      accuracy: latest.coords.accuracy ?? null,
+      heading: latest.coords.heading ?? null,
+      speed: latest.coords.speed ?? null,
+    }),
+  });
+}
+
 if (isNative) {
   TaskManager.defineTask<{ locations: Location.LocationObject[] }>(
     BACKGROUND_LOCATION_TASK,
@@ -46,22 +114,16 @@ if (isNative) {
           // Logged out / session cleared — nothing to report
           return;
         }
-        await fetch(`${BASE_URL}${API_ENDPOINTS.COURIER.UPDATE_LOCATION}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            latitude: latest.coords.latitude,
-            longitude: latest.coords.longitude,
-            accuracy: latest.coords.accuracy ?? null,
-            heading: latest.coords.heading ?? null,
-            speed: latest.coords.speed ?? null,
-          }),
-        });
+        const response = await putLocation(token, latest);
+        if (response.status === 401 || response.status === 403) {
+          // Expired mid-background-stint: refresh once and retry this fix
+          const freshToken = await refreshAccessTokenInBackground();
+          if (freshToken) {
+            await putLocation(freshToken, latest);
+          }
+        }
       } catch {
-        // Swallow transient network/auth failures — the next fix retries
+        // Swallow transient network failures — the next fix retries
       }
     }
   );

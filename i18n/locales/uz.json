@@ -103,7 +103,8 @@
     "accept_failed": "Buyurtmani qabul qilib bo'lmadi",
     "new_order_available": "Yangi buyurtma!",
     "tap_to_view": "Ko'rish uchun bosing",
-    "view": "Ko'rish"
+    "view": "Ko'rish",
+    "earnings_label": "Daromad"
   },
   "notifications_page": {
     "title": "Bildirishnomalar",
@@ -148,7 +149,8 @@
     "card_payments_available": "Karta orqali to'lovlar yechib olinadi",
     "from": "Dan",
     "to": "Gacha",
-    "apply": "Qo'llash"
+    "apply": "Qo'llash",
+    "payout_info": "To'lovlar platforma tomonidan amalga oshiriladi. Karta to'lovlari balansi ro'yxatdan o'tgan hisobingizga o'tkaziladi."
   },
   "settings": {
     "title": "Sozlamalar",
@@ -244,7 +246,9 @@
     "issue_accident": "Yo'l-transport hodisasi",
     "issue_vehicle": "Transport muammosi",
     "issue_other": "Boshqa",
-    "no_phone": "Telefon raqami mavjud emas"
+    "no_phone": "Telefon raqami mavjud emas",
+    "your_earnings": "Sizning daromadingiz (yetkazish + choychaqa)",
+    "order_total": "Buyurtma summasi"
   },
   "personal_info": {
     "title": "Shaxsiy ma'lumotlar",
