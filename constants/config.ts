@@ -1,5 +1,27 @@
 // API Configuration
-export const BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || 'http://localhost:8080';
+//
+// Dev builds fall back to localhost; production builds MUST provide the API
+// origin via EXPO_PUBLIC_RORK_API_BASE_URL and are forced onto TLS
+// (http:// is upgraded to https://, ws:// to wss://).
+const enforceSecureTransport = (url: string): string => {
+  if (__DEV__) {
+    return url;
+  }
+  return url.replace(/^http:\/\//i, 'https://').replace(/^ws:\/\//i, 'wss://');
+};
+
+const resolveBaseUrl = (): string => {
+  const envBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  if (__DEV__) {
+    return envBaseUrl || 'http://localhost:8080';
+  }
+  if (!envBaseUrl) {
+    throw new Error('EXPO_PUBLIC_RORK_API_BASE_URL must be set for production builds');
+  }
+  return enforceSecureTransport(envBaseUrl);
+};
+
+export const BASE_URL = resolveBaseUrl();
 
 // API Endpoints - Based on courier-app-api.md documentation
 export const API_ENDPOINTS = {
@@ -230,12 +252,15 @@ export const NAVIGATION_URLS = {
 // WebSocket Configuration (STOMP over SockJS)
 export const WEBSOCKET_CONFIG = {
   // Native WebSocket endpoint for mobile apps
-  URL: process.env.EXPO_PUBLIC_WS_URL || `${BASE_URL}/ws`,
+  URL: enforceSecureTransport(process.env.EXPO_PUBLIC_WS_URL || `${BASE_URL}/ws`),
   // SockJS endpoint for web browsers (with fallbacks)
-  SOCKJS_URL: process.env.EXPO_PUBLIC_WS_SOCKJS_URL || `${BASE_URL}/ws-sockjs`,
-  // Aggressive reconnect: the backend flips couriers OFFLINE when the socket
-  // drops, so every second disconnected is time not receiving orders
+  SOCKJS_URL: enforceSecureTransport(process.env.EXPO_PUBLIC_WS_SOCKJS_URL || `${BASE_URL}/ws-sockjs`),
+  // Aggressive first retry (the backend flips couriers OFFLINE when the
+  // socket drops), then exponential backoff so a down server isn't hammered:
+  // 3s -> 6s -> 12s ... capped at MAX_RECONNECT_DELAY. Resets after a
+  // successful connect.
   RECONNECT_INTERVAL: 3000,
+  MAX_RECONNECT_DELAY: 60000,
   MAX_RECONNECT_ATTEMPTS: 30,
   HEARTBEAT_INCOMING: 10000,
   HEARTBEAT_OUTGOING: 10000,

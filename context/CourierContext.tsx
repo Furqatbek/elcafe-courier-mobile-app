@@ -5,6 +5,8 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
+import { apiClient, tokenStorage } from '@/services/api';
+import logger from '@/lib/logger';
 
 export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
@@ -294,6 +296,28 @@ const DEFAULT_STATS: DriverStats = {
   rating: 0,
 };
 
+// Decode a JWT's exp claim; returns true when the token is expired or expires
+// within TOKEN_CONFIG.REFRESH_THRESHOLD_MS. Returns false when exp cannot be
+// determined — better to attempt using the token than to block on it.
+const isAccessTokenExpiringSoon = (token: string): boolean => {
+  try {
+    const payloadPart = token.split('.')[1];
+    const atobFn: ((data: string) => string) | undefined = (globalThis as any).atob;
+    if (!payloadPart || typeof atobFn !== 'function') {
+      return false;
+    }
+    const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const payload = JSON.parse(atobFn(padded));
+    if (typeof payload.exp !== 'number') {
+      return false;
+    }
+    return payload.exp * 1000 - Date.now() < TOKEN_CONFIG.REFRESH_THRESHOLD_MS;
+  } catch {
+    return false;
+  }
+};
+
 export const [CourierProvider, useCourier] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
   const [courierProfile, setCourierProfile] = useState<CourierProfile | null>(null);
@@ -301,6 +325,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  // Non-null when the last active-orders sync failed and the list may be stale
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [stats, setStats] = useState<DriverStats>(DEFAULT_STATS);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -323,6 +349,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [newOrderOffer, setNewOrderOffer] = useState<NewOrderNotification | null>(null);
   const [orderTakenEvent, setOrderTakenEvent] = useState<OrderTakenNotification | null>(null);
   const wsUnsubscribeRefs = useRef<(() => void)[]>([]);
+  // Per-order topic subscriptions (topics 3 & 4), keyed by orderId, so we
+  // only subscribe once per active order and can unsubscribe when it leaves
+  // the active set
+  const orderSubscriptionsRef = useRef<Map<number, () => void>>(new Map());
 
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
@@ -330,6 +360,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
+  // Single-flight guard: concurrent 401s share ONE refresh request instead of
+  // double-spending a rotated refresh token
+  const refreshInFlightRef = useRef<Promise<string | null> | null>(null);
+  // Whether the location watcher was last started with the active-order
+  // (fast) interval — lets us restart it when the active set flips
+  const watcherHasActiveOrdersRef = useRef<boolean | null>(null);
   const isOnlineRef = useRef(false);
   const courierProfileRef = useRef<CourierProfile | null>(null);
   // The status the courier *wants* (set by user actions). The backend flips
@@ -357,44 +393,87 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     refreshTokenRef.current = refreshToken;
   }, [refreshToken]);
 
-  // Refresh access token using refresh token
+  // Always points at the latest logout closure — refreshAccessToken has no
+  // deps (single-flight via ref), so it must not capture a stale logout.
+  const logoutRef = useRef<() => Promise<void>>(async () => {});
+
+  // Refresh access token using refresh token.
+  //
+  // Single-flight: concurrent 401s share ONE in-flight refresh request, so a
+  // rotated refresh token is never double-spent. Only a DEFINITIVE server
+  // rejection (401/403 or an explicit failure payload) logs the user out —
+  // transport failures throw and keep the session intact.
   const refreshAccessToken = useCallback(async (): Promise<string | null> => {
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
+    }
+
     const currentRefreshToken = refreshTokenRef.current;
-    if (!currentRefreshToken || isRefreshing) {
+    if (!currentRefreshToken) {
       return null;
     }
 
-    setIsRefreshing(true);
+    const doRefresh = async (): Promise<string | null> => {
+      setIsRefreshing(true);
+      try {
+        let response: Response;
+        try {
+          response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refreshToken: currentRefreshToken }),
+          });
+        } catch (networkError) {
+          // Transport failure: the refresh token may still be valid — keep
+          // the session and surface the error to the caller.
+          logger.error('Token refresh network error:', networkError);
+          throw networkError;
+        }
 
-    try {
-      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.REFRESH}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken: currentRefreshToken }),
-      });
+        if (response.status === 401 || response.status === 403) {
+          // Definitive: refresh token expired/revoked
+          logger.warn('Token refresh rejected by server, logging out');
+          await logoutRef.current();
+          return null;
+        }
 
-      const data: RefreshTokenResponse = await response.json();
+        if (!response.ok) {
+          // Transient server error (5xx etc.) — keep the session
+          throw new Error(`Token refresh failed with status ${response.status}`);
+        }
 
-      if (data.success) {
-        setAccessToken(data.data.accessToken);
-        setRefreshToken(data.data.refreshToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
-        return data.data.accessToken;
+        const data: RefreshTokenResponse = await response.json();
+
+        if (data.success && data.data?.accessToken && data.data?.refreshToken) {
+          const newAccessToken = data.data.accessToken;
+          const newRefreshToken = data.data.refreshToken;
+          // Update refs synchronously so concurrent callers (WebSocket token
+          // provider, queued 401 retries) see the fresh tokens immediately
+          accessTokenRef.current = newAccessToken;
+          refreshTokenRef.current = newRefreshToken;
+          setAccessToken(newAccessToken);
+          setRefreshToken(newRefreshToken);
+          apiClient.setTokens(newAccessToken, newRefreshToken);
+          await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, newAccessToken);
+          await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, newRefreshToken);
+          return newAccessToken;
+        }
+
+        // Server answered but rejected the refresh — definitive
+        await logoutRef.current();
+        return null;
+      } finally {
+        setIsRefreshing(false);
+        refreshInFlightRef.current = null;
       }
+    };
 
-      // Refresh failed, log user out
-      await logout();
-      return null;
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      return null;
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [isRefreshing]);
+    const inFlight = doRefresh();
+    refreshInFlightRef.current = inFlight;
+    return inFlight;
+  }, []);
 
   // Helper function for authenticated API requests
   const authenticatedFetch = useCallback(async (endpoint: string, options: RequestInit = {}) => {
@@ -440,10 +519,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
       if (data.success && Array.isArray(data.data)) {
         setOrders(data.data);
+        setLastSyncError(null);
+      } else {
+        setLastSyncError(data.message || 'Failed to sync orders');
       }
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
-      // Keep existing orders on error
+    } catch (error: any) {
+      logger.error('Failed to fetch orders:', error);
+      // Keep existing orders on error, but surface staleness so screens can
+      // warn the courier that the list may be out of date
+      setLastSyncError(error?.message || 'Failed to sync orders');
     }
   }, [authenticatedFetch]);
 
@@ -749,14 +833,38 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
       locationSubscriptionRef.current = null;
     }
+    watcherHasActiveOrdersRef.current = null;
     setIsLocationTracking(false);
   }, []);
 
+  // Token provider for the WebSocket layer. Called by stompjs before EVERY
+  // (re)connect attempt, so reconnects never present a stale JWT. Reads from
+  // refs (not state) and reuses the single-flight refresh, so its identity is
+  // stable and concurrent refreshes are impossible.
+  const getWebSocketToken = useCallback(async (): Promise<string | null> => {
+    const token = accessTokenRef.current;
+    if (!token) {
+      return null;
+    }
+    if (!isAccessTokenExpiringSoon(token)) {
+      return token;
+    }
+    try {
+      const refreshed = await refreshAccessToken();
+      return refreshed ?? accessTokenRef.current;
+    } catch (error) {
+      // Network error during refresh — try the current token anyway; the
+      // reconnect loop will retry with a fresh one later
+      logger.warn('[CourierContext] Token refresh before WS connect failed:', error);
+      return accessTokenRef.current;
+    }
+  }, [refreshAccessToken]);
+
   // WebSocket connection management
-  const connectWebSocket = useCallback((token: string) => {
+  const connectWebSocket = useCallback(() => {
     // Set up event handlers
     websocketService.onConnected(() => {
-      console.log('[CourierContext] WebSocket connected');
+      logger.log('[CourierContext] WebSocket connected');
       setIsWebSocketConnected(true);
 
       // The backend flips couriers to OFFLINE when the socket drops. Re-assert
@@ -788,14 +896,19 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       setIsWebSocketConnected(false);
     });
 
-    // Connect to WebSocket
-    websocketService.connect(token);
-  }, []);
+    // Connect to WebSocket with a token provider so every (re)connect
+    // attempt fetches a fresh (refreshed-if-needed) access token
+    websocketService.connect(getWebSocketToken);
+  }, [getWebSocketToken]);
 
   const disconnectWebSocket = useCallback(() => {
     // Unsubscribe from all topics
     wsUnsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
     wsUnsubscribeRefs.current = [];
+
+    // Unsubscribe per-order topic subscriptions (auth teardown)
+    orderSubscriptionsRef.current.forEach((unsubscribe) => unsubscribe());
+    orderSubscriptionsRef.current.clear();
 
     // Disconnect
     websocketService.disconnect();
@@ -813,7 +926,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
         const newOrder: AvailableOrder = {
           orderId: notification.orderId,
-          externalOrderNo: notification.externalOrderNo,
+          externalOrderNo: notification.externalOrderNo ?? '',
           restaurantId: notification.restaurantId,
           restaurantName: notification.restaurantName || 'Restaurant',
           restaurantAddress: notification.restaurantAddress || '',
@@ -890,7 +1003,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Handler for incoming notification messages (shared by courier/user/broadcast topics 5, 6, 7)
   const handleNotificationMessage = useCallback((notification: WebSocketNotification) => {
-    console.log('[CourierContext] Notification received:', notification);
+    logger.log('[CourierContext] Notification received:', notification.id, notification.notificationType || notification.type);
     setNotifications((prev) => {
       const newNotification: Notification = {
         id: notification.id,
@@ -1010,10 +1123,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       websocketService.subscribeToOrderTaken(orderId, handleOrderTaken)
     );
 
-    // Combined unsubscribe for both order-specific topics
-    const unsubscribe = () => unsubs.forEach((fn) => fn());
-    wsUnsubscribeRefs.current.push(unsubscribe);
-    return unsubscribe;
+    // Combined unsubscribe for both order-specific topics. Lifecycle is
+    // owned by orderSubscriptionsRef (subscribe once per active order,
+    // unsubscribe when it leaves the active set) — NOT wsUnsubscribeRefs,
+    // which subscribeToWebSocketTopics clears wholesale on re-subscribe.
+    return () => unsubs.forEach((fn) => fn());
   }, [handleOrderTaken]);
 
   // Clear new order offer (after user views/dismisses it)
@@ -1043,6 +1157,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       externalOrderNo: data.orderNumber,
       restaurantId: 0,
       restaurantName: data.restaurantName || 'Restaurant',
+      itemCount: 0,
     };
 
     setNewOrderOffer(notification);
@@ -1089,10 +1204,16 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setIsOnline(false);
     setCurrentLocation(null);
     setNewOrderOffer(null);
+    setLastSyncError(null);
     hasLoadedInitialData.current = false;
 
-    await AsyncStorage.removeItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
-    await AsyncStorage.removeItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
+    // Keep the shared API client and its persisted tokens in sync
+    apiClient.clearTokens();
+    accessTokenRef.current = null;
+    refreshTokenRef.current = null;
+
+    await tokenStorage.removeItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
+    await tokenStorage.removeItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
     await AsyncStorage.removeItem(TOKEN_CONFIG.USER_KEY);
     await AsyncStorage.removeItem('courier_profile');
   }, [stopLocationTracking]);
@@ -1127,6 +1248,26 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // Always clear local session
     await clearLocalSession();
   }, [accessToken, refreshToken, clearLocalSession]);
+
+  // Keep logoutRef pointing at the latest logout closure (used by the
+  // dependency-free single-flight refresh)
+  useEffect(() => {
+    logoutRef.current = logout;
+  }, [logout]);
+
+  // Mirror tokens rotated by apiClient's own 401-retry refresh path back
+  // into context state/refs so both auth flows stay consistent
+  useEffect(() => {
+    apiClient.setOnTokensRefreshed((newAccessToken, newRefreshToken) => {
+      accessTokenRef.current = newAccessToken;
+      refreshTokenRef.current = newRefreshToken;
+      setAccessToken(newAccessToken);
+      setRefreshToken(newRefreshToken);
+    });
+    return () => {
+      apiClient.setOnTokensRefreshed(null);
+    };
+  }, []);
 
   // Logout from all devices - revokes all refresh tokens
   const logoutAllDevices = useCallback(async () => {
@@ -1166,14 +1307,17 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
+        const storedToken = await tokenStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
         const storedUser = await AsyncStorage.getItem(TOKEN_CONFIG.USER_KEY);
-        const storedRefresh = await AsyncStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
+        const storedRefresh = await tokenStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
         const storedProfile = await AsyncStorage.getItem('courier_profile');
 
         if (storedToken && storedUser) {
           setAccessToken(storedToken);
           setRefreshToken(storedRefresh);
+          if (storedRefresh) {
+            apiClient.setTokens(storedToken, storedRefresh);
+          }
           setUser(JSON.parse(storedUser));
 
           if (storedProfile) {
@@ -1209,10 +1353,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [user, refreshData]);
 
-  // Connect to WebSocket when authenticated
+  // Connect to WebSocket when authenticated. The service receives a token
+  // PROVIDER, so token rotations don't require reconnecting — stompjs asks
+  // for a fresh token before every (re)connect attempt.
   useEffect(() => {
     if (accessToken && user) {
-      connectWebSocket(accessToken);
+      connectWebSocket();
       subscribeToWebSocketTopics();
     }
 
@@ -1224,17 +1370,46 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     };
   }, [accessToken, user, connectWebSocket, subscribeToWebSocketTopics, disconnectWebSocket]);
 
-  // Subscribe to order status updates for active orders
+  // Subscribe to order status updates for active orders.
+  // Tracks per-order subscriptions in a ref: subscribe only to orders newly
+  // entering the active set, unsubscribe those that leave it — handlers never
+  // accumulate across `orders` state changes. Full teardown happens in
+  // disconnectWebSocket (auth loss / logout / unmount).
   useEffect(() => {
-    if (isWebSocketConnected && orders.length > 0) {
-      // Subscribe to status updates for all active orders
-      orders.forEach((order) => {
-        if (order.status !== 'DELIVERED' && order.status !== 'CANCELLED') {
-          subscribeToOrderStatusUpdates(order.orderId);
-        }
-      });
+    if (!isWebSocketConnected) {
+      return;
     }
+
+    const activeOrderIds = new Set(
+      orders
+        .filter((order) => order.status !== 'DELIVERED' && order.status !== 'CANCELLED')
+        .map((order) => Number(order.orderId))
+    );
+
+    // Subscribe to orders that just became active
+    activeOrderIds.forEach((orderId) => {
+      if (!orderSubscriptionsRef.current.has(orderId)) {
+        orderSubscriptionsRef.current.set(orderId, subscribeToOrderStatusUpdates(orderId));
+      }
+    });
+
+    // Unsubscribe from orders that left the active set
+    orderSubscriptionsRef.current.forEach((unsubscribe, orderId) => {
+      if (!activeOrderIds.has(orderId)) {
+        unsubscribe();
+        orderSubscriptionsRef.current.delete(orderId);
+      }
+    });
   }, [isWebSocketConnected, orders, subscribeToOrderStatusUpdates]);
+
+  // Safety net: unsubscribe all per-order topics when the provider unmounts
+  useEffect(() => {
+    const subscriptionsMap = orderSubscriptionsRef.current;
+    return () => {
+      subscriptionsMap.forEach((unsubscribe) => unsubscribe());
+      subscriptionsMap.clear();
+    };
+  }, []);
 
   // Fetch active orders when going online
   // Available orders come via WebSocket and push notifications, no polling needed
@@ -1271,9 +1446,12 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
         setAccessToken(accessToken);
         setRefreshToken(refreshToken);
+        accessTokenRef.current = accessToken;
+        refreshTokenRef.current = refreshToken;
+        apiClient.setTokens(accessToken, refreshToken);
 
-        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, accessToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
+        await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, accessToken);
+        await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, refreshToken);
 
         // Fetch courier profile using the new token
         try {
@@ -1393,6 +1571,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       if (data.success && data.data) {
         setAccessToken(data.data.accessToken);
         setRefreshToken(data.data.refreshToken);
+        accessTokenRef.current = data.data.accessToken;
+        refreshTokenRef.current = data.data.refreshToken;
+        apiClient.setTokens(data.data.accessToken, data.data.refreshToken);
         setUser(data.data.user);
         if (data.data.courier) {
           setCourierProfile(data.data.courier);
@@ -1400,8 +1581,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         }
         hasLoadedInitialData.current = false;
 
-        await AsyncStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
-        await AsyncStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
+        await tokenStorage.setItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY, data.data.accessToken);
+        await tokenStorage.setItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY, data.data.refreshToken);
         await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
       }
 
@@ -1509,7 +1690,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
 
     // Determine update interval based on whether courier has active orders
-    const hasActiveOrders = orders.some(o => o.status !== 'completed');
+    // (terminal statuses are DELIVERED and CANCELLED)
+    const hasActiveOrders = orders.some(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
+    watcherHasActiveOrdersRef.current = hasActiveOrders;
     const timeInterval = hasActiveOrders
       ? LOCATION_CONFIG.ACTIVE_INTERVAL  // 5 seconds during active delivery
       : LOCATION_CONFIG.IDLE_INTERVAL;   // 30 seconds when idle
@@ -1538,17 +1721,42 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   const toggleOnline = async () => {
     const newStatus: CourierStatus = isOnline ? 'OFFLINE' : 'AVAILABLE';
-    await updateCourierStatus(newStatus);
 
     if (newStatus === 'AVAILABLE') {
-      await startLocationTracking();
+      // Request location permission BEFORE flipping the server status: a
+      // denied permission must never leave the courier AVAILABLE on the
+      // server while the app cannot report their position.
+      await startLocationTracking(); // throws if permission denied
+      try {
+        await updateCourierStatus('AVAILABLE');
+      } catch (error) {
+        // Server rejected the status change — don't keep tracking
+        await stopLocationTracking();
+        throw error;
+      }
     } else {
+      await updateCourierStatus('OFFLINE');
       await stopLocationTracking();
     }
   };
 
   const activeOrders = useMemo(() => orders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => o.status === 'DELIVERED'), [orders]);
+
+  // Restart the location watcher with the right cadence when the courier
+  // gains their first active order (IDLE_INTERVAL -> ACTIVE_INTERVAL) or
+  // loses the last one (back to IDLE_INTERVAL).
+  useEffect(() => {
+    if (!isLocationTracking) {
+      return;
+    }
+    const hasActive = activeOrders.length > 0;
+    if (watcherHasActiveOrdersRef.current !== null && watcherHasActiveOrdersRef.current !== hasActive) {
+      startLocationTracking().catch((error) => {
+        logger.error('[CourierContext] Failed to restart location watcher:', error);
+      });
+    }
+  }, [activeOrders.length, isLocationTracking, startLocationTracking]);
 
   // Accept an available order
   const acceptOrder = useCallback(async (orderId: number | string) => {
@@ -1561,7 +1769,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       });
 
       const data = await response.json();
-      console.log('[CourierContext] acceptOrder response:', data);
+      // Don't dump the full payload — it carries customer name/phone/address
+      logger.log('[CourierContext] acceptOrder response:', data.success, data.data?.orderId ?? orderId);
 
       if (data.success && data.data) {
         // Remove from available orders
@@ -1705,10 +1914,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       console.log('[CourierContext] API response status:', response.status);
 
       const result = await response.json();
-      console.log('[CourierContext] API response body:', JSON.stringify(result));
+      // Don't dump the full payload — it can carry customer PII
+      logger.log('[CourierContext] completeOrder response:', result.success, result.data?.orderId ?? numericOrderId);
 
       if (result.success && result.data) {
-        console.log('[CourierContext] Order completed successfully, refreshing stats...');
+        logger.log('[CourierContext] Order completed successfully, refreshing stats...');
         // Refresh stats after successful completion
         await fetchStats();
 
@@ -1788,6 +1998,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     logoutAllDevices,
     requestOtp,
     verifyOtp,
+    authenticatedFetch,
 
     // Courier profile
     courierProfile,
@@ -1810,6 +2021,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     updateOrderStatus,
     completeOrder,
     reportOrderIssue,
+    // Staleness: non-null / true when the last active-orders sync failed and
+    // the current list may be out of date
+    lastSyncError,
+    isStale: lastSyncError !== null,
 
     // Order history
     orderHistory,

@@ -1,6 +1,7 @@
-import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
+import { Client, IMessage, ReconnectionTimeMode, StompSubscription } from '@stomp/stompjs';
 import { Platform } from 'react-native';
 import { WEBSOCKET_CONFIG } from '@/constants/config';
+import { log, warn, error as logError } from '@/lib/logger';
 
 // WebSocket message types
 // Matches the flat structure sent by the backend
@@ -129,6 +130,14 @@ export interface LocationConfirmation {
 
 export type WebSocketMessageHandler<T> = (message: T) => void;
 
+/**
+ * Supplies the current access token before EVERY (re)connect attempt, so
+ * stompjs reconnects never reuse a stale JWT. Return null if no token is
+ * available (the connect attempt proceeds unauthenticated and will be
+ * rejected by the server, then retried).
+ */
+export type AccessTokenProvider = () => Promise<string | null> | string | null;
+
 interface SubscriptionInfo {
   destination: string;
   subscription: StompSubscription;
@@ -137,7 +146,10 @@ interface SubscriptionInfo {
 class WebSocketService {
   private client: Client | null = null;
   private subscriptions: Map<string, SubscriptionInfo> = new Map();
-  private accessToken: string | null = null;
+  private tokenProvider: AccessTokenProvider | null = null;
+  // Set only when connect() was called with a raw string token, so repeated
+  // connect(sameToken) calls stay idempotent (legacy call style)
+  private staticToken: string | null = null;
   private reconnectAttempts: number = 0;
   private isConnecting: boolean = false;
   // True while a live STOMP session exists; lets close/disconnect handlers
@@ -151,15 +163,49 @@ class WebSocketService {
   private onErrorCallback?: (error: string) => void;
 
   /**
-   * Initialize WebSocket connection with authentication
+   * Initialize WebSocket connection with authentication.
+   *
+   * Preferred: pass an AccessTokenProvider — it is consulted via stompjs's
+   * `beforeConnect` hook before EVERY (re)connect attempt, so automatic
+   * reconnects always carry a fresh JWT. A raw string token is still accepted
+   * for backward compatibility (it becomes a constant provider).
    */
-  connect(accessToken: string): void {
-    if (this.isConnecting || (this.client?.connected && this.accessToken === accessToken)) {
-      console.log('[WebSocket] Already connected or connecting');
+  connect(tokenOrProvider: string | AccessTokenProvider): void {
+    const isStatic = typeof tokenOrProvider !== 'function';
+    const provider: AccessTokenProvider = isStatic ? () => tokenOrProvider : tokenOrProvider;
+
+    // Idempotency: same auth source and a client that is already live or
+    // in-flight — nothing to do.
+    const sameAuthSource = isStatic
+      ? this.staticToken === tokenOrProvider
+      : this.tokenProvider === tokenOrProvider;
+    if (this.client && sameAuthSource && (this.isConnecting || this.client.active)) {
+      log('[WebSocket] Already connected or connecting');
       return;
     }
 
-    this.accessToken = accessToken;
+    // Auth source changed (or a stale client lingers): never allow two live
+    // clients — cleanly deactivate the old one before creating the new one.
+    if (this.client) {
+      const oldClient = this.client;
+      this.client = null;
+      this.subscriptions.clear();
+      // Intentional teardown: suppress the lost-connection notification
+      this.wasConnected = false;
+      // Detach shared-state callbacks so the dying client's close events
+      // can't clobber the replacement client's connection bookkeeping
+      oldClient.onConnect = () => {};
+      oldClient.onDisconnect = () => {};
+      oldClient.onWebSocketClose = () => {};
+      oldClient.onWebSocketError = () => {};
+      oldClient.onStompError = () => {};
+      oldClient.deactivate().catch((error) => {
+        warn('[WebSocket] Error deactivating previous client:', error);
+      });
+    }
+
+    this.tokenProvider = provider;
+    this.staticToken = isStatic ? (tokenOrProvider as string) : null;
     this.isConnecting = true;
 
     // Build WebSocket URL based on platform
@@ -178,21 +224,37 @@ class WebSocketService {
       }
     }
 
-    console.log('[WebSocket] Connecting to:', wsUrl);
+    log('[WebSocket] Connecting to:', wsUrl);
 
     this.client = new Client({
       brokerURL: wsUrl,
-      connectHeaders: {
-        Authorization: `Bearer ${accessToken}`,
-      },
       debug: (str) => {
         if (__DEV__) {
           console.log('[STOMP]', str);
         }
       },
+      // Exponential backoff: 3s -> 6s -> 12s ... capped at 60s so a down
+      // server isn't hammered forever. stompjs resets the delay back to
+      // reconnectDelay after every successful connect.
       reconnectDelay: WEBSOCKET_CONFIG.RECONNECT_INTERVAL,
+      maxReconnectDelay: WEBSOCKET_CONFIG.MAX_RECONNECT_DELAY,
+      reconnectTimeMode: ReconnectionTimeMode.EXPONENTIAL,
       heartbeatIncoming: WEBSOCKET_CONFIG.HEARTBEAT_INCOMING,
       heartbeatOutgoing: WEBSOCKET_CONFIG.HEARTBEAT_OUTGOING,
+
+      // Runs before EVERY (re)connect attempt (initial and automatic
+      // reconnects) — pull a fresh access token so reconnects after a token
+      // rotation never present a stale JWT.
+      beforeConnect: async (client: Client) => {
+        try {
+          const token = await this.tokenProvider?.();
+          client.connectHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+        } catch (error) {
+          // Provider failed (e.g. refresh network error): keep the previous
+          // headers and let this attempt play out; the next retry re-asks.
+          logError('[WebSocket] Failed to obtain access token before connect:', error);
+        }
+      },
 
       // For web platform, use SockJS
       ...(Platform.OS === 'web' && {
@@ -204,7 +266,7 @@ class WebSocketService {
       }),
 
       onConnect: () => {
-        console.log('[WebSocket] Connected successfully');
+        log('[WebSocket] Connected successfully');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.wasConnected = true;
@@ -215,7 +277,7 @@ class WebSocketService {
       // Fires only on graceful STOMP disconnect (client.deactivate()) —
       // NOT on network drops. Abrupt losses are handled by onWebSocketClose.
       onDisconnect: () => {
-        console.log('[WebSocket] Disconnected (graceful)');
+        log('[WebSocket] Disconnected (graceful)');
         this.isConnecting = false;
         if (this.wasConnected) {
           this.wasConnected = false;
@@ -230,20 +292,20 @@ class WebSocketService {
       onWebSocketClose: () => {
         this.isConnecting = false;
         if (this.wasConnected) {
-          console.log('[WebSocket] Connection lost');
+          log('[WebSocket] Connection lost');
           this.wasConnected = false;
           this.onDisconnectedCallback?.();
         }
       },
 
       onStompError: (frame) => {
-        console.error('[WebSocket] STOMP error:', frame.headers['message']);
+        logError('[WebSocket] STOMP error:', frame.headers['message']);
         this.isConnecting = false;
         this.onErrorCallback?.(frame.headers['message'] || 'Connection error');
       },
 
       onWebSocketError: (event) => {
-        console.error('[WebSocket] WebSocket error:', event);
+        logError('[WebSocket] WebSocket error:', event);
         this.isConnecting = false;
         this.reconnectAttempts++;
 
@@ -261,14 +323,17 @@ class WebSocketService {
    */
   disconnect(): void {
     if (this.client) {
-      console.log('[WebSocket] Disconnecting...');
+      log('[WebSocket] Disconnecting...');
       this.subscriptions.clear();
       // Intentional disconnect (logout/token change): suppress the
       // lost-connection notification so no re-assert or auto-offline fires
       this.wasConnected = false;
-      this.client.deactivate();
+      this.client.deactivate().catch((error) => {
+        warn('[WebSocket] Error during deactivate:', error);
+      });
       this.client = null;
-      this.accessToken = null;
+      this.tokenProvider = null;
+      this.staticToken = null;
       this.isConnecting = false;
     }
   }
