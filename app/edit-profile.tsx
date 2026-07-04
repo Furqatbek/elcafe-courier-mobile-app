@@ -6,19 +6,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
-  Camera,
   User,
   Mail,
   Phone,
 } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -35,66 +32,8 @@ export default function EditProfileScreen() {
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone || '');
-  const [profileImage, setProfileImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status !== 'granted') {
-      Alert.alert(
-        t('common.error_title'),
-        t('edit_profile.photo_permission_denied')
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setProfileImage(result.assets[0].uri);
-    }
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-
-    if (status !== 'granted') {
-      Alert.alert(
-        t('common.error_title'),
-        t('edit_profile.camera_permission_denied')
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setProfileImage(result.assets[0].uri);
-    }
-  };
-
-  const showImageOptions = () => {
-    Alert.alert(
-      t('edit_profile.change_photo'),
-      t('edit_profile.choose_option'),
-      [
-        { text: t('edit_profile.take_photo'), onPress: takePhoto },
-        { text: t('edit_profile.choose_from_library'), onPress: pickImage },
-        { text: t('common.cancel'), style: 'cancel' },
-      ]
-    );
-  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -170,21 +109,11 @@ export default function EditProfileScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Profile Photo */}
+        {/* Profile Avatar (initials only — photo upload is not supported) */}
         <View style={styles.photoSection}>
-          <TouchableOpacity style={styles.photoContainer} onPress={showImageOptions}>
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.initialsContainer}>
-                <Text style={styles.initials}>{getInitials()}</Text>
-              </View>
-            )}
-            <View style={styles.cameraButton}>
-              <Camera size={16} color={Colors.surface} />
-            </View>
-          </TouchableOpacity>
-          <Text style={styles.changePhotoText}>{t('edit_profile.tap_to_change')}</Text>
+          <View style={styles.initialsContainer}>
+            <Text style={styles.initials}>{getInitials()}</Text>
+          </View>
         </View>
 
         {/* Form Fields */}
@@ -301,17 +230,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  photoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    position: 'relative',
-  },
-  profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
   initialsContainer: {
     width: 120,
     height: 120,
@@ -324,25 +242,6 @@ const styles = StyleSheet.create({
     fontSize: 40,
     fontWeight: '700',
     color: Colors.surface,
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.secondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.surface,
-  },
-  changePhotoText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
   },
   form: {
     marginBottom: 24,

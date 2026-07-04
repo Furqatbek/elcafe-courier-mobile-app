@@ -66,7 +66,8 @@ export default function OrderDetailScreen() {
 
   const restaurantName = order.restaurantName ?? '-';
   const restaurantAddress = order.restaurantAddress ?? '-';
-  const restaurantPhone = order.customerPhone ?? null; // backend uses customerPhone for contact
+  // The order payload carries no restaurant phone, so the pickup card is
+  // intentionally non-callable — the only call action is to the customer.
   const customerName = order.customerName ?? '-';
   const customerPhone = order.customerPhone ?? null;
   const deliveryAddr = order.deliveryAddress ?? '-';
@@ -234,13 +235,10 @@ export default function OrderDetailScreen() {
     if (customerPhone) {
       Linking.openURL(`tel:${customerPhone}`);
     } else {
-      Alert.alert(t('order_detail.call'), t('order_detail.no_phone', 'Phone number not available'));
-    }
-  };
-
-  const handleCallRestaurant = () => {
-    if (restaurantPhone) {
-      Linking.openURL(`tel:${restaurantPhone}`);
+      Alert.alert(
+        t('order_detail.call_customer', 'Call customer'),
+        t('order_detail.no_phone', 'Phone number not available')
+      );
     }
   };
 
@@ -282,17 +280,14 @@ export default function OrderDetailScreen() {
         {/* Action Card */}
         <View style={styles.card}>
           <View style={styles.locationSection}>
-            <TouchableOpacity style={styles.timelineItem} onPress={handleCallRestaurant}>
+            <View style={styles.timelineItem}>
               <View style={[styles.timelineDot, { backgroundColor: Colors.primary }]} />
               <View style={styles.timelineContent}>
                 <Text style={styles.locationLabel}>{t('order_detail.pickup_label')}</Text>
                 <Text style={styles.locationName}>{restaurantName}</Text>
                 <Text style={styles.locationAddress}>{restaurantAddress}</Text>
-                {restaurantPhone && (
-                  <Text style={styles.phoneText}>{restaurantPhone}</Text>
-                )}
               </View>
-            </TouchableOpacity>
+            </View>
 
             <View style={styles.timelineLine} />
 
@@ -363,7 +358,7 @@ export default function OrderDetailScreen() {
         {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
           <>
             <View style={styles.contactRow}>
-              {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call'), Colors.primary, handleCallCustomer)}
+              {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call_customer', 'Call customer'), Colors.primary, handleCallCustomer)}
             </View>
             <View style={styles.reportIssueContainer}>
               <TouchableOpacity
@@ -593,11 +588,6 @@ const styles = StyleSheet.create({
   locationAddress: {
     fontSize: 14,
     color: Colors.textSecondary,
-  },
-  phoneText: {
-    fontSize: 13,
-    color: Colors.primary,
-    marginTop: 4,
   },
   instructionsText: {
     fontSize: 13,

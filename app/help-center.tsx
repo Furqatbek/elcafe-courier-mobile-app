@@ -33,7 +33,9 @@ import { APP_CONFIG } from '@/constants/config';
 // known placeholder are hidden so we never point users at dead contacts.
 const SUPPORT_PHONE: string = APP_CONFIG.SUPPORT_PHONE;
 const SUPPORT_EMAIL: string = APP_CONFIG.SUPPORT_EMAIL;
-const hasRealSupportPhone = !!SUPPORT_PHONE && SUPPORT_PHONE !== '+1234567890';
+const PLACEHOLDER_PHONES = ['+1234567890', '+998901234567'];
+const hasRealSupportPhone =
+  !!SUPPORT_PHONE && !PLACEHOLDER_PHONES.includes(SUPPORT_PHONE);
 const hasRealSupportEmail =
   !!SUPPORT_EMAIL && !SUPPORT_EMAIL.toLowerCase().includes('courierapp.com');
 

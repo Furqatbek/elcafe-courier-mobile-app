@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Lock, Mail, Eye, EyeOff } from 'lucide-react-native';
+import { Lock, Mail, Eye, EyeOff, Smartphone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { useCourier } from '@/context/CourierContext';
@@ -11,7 +11,7 @@ import { Logo } from '@/components/Logo';
 export default function LoginScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { login } = useCourier();
+  const { login, fetchCourierProfile } = useCourier();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +26,15 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       await login(email, password);
-      router.replace('/(tabs)/orders');
+      // Users without a courier profile must complete the courier
+      // application before they can receive orders.
+      const profile = await fetchCourierProfile();
+      if (!profile) {
+        router.replace('/become-courier');
+      } else {
+        // AuthNavigator redirects unverified couriers to verification-pending
+        router.replace('/(tabs)/orders');
+      }
     } catch (error: any) {
       Alert.alert(t('common.error_title'), error.message || t('login.failed'));
     } finally {
@@ -88,12 +96,22 @@ export default function LoginScreen() {
               <Text style={styles.forgotPasswordText}>{t('login.forgot_password')}</Text>
             </TouchableOpacity>
 
-            <Button 
-              title={t('login.login_button')} 
-              onPress={handleLogin} 
-              isLoading={isLoading} 
+            <Button
+              title={t('login.login_button')}
+              onPress={handleLogin}
+              isLoading={isLoading}
               style={styles.loginButton}
             />
+
+            <TouchableOpacity
+              style={styles.phoneLoginButton}
+              onPress={() => router.push('/login-otp')}
+            >
+              <Smartphone size={20} color={Colors.primary} />
+              <Text style={styles.phoneLoginText}>
+                {t('login.login_with_phone', 'Log in with phone number')}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
@@ -174,6 +192,23 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  phoneLoginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 56,
+    marginTop: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.surface,
+  },
+  phoneLoginText: {
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 16,
   },
   loginButton: {
     marginTop: 8,

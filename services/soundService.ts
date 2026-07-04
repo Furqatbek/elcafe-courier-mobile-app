@@ -2,28 +2,16 @@ import { Audio, AVPlaybackSource } from 'expo-av';
 import { Platform } from 'react-native';
 import logger from '@/lib/logger';
 
-// Try to load bundled sound, fall back to null if not available
-let NEW_ORDER_SOUND: AVPlaybackSource | null = null;
-try {
-  NEW_ORDER_SOUND = require('@/assets/sounds/new-order.mp3');
-} catch {
-  logger.log('[SoundService] No bundled sound file found, will use fallback');
-}
-
-// Fallback sound URL (free notification sound)
-const FALLBACK_SOUND_URL = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
+// Bundled alert sound (44.1kHz 16-bit mono WAV, two-tone urgent alert).
+// Shipped with the app — no network audio in production.
+const NEW_ORDER_SOUND: AVPlaybackSource = require('@/assets/sounds/new-order.wav');
 
 class SoundService {
   private newOrderSound: Audio.Sound | null = null;
   private isLoaded: boolean = false;
   private isPlaying: boolean = false;
-  private soundSource: AVPlaybackSource;
+  private soundSource: AVPlaybackSource = NEW_ORDER_SOUND;
   private webAudioContext: AudioContext | null = null;
-
-  constructor() {
-    // Use bundled sound if available, otherwise use fallback URL
-    this.soundSource = NEW_ORDER_SOUND || { uri: FALLBACK_SOUND_URL };
-  }
 
   /**
    * Initialize audio settings for the app

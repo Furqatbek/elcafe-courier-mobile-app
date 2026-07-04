@@ -37,7 +37,8 @@
     "login_button": "Login",
     "no_account": "Don't have an account? ",
     "sign_up": "Sign Up",
-    "failed": "Login failed. Please try again."
+    "failed": "Login failed. Please try again.",
+    "login_with_phone": "Log in with phone number"
   },
   "register": {
     "create_account_subtitle": "Join our courier community",
@@ -57,7 +58,14 @@
     "password_mismatch": "Passwords do not match",
     "password_too_short": "Password must be at least 6 characters",
     "registration_success": "Registration successful! Please login.",
-    "registration_failed": "Registration failed. Please try again."
+    "registration_failed": "Registration failed. Please try again.",
+    "first_name_required": "First name is required",
+    "last_name_required": "Last name is required",
+    "email_required": "Email is required",
+    "phone_required": "Phone number is required",
+    "password_required": "Password is required",
+    "confirm_password_required": "Please confirm your password",
+    "next_step_courier": "After logging in, complete a short courier application to start delivering."
   },
   "onboarding": {
     "welcome_title": "Deliver Faster. Earn More.",
@@ -104,7 +112,15 @@
     "new_order_available": "New Order Available!",
     "tap_to_view": "Tap to view details",
     "view": "View",
-    "earnings_label": "Earnings"
+    "earnings_label": "Earnings",
+    "location_permission_title": "Location Permission Needed",
+    "location_permission_message": "Going online requires location access so we can send you nearby orders and share your position during deliveries. Please enable location for this app in your device settings.",
+    "open_settings": "Open Settings",
+    "toggle_online_failed": "Could not update your status. Please check your connection and try again.",
+    "hours_ago_few": "{{count}}h ago",
+    "hours_ago_many": "{{count}}h ago",
+    "minutes_ago_few": "{{count}} mins ago",
+    "minutes_ago_many": "{{count}} mins ago"
   },
   "notifications_page": {
     "title": "Notifications",
@@ -248,7 +264,8 @@
     "issue_other": "Other",
     "no_phone": "Phone number not available",
     "your_earnings": "Your earnings (fee + tip)",
-    "order_total": "Order total"
+    "order_total": "Order total",
+    "call_customer": "Call customer"
   },
   "personal_info": {
     "title": "Personal Information",
@@ -495,7 +512,14 @@
     "otp_resent": "Verification code resent!",
     "otp_request_failed": "Failed to send code. Please try again.",
     "enter_complete_otp": "Please enter the complete verification code",
-    "verification_failed": "Verification failed. Please try again."
+    "verification_failed": "Verification failed. Please try again.",
+    "change_number": "Change number",
+    "invalid_otp": "Enter the 6-digit code",
+    "otp_failed": "Failed to send the code. Please try again.",
+    "otp_placeholder": "Enter the 6-digit code",
+    "resend_otp": "Resend code",
+    "send_otp": "Send code",
+    "verify_button": "Verify"
   },
   "become_courier": {
     "title": "Become a Courier",
@@ -519,7 +543,30 @@
     "verification_note": "Your application will be reviewed by our team. This usually takes 1-2 business days. You'll receive a notification once approved.",
     "submit": "Submit Application",
     "success": "Application submitted successfully!",
-    "error": "Failed to submit application. Please try again."
+    "error": "Failed to submit application. Please try again.",
+    "and": "and",
+    "email": "Email (optional)",
+    "error_message": "Failed to submit your application. Please try again.",
+    "first_name": "First name",
+    "last_name": "Last name",
+    "personal_info": "Personal information",
+    "phone": "Phone number",
+    "privacy_link": "Privacy Policy",
+    "radius_helper": "Maximum distance for receiving orders",
+    "submitting": "Submitting...",
+    "success_message": "Your application is under review. We will contact you shortly.",
+    "success_title": "Application submitted!",
+    "terms_agree": "I agree to the",
+    "terms_link": "Terms of Service",
+    "validation": {
+      "first_name_required": "Enter your first name",
+      "last_name_required": "Enter your last name",
+      "phone_required": "Enter your phone number",
+      "terms_required": "Please accept the Terms of Service",
+      "vehicle_type_required": "Select a vehicle type"
+    },
+    "vehicle_info": "Vehicle information",
+    "work_preferences": "Work preferences"
   },
   "available_orders": {
     "title": "Available Orders",
@@ -552,7 +599,13 @@
     "order_taken_title": "Order No Longer Available",
     "order_taken_message": "This order was taken by {{courierName}}",
     "order_already_taken": "This order was already taken by another courier.",
-    "another_courier": "another courier"
+    "another_courier": "another courier",
+    "accept_failed": "Failed to accept the order. Please try again.",
+    "distance": "Distance",
+    "earnings": "Earnings",
+    "estimated_time": "~{{time}} min",
+    "no_orders": "No orders available",
+    "subtitle": "Orders nearby"
   },
   "order_offer": {
     "new_order": "New Order!",
@@ -604,14 +657,46 @@
     "enter_description": "Please describe the issue",
     "submit": "Submit Report",
     "success": "Issue reported successfully!",
-    "error": "Failed to submit report. Please try again."
+    "error": "Failed to submit report. Please try again.",
+    "add_photo": "Add photo",
+    "change_photo": "Change photo",
+    "error_message": "Failed to submit the report. Please try again.",
+    "issue_types": {
+      "customer_unavailable": "Customer unavailable",
+      "missing_items": "Missing items",
+      "order_damaged": "Order damaged",
+      "other": "Other",
+      "restaurant_closed": "Restaurant closed",
+      "traffic_delay": "Traffic delay",
+      "vehicle_issue": "Vehicle issue",
+      "wrong_address": "Wrong address"
+    },
+    "order_id": "Order #{{id}}",
+    "photo": "Photo (optional)",
+    "select_issue_type": "Select the issue type",
+    "submitting": "Submitting...",
+    "success_message": "We will review your issue and get back to you.",
+    "success_title": "Report submitted",
+    "validation": {
+      "description_required": "Describe the issue",
+      "issue_type_required": "Select the issue type"
+    }
   },
   "notifications": {
     "title": "Notifications",
     "empty_title": "No Notifications",
     "empty_message": "You're all caught up! New notifications will appear here.",
     "fetch_error": "Failed to load notifications",
-    "read_all": "Read All"
+    "read_all": "Read All",
+    "mark_read_error": "Failed to mark as read",
+    "types": {
+      "new_order": "New order",
+      "order_assigned": "Order assigned",
+      "order_cancelled": "Order cancelled",
+      "payout": "Payout",
+      "rating": "New review",
+      "verification": "Verification"
+    }
   },
   "verification_pending": {
     "title": "Verification Pending",
@@ -628,7 +713,8 @@
     "call": "Call",
     "email": "Email",
     "chat": "Chat",
-    "logout": "Log Out"
+    "logout": "Log Out",
+    "check_status": "Check status"
   },
   "realtime": {
     "new_order": "New Order!",
@@ -674,6 +760,20 @@
       "order_not_ready": "This order is not ready for pickup yet",
       "order_not_yours": "This order is not assigned to you",
       "courier_not_available": "You must be online to accept orders"
-    }
+    },
+    "location_permission_denied": "Location access denied.",
+    "location_unavailable": "Could not determine your location.",
+    "network_error": "Network error. Check your internet connection.",
+    "server_error": "Server error. Please try again later.",
+    "timeout": "Request timed out. Please try again.",
+    "unknown_error": "Something went wrong. Please try again.",
+    "validation_error": "Please check the entered data."
+  },
+  "location_disclosure": {
+    "title": "Location Sharing",
+    "description": "To dispatch nearby orders and share your live position with restaurants and customers, this app collects location data while you are online — including when the app is in the background or closed.",
+    "offline_note": "Your location is not collected while you are offline.",
+    "agree": "Agree",
+    "not_now": "Not now"
   }
 }

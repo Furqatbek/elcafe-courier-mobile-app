@@ -37,7 +37,8 @@
     "login_button": "Kirish",
     "no_account": "Hisobingiz yo'qmi? ",
     "sign_up": "Ro'yxatdan o'tish",
-    "failed": "Kirish xatosi. Qayta urinib ko'ring."
+    "failed": "Kirish xatosi. Qayta urinib ko'ring.",
+    "login_with_phone": "Telefon raqami orqali kirish"
   },
   "register": {
     "create_account_subtitle": "Kuryerlar jamoasiga qo'shiling",
@@ -57,7 +58,14 @@
     "password_mismatch": "Parollar mos kelmaydi",
     "password_too_short": "Parol kamida 6 ta belgidan iborat bo'lishi kerak",
     "registration_success": "Ro'yxatdan o'tish muvaffaqiyatli! Tizimga kiring.",
-    "registration_failed": "Ro'yxatdan o'tish xatosi. Qayta urinib ko'ring."
+    "registration_failed": "Ro'yxatdan o'tish xatosi. Qayta urinib ko'ring.",
+    "first_name_required": "Ismingizni kiriting",
+    "last_name_required": "Familiyangizni kiriting",
+    "email_required": "Elektron pochtangizni kiriting",
+    "phone_required": "Telefon raqamingizni kiriting",
+    "password_required": "Parolni kiriting",
+    "confirm_password_required": "Parolni tasdiqlang",
+    "next_step_courier": "Tizimga kirgach, yetkazib berishni boshlash uchun qisqa kuryer anketasini to'ldiring."
   },
   "onboarding": {
     "welcome_title": "Tezroq yetkazing. Ko'proq daromad oling.",
@@ -104,7 +112,15 @@
     "new_order_available": "Yangi buyurtma!",
     "tap_to_view": "Ko'rish uchun bosing",
     "view": "Ko'rish",
-    "earnings_label": "Daromad"
+    "earnings_label": "Daromad",
+    "location_permission_title": "Joylashuvga ruxsat kerak",
+    "location_permission_message": "Onlayn bo'lish uchun joylashuvga ruxsat kerak: shu orqali sizga yaqin-atrofdagi buyurtmalarni yuboramiz va yetkazib berish paytida joylashuvingizni ulashamiz. Qurilma sozlamalarida ilova uchun joylashuvni yoqing.",
+    "open_settings": "Sozlamalarni ochish",
+    "toggle_online_failed": "Holatni yangilab bo'lmadi. Internet aloqasini tekshirib, qayta urinib ko'ring.",
+    "hours_ago_few": "{{count}}s oldin",
+    "hours_ago_many": "{{count}}s oldin",
+    "minutes_ago_few": "{{count}} daq oldin",
+    "minutes_ago_many": "{{count}} daq oldin"
   },
   "notifications_page": {
     "title": "Bildirishnomalar",
@@ -248,7 +264,8 @@
     "issue_other": "Boshqa",
     "no_phone": "Telefon raqami mavjud emas",
     "your_earnings": "Sizning daromadingiz (yetkazish + choychaqa)",
-    "order_total": "Buyurtma summasi"
+    "order_total": "Buyurtma summasi",
+    "call_customer": "Mijozga qo'ng'iroq qilish"
   },
   "personal_info": {
     "title": "Shaxsiy ma'lumotlar",
@@ -696,7 +713,8 @@
     "call": "Qo'ng'iroq",
     "email": "Email",
     "chat": "Chat",
-    "logout": "Chiqish"
+    "logout": "Chiqish",
+    "check_status": "Holatni tekshirish"
   },
   "realtime": {
     "new_order": "Yangi buyurtma!",
@@ -750,5 +768,12 @@
     "service_unavailable": "Xizmat hozircha mavjud emas.",
     "unknown": "Kutilmagan xato yuz berdi.",
     "validation": "Kiritilgan ma'lumotlarni tekshirib, qayta urinib ko'ring."
+  },
+  "location_disclosure": {
+    "title": "Joylashuvni ulashish",
+    "description": "Yaqin-atrofdagi buyurtmalarni taklif qilish va joylashuvingizni restoranlar hamda mijozlarga uzatish uchun ilova siz onlayn bo'lganingizda joylashuv ma'lumotlarini to'playdi — jumladan, ilova fonda ishlayotganda yoki yopiq bo'lganda ham.",
+    "offline_note": "Siz oflayn bo'lganingizda joylashuvingiz to'planmaydi.",
+    "agree": "Roziman",
+    "not_now": "Hozir emas"
   }
 }

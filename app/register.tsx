@@ -127,7 +127,10 @@ export default function RegisterScreen() {
       if (data.success) {
         Alert.alert(
           t('common.success'),
-          t('register.registration_success'),
+          `${t('register.registration_success')}\n\n${t(
+            'register.next_step_courier',
+            'After logging in, complete a short courier application to start delivering.'
+          )}`,
           [
             {
               text: t('common.ok'),

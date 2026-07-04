@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import {
   Clock,
@@ -15,16 +15,45 @@ import {
   FileText,
   Phone,
   Mail,
+  RefreshCw,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { APP_CONFIG } from '@/constants/config';
 import { useCourier } from '@/context/CourierContext';
 import * as Linking from 'expo-linking';
 
+// Known placeholder numbers from the config defaults — never show a
+// call-support row that would dial a number we don't actually own.
+const PLACEHOLDER_PHONES = ['+1234567890', '+998901234567'];
+const hasRealSupportPhone =
+  !!APP_CONFIG.SUPPORT_PHONE &&
+  !PLACEHOLDER_PHONES.includes(APP_CONFIG.SUPPORT_PHONE);
+
+// Re-check verification status every 30 seconds; once the backend flips
+// `verified`, the AuthNavigator in app/_layout.tsx redirects to the main app.
+const STATUS_POLL_INTERVAL_MS = 30000;
+
 export default function VerificationPendingScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const { logout } = useCourier();
+  const { logout, fetchCourierProfile } = useCourier();
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchCourierProfile().catch(() => {});
+    }, STATUS_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [fetchCourierProfile]);
+
+  const handleCheckStatus = async () => {
+    if (isCheckingStatus) return;
+    setIsCheckingStatus(true);
+    try {
+      await fetchCourierProfile();
+    } finally {
+      setIsCheckingStatus(false);
+    }
+  };
 
   const handleContactSupport = (method: 'phone' | 'email') => {
     switch (method) {
@@ -114,17 +143,35 @@ export default function VerificationPendingScreen() {
         </View>
       </View>
 
+      {/* Manual status re-check */}
+      <TouchableOpacity
+        style={styles.checkStatusButton}
+        onPress={handleCheckStatus}
+        disabled={isCheckingStatus}
+      >
+        {isCheckingStatus ? (
+          <ActivityIndicator size="small" color={Colors.surface} />
+        ) : (
+          <RefreshCw size={20} color={Colors.surface} />
+        )}
+        <Text style={styles.checkStatusText}>
+          {t('verification_pending.check_status', 'Check status')}
+        </Text>
+      </TouchableOpacity>
+
       {/* Contact Support */}
       <View style={styles.supportSection}>
         <Text style={styles.supportTitle}>{t('verification_pending.need_help')}</Text>
         <View style={styles.supportButtons}>
-          <TouchableOpacity
-            style={styles.supportButton}
-            onPress={() => handleContactSupport('phone')}
-          >
-            <Phone size={20} color={Colors.primary} />
-            <Text style={styles.supportButtonText}>{t('verification_pending.call')}</Text>
-          </TouchableOpacity>
+          {hasRealSupportPhone && (
+            <TouchableOpacity
+              style={styles.supportButton}
+              onPress={() => handleContactSupport('phone')}
+            >
+              <Phone size={20} color={Colors.primary} />
+              <Text style={styles.supportButtonText}>{t('verification_pending.call')}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.supportButton}
             onPress={() => handleContactSupport('email')}
@@ -260,6 +307,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     lineHeight: 20,
+  },
+  checkStatusButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+    marginBottom: 32,
+  },
+  checkStatusText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.surface,
   },
   supportSection: {
     marginBottom: 32,
