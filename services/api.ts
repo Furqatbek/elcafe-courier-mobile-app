@@ -487,6 +487,18 @@ export const authApi = {
   getMe: () => apiClient.get<User>(API_ENDPOINTS.AUTH.ME),
 };
 
+// User account (personal fields live here — backend-verified:
+// PUT /couriers/me persists vehicle fields ONLY and silently ignores
+// firstName/lastName/email/phone)
+export const userApi = {
+  updatePersonalInfo: (data: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  }) => apiClient.put<User>(API_ENDPOINTS.USER.ME, data),
+};
+
 // Courier Profile
 export const courierApi = {
   register: (data: CourierRegisterRequest) =>

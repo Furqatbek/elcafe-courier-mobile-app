@@ -67,14 +67,17 @@ export default function OrderRatingScreen() {
 
     setIsLoading(true);
     try {
+      // Backend contract is {rating, comment} only — fold selected tags into
+      // the comment so the courier's input isn't silently dropped
+      const tagsPrefix = selectedTags.length > 0 ? `[${selectedTags.join(', ')}] ` : '';
+      const fullComment = `${tagsPrefix}${comment.trim()}`.trim();
       const response = await authenticatedFetch(
         `/api/v1/couriers/me/orders/${orderId}/rating`,
         {
           method: 'POST',
           body: JSON.stringify({
             rating: overallRating,
-            tags: selectedTags,
-            comment: comment.trim() || undefined,
+            comment: fullComment || undefined,
           }),
         }
       );

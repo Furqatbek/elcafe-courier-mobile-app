@@ -20,7 +20,7 @@ import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useCourier } from '@/context/CourierContext';
-import { courierApi } from '@/services/api';
+import { userApi } from '@/services/api';
 import { validateEmail, validatePhone, validateRequired } from '@/lib/validation';
 
 export default function EditProfileScreen() {
@@ -69,7 +69,9 @@ export default function EditProfileScreen() {
 
     setIsLoading(true);
     try {
-      await courierApi.updateProfile({ firstName, lastName, email, phone });
+      // Personal fields go to the USER resource — PUT /couriers/me silently
+      // ignores them (backend-verified), which made this save a no-op before
+      await userApi.updatePersonalInfo({ firstName, lastName, email, phone });
       await fetchCourierProfile();
 
       Alert.alert(

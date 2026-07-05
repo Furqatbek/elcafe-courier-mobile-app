@@ -250,3 +250,46 @@ manual/QA cases):
 Backend-side verification: confirm `request-otp` rejects malformed values
 (the last three rows) with a 4xx and a message the app can surface, rather
 than silently queuing SMS to garbage numbers.
+
+---
+
+# RESOLUTION — Backend team response (2026-07-05)
+
+Backend verified all 11 items (`COURIER_VERIFICATION_RESPONSE.md` in the
+backend repo). Status per item, and the app-side reconciliation shipped in
+this commit:
+
+| # | Item | Outcome | App-side action taken |
+|---|------|---------|----------------------|
+| 1 | STOMP subscribe auth | **FIXED backend-side** — `WebSocketDestinationAuthorizer` checks every SUBSCRIBE; `/topic/orders/{id}` party-to-order only | Denied-SUBSCRIBE ERROR frames now logged unmissably (`services/websocket.ts`); our subscriptions are all within courier scope |
+| 2 | Refresh rotation | Reuse-tolerant, **never rotated** — same refresh token returned | None needed (tokenManager already handles non-rotating refresh; its rotation safety stays as future-proofing). **Decision: accept for MVP — recommended YES** |
+| 3 | Expo vs FCM push | **LAUNCH BLOCKER** — backend sends raw FCM; rejects + deactivates `ExponentPushToken`s | **DECISION REQUIRED** (see below) |
+| 4 | Notifications API | 4b/4c/4e corrected | App already used PATCH `/read`; `read-all` userId now mandatory-guarded; `read-batch` unused; `COURIER_ASSIGNED` added to type maps |
+| 5 | DELETE /users/me | **Shipped** | Already wired ✓ |
+| 6 | Order rating | **Shipped** — `{rating, comment}` only | Payload aligned; tags folded into comment |
+| 7 | Reviews field | `courierRating` | Already using it ✓ |
+| 8 | Earnings fields | Confirmed; **period/date params IGNORED** | Date-range picker removed from finance (was lying UI); fetch sends no params |
+| 9a | Auto-offline | Confirmed (AVAILABLE/ON_BREAK only) | Client mirror already matches ✓ |
+| 9b | Status endpoint | PUT+PATCH both work, idempotent; SUSPENDED self-clear guard deferred | **Decision: approve deferral — recommended YES** with note it must land before admin suspension flow ships |
+| 10 | ORDER_TAKEN | Confirmed exactly as implemented | None ✓ |
+| 11.1 | Timestamp Z suffix | **CHANGED** — all timestamps now UTC with `Z` | Verified: no manual `Z` appends in app; `new Date()` parsing correct. Test on stage before deploy |
+| 11.2 | JWT claims | Tiny token, no roles | App only decodes `exp` ✓; role comes from API responses ✓ |
+| 11.4 | PUT /couriers/me | Vehicle fields ONLY — personal fields silently ignored | edit-profile now saves personal fields via `PUT /users/me` (`userApi.updatePersonalInfo`) — was a silent no-op |
+| 11.5 | OSRM | Backend defaults to public demo | Ops: set `DELIVERY_ROUTING_OSRM_URL` backend-side (app-side env already gated) |
+| A | Phone/OTP validation | Fixed backend-side; accepts `+998XXXXXXXXX` | Our normalizePhone output matches ✓ |
+
+## Open decision: push token format (Item 3 — blocks courier push)
+
+**Recommendation: backend adds the Expo Push transport** (detect
+`ExponentPushToken[` prefix → POST to `https://exp.host/--/api/v2/push/send`).
+
+Rationale:
+- App-side native tokens are clean on Android (`getDevicePushTokenAsync`
+  returns an FCM registration token) but NOT on iOS, where it returns a raw
+  APNs token that Firebase Admin cannot target without an APNs batch-import
+  step or embedding the Firebase iOS SDK (a native dependency change this
+  late in the cycle).
+- The Expo transport is a small, well-documented backend addition, keeps one
+  token type across platforms, and Expo handles the APNs/FCM fan-out.
+- Until either side ships, `NEW_DELIVERY_AVAILABLE` pushes are dead and the
+  backend actively deactivates our registered tokens.

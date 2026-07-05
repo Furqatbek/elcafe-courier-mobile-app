@@ -31,6 +31,9 @@ import { Truck } from 'lucide-react-native';
 const notificationIcons: Record<string, any> = {
   NEW_ORDER_NEARBY: Package,
   ORDER_ASSIGNED: Package,
+  // Backend-verified real type (ORDER_ASSIGNED/NEW_ORDER_NEARBY kept as
+  // harmless legacy keys)
+  COURIER_ASSIGNED: Package,
   ORDER_CANCELLED: XCircle,
   PAYOUT_ISSUED: DollarSign,
   VERIFICATION_APPROVED: CheckCircle,
@@ -43,6 +46,7 @@ const notificationIcons: Record<string, any> = {
 const notificationColors: Record<string, string> = {
   NEW_ORDER_NEARBY: Colors.primary,
   ORDER_ASSIGNED: Colors.success,
+  COURIER_ASSIGNED: Colors.success,
   ORDER_CANCELLED: Colors.danger,
   PAYOUT_ISSUED: Colors.success,
   VERIFICATION_APPROVED: Colors.success,

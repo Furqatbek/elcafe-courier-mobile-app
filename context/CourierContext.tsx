@@ -446,23 +446,17 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   // Fetch earnings from API with period support
+  // Backend-verified: the earnings endpoint takes NO period/date params —
+  // it always returns its own computed window. The optional args are kept
+  // for signature compatibility but intentionally not sent.
   const fetchEarnings = useCallback(async (
-    period: EarningsPeriod = 'THIS_WEEK',
-    startDate?: string,
-    endDate?: string
+    _period?: EarningsPeriod,
+    _startDate?: string,
+    _endDate?: string
   ) => {
     setIsLoadingEarnings(true);
     try {
-      // Build query params
-      const params = new URLSearchParams();
-      params.append('period', period);
-      if (period === 'CUSTOM' && startDate) params.append('startDate', startDate);
-      if (period === 'CUSTOM' && endDate) params.append('endDate', endDate);
-
-      const queryString = params.toString();
-      const endpoint = `${API_ENDPOINTS.COURIER.EARNINGS}?${queryString}`;
-
-      const response = await authenticatedFetch(endpoint);
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.EARNINGS);
       const data = await response.json();
 
       if (data.success && data.data) {
@@ -473,15 +467,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           // Ensure breakdown is always an array
           breakdown: data.data.breakdown || [],
         });
-        setEarningsPeriod(period);
-
-        // Also update legacy stats for backward compatibility
+        // Legacy stats mapped directly from the backend's computed fields
+        // (the response always carries today/week/month — no period switch)
         setStats(prev => ({
           ...prev,
-          todayEarnings: period === 'TODAY' ? data.data.totalEarnings : prev.todayEarnings,
-          weekEarnings: period === 'THIS_WEEK' ? data.data.totalEarnings : prev.weekEarnings,
-          monthEarnings: period === 'THIS_MONTH' ? data.data.totalEarnings : prev.monthEarnings,
-          completedOrders: data.data.totalDeliveries,
+          todayEarnings: data.data.todayEarnings ?? prev.todayEarnings,
+          weekEarnings: data.data.weekEarnings ?? prev.weekEarnings,
+          monthEarnings: data.data.monthEarnings ?? prev.monthEarnings,
+          completedOrders: data.data.totalDeliveries ?? prev.completedOrders,
         }));
       }
     } catch (error) {
@@ -676,9 +669,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     if (unreadCount === 0) return;
 
     try {
+      // Backend-verified: userId is a MANDATORY query param (400 without it)
       const userId = user?.id || courierProfile?.userId;
-      const params = new URLSearchParams({ role: 'COURIER' });
-      if (userId) params.append('userId', String(userId));
+      if (!userId) {
+        logger.error('[CourierContext] Cannot mark all read: no userId in session');
+        return;
+      }
+      const params = new URLSearchParams({ role: 'COURIER', userId: String(userId) });
 
       const response = await authenticatedFetch(
         `${API_ENDPOINTS.NOTIFICATIONS.READ_ALL}?${params}`,

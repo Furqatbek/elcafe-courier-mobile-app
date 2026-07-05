@@ -98,6 +98,9 @@ export const API_ENDPOINTS = {
 
   // User endpoints
   USER: {
+    // Personal fields (firstName/lastName/email/phone) live on the USER
+    // resource — PUT /couriers/me silently ignores them (backend-verified)
+    ME: '/api/v1/users/me',
     LOGOUT_ALL: '/api/v1/users/me/logout-all',
   },
 

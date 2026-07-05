@@ -296,9 +296,20 @@ class WebSocketService {
       },
 
       onStompError: (frame) => {
-        logError('[WebSocket] STOMP error:', frame.headers['message']);
+        const message = frame.headers['message'] || '';
+        // The backend's WebSocketDestinationAuthorizer rejects unauthorized
+        // SUBSCRIBE frames with a STOMP ERROR. Our subscriptions are all
+        // within this courier's own scope, so a denial here means a bug or a
+        // contract change — make it unmissable in production logs. The
+        // connection closes after ERROR; exponential reconnect backoff
+        // bounds any retry churn.
+        if (/denied|forbidden|unauthori[sz]ed|access/i.test(message)) {
+          logError('[WebSocket] SUBSCRIBE rejected by server authorizer:', message);
+        } else {
+          logError('[WebSocket] STOMP error:', message);
+        }
         this.isConnecting = false;
-        this.onErrorCallback?.(frame.headers['message'] || 'Connection error');
+        this.onErrorCallback?.(message || 'Connection error');
       },
 
       onWebSocketError: (event) => {
