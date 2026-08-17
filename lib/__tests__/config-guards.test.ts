@@ -5,7 +5,7 @@ import {
 } from '@/constants/config';
 
 describe('containsReplaceMePlaceholder', () => {
-  it('detects the literal eas.json placeholder values', () => {
+  it('detects literal template placeholder values', () => {
     expect(containsReplaceMePlaceholder('REPLACE_ME_PROD_API_BASE_URL')).toBe(true);
     expect(containsReplaceMePlaceholder('REPLACE_ME_EXPO_PROJECT_ID')).toBe(true);
   });
@@ -51,8 +51,8 @@ describe('findPlaceholderVars', () => {
     ).toEqual([]);
   });
 
-  it('flags the default eas.json production profile wholesale', () => {
-    // Mirrors eas.json "production".env as shipped — the guard must name
+  it('flags a fully unconfigured production env wholesale', () => {
+    // Mirrors an untouched env template — the guard must name
     // every single variable so the failed build is self-explanatory.
     const easProductionEnv = {
       EXPO_PUBLIC_RORK_API_BASE_URL: 'REPLACE_ME_PROD_API_BASE_URL',

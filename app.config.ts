@@ -3,23 +3,22 @@ import { ExpoConfig, ConfigContext } from "expo/config";
 
 /**
  * App config (converted from app.json so build-time secrets can be injected
- * from the environment / EAS secrets).
+ * from the environment).
  *
- * Build-time env vars (NOT EXPO_PUBLIC_* — these are consumed here at config
- * evaluation time, set them as EAS secrets or in the shell running the build):
+ * Builds are done LOCALLY (npx expo prebuild + Gradle/Xcode) and uploaded
+ * to the stores manually — EAS is not used. Set these in the shell (or a
+ * .env file, which Expo loads) before prebuild/bundling:
  *   GOOGLE_MAPS_API_KEY   Android Google Maps SDK key (react-native-maps)
- *   EAS_PROJECT_ID        EAS project UUID (expo.dev project settings)
- *   GOOGLE_SERVICES_JSON  Optional path to google-services.json (EAS file
- *                         secret); defaults to ./google-services.json
+ *   GOOGLE_SERVICES_JSON  Optional path override for google-services.json;
+ *                         defaults to ./google-services.json (repo root)
  *
  * See docs/PRODUCTION.md for the full launch checklist.
  */
 
 // Firebase config for Android push (FCM). Required for ANY Android push
-// delivery — a build without it ships with push notifications dead.
-// Wired conditionally so local dev machines without the secret can still
-// evaluate this config; EAS builds provide it via a file secret
-// (GOOGLE_SERVICES_JSON) or a committed google-services.json.
+// delivery — a build without it ships with push notifications dead AND
+// getDevicePushTokenAsync throws at runtime. Wired conditionally so dev
+// machines without the secret can still evaluate this config.
 const googleServicesFile =
   process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json";
 const hasGoogleServicesFile = existsSync(googleServicesFile);
@@ -49,6 +48,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: false,
     bundleIdentifier: "app.zbr.courier",
     buildNumber: "1",
+    // Backend sends iOS push directly via APNs — pin the production APNs
+    // environment for store builds (Xcode flips debug builds automatically).
+    entitlements: {
+      "aps-environment": "production",
+    },
     infoPlist: {
       // App uses HTTPS only (exempt encryption) — declaring it here skips the
       // export-compliance questionnaire on every App Store Connect upload.
@@ -134,10 +138,5 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   experiments: {
     typedRoutes: true,
-  },
-  extra: {
-    eas: {
-      projectId: process.env.EAS_PROJECT_ID,
-    },
   },
 });

@@ -263,7 +263,7 @@ this commit:
 |---|------|---------|----------------------|
 | 1 | STOMP subscribe auth | **FIXED backend-side** — `WebSocketDestinationAuthorizer` checks every SUBSCRIBE; `/topic/orders/{id}` party-to-order only | Denied-SUBSCRIBE ERROR frames now logged unmissably (`services/websocket.ts`); our subscriptions are all within courier scope |
 | 2 | Refresh rotation | Reuse-tolerant, **never rotated** — same refresh token returned | None needed (tokenManager already handles non-rotating refresh; its rotation safety stays as future-proofing). **Decision: accept for MVP — recommended YES** |
-| 3 | Expo vs FCM push | **LAUNCH BLOCKER** — backend sends raw FCM; rejects + deactivates `ExponentPushToken`s | **DECISION REQUIRED** (see below) |
+| 3 | Expo vs FCM push | **RESOLVED** — app now registers NATIVE tokens (`getDevicePushTokenAsync`: FCM registration token on Android, raw APNs token on iOS); backend keeps Firebase Admin + direct APNs with its own keys. Expo push service unused. | Native-token registration shipped; `deviceType` field routes platform |
 | 4 | Notifications API | 4b/4c/4e corrected | App already used PATCH `/read`; `read-all` userId now mandatory-guarded; `read-batch` unused; `COURIER_ASSIGNED` added to type maps |
 | 5 | DELETE /users/me | **Shipped** | Already wired ✓ |
 | 6 | Order rating | **Shipped** — `{rating, comment}` only | Payload aligned; tags folded into comment |
@@ -278,18 +278,17 @@ this commit:
 | 11.5 | OSRM | Backend defaults to public demo | Ops: set `DELIVERY_ROUTING_OSRM_URL` backend-side (app-side env already gated) |
 | A | Phone/OTP validation | Fixed backend-side; accepts `+998XXXXXXXXX` | Our normalizePhone output matches ✓ |
 
-## Open decision: push token format (Item 3 — blocks courier push)
+## Push token format (Item 3) — RESOLVED
 
-**Recommendation: backend adds the Expo Push transport** (detect
-`ExponentPushToken[` prefix → POST to `https://exp.host/--/api/v2/push/send`).
+Decision: the app registers **native device tokens** via
+`getDevicePushTokenAsync` — FCM registration token on Android, raw APNs
+device token on iOS — routed by the `deviceType` field. The backend keeps its
+existing Firebase Admin (Android) and direct APNs (iOS) senders with the
+platform keys already provisioned to it. No Expo transport needed on either
+side.
 
-Rationale:
-- App-side native tokens are clean on Android (`getDevicePushTokenAsync`
-  returns an FCM registration token) but NOT on iOS, where it returns a raw
-  APNs token that Firebase Admin cannot target without an APNs batch-import
-  step or embedding the Firebase iOS SDK (a native dependency change this
-  late in the cycle).
-- The Expo transport is a small, well-documented backend addition, keeps one
-  token type across platforms, and Expo handles the APNs/FCM fan-out.
-- Until either side ships, `NEW_DELIVERY_AVAILABLE` pushes are dead and the
-  backend actively deactivates our registered tokens.
+Backend note: expect `deviceToken` values that are NOT `ExponentPushToken[…]`
+— Android tokens are FCM registration strings, iOS tokens are APNs hex
+strings. Route on `deviceType` (`ANDROID` → Firebase Admin, `IOS` → APNs).
+Verify one test push per platform (foreground, background, killed) during the
+staging pass.

@@ -28,7 +28,7 @@ export const enforceSecureTransport = (url: string): string => {
 };
 
 /**
- * True when an env value still carries an unreplaced eas.json placeholder
+ * True when an env value still carries an unreplaced template placeholder
  * (e.g. "REPLACE_ME_PROD_API_BASE_URL"). Placeholders are truthy strings, so
  * plain `if (!value)` guards never catch them — this check does.
  */
@@ -51,7 +51,6 @@ const CONSUMED_EXPO_PUBLIC_ENV: Record<string, string | undefined> = {
   EXPO_PUBLIC_RORK_API_BASE_URL: process.env.EXPO_PUBLIC_RORK_API_BASE_URL,
   EXPO_PUBLIC_WS_URL: process.env.EXPO_PUBLIC_WS_URL,
   EXPO_PUBLIC_WS_SOCKJS_URL: process.env.EXPO_PUBLIC_WS_SOCKJS_URL,
-  EXPO_PUBLIC_PROJECT_ID: process.env.EXPO_PUBLIC_PROJECT_ID,
   EXPO_PUBLIC_ROUTING_URL: process.env.EXPO_PUBLIC_ROUTING_URL,
   EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL,
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
@@ -65,7 +64,7 @@ if (!__DEV__) {
   if (placeholderVars.length > 0) {
     throw new Error(
       `Production build has unreplaced REPLACE_ME placeholder(s) in: ${placeholderVars.join(', ')}. ` +
-      'Replace them with real values in eas.json before building (docs/PRODUCTION.md, section 1).'
+      'Replace them with real values in .env before building (docs/PRODUCTION.md, section 1).'
     );
   }
 }

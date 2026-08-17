@@ -6,28 +6,29 @@ from the environment). Build profiles live in `eas.json`.
 
 ## 1. Environment variables
 
+> **Build model:** builds are made LOCALLY (`npx expo prebuild` + Gradle /
+> Xcode) and uploaded to the stores manually. EAS is NOT used — `eas.json`
+> has been removed. All variables come from a `.env` file (Expo loads it
+> automatically) or the shell running the build. Start from `.env.example`.
+
 ### Build-time secrets (read by `app.config.ts`, NOT `EXPO_PUBLIC_*`)
 
-These are evaluated when the Expo config is resolved. `EXPO_PUBLIC_*` is **not**
-the mechanism for them — they must be set as [EAS secrets](https://docs.expo.dev/build-reference/variables/)
-(`eas env:create` / project env vars on expo.dev) or exported in the shell that
-runs the build.
+These are evaluated when the Expo config is resolved (prebuild/bundling).
 
 | Variable | Purpose |
 |---|---|
 | `GOOGLE_MAPS_API_KEY` | Android Google Maps SDK key, injected into `android.config.googleMaps.apiKey` |
-| `EAS_PROJECT_ID` | EAS project UUID, injected into `extra.eas.projectId` |
-| `GOOGLE_SERVICES_JSON` | **REQUIRED for Android push.** Path to `google-services.json` (upload as an EAS *file* secret). If unset, `app.config.ts` falls back to `./google-services.json` in the repo root. When neither exists the config still evaluates (local dev convenience) but prints a warning and the build ships with **Android push notifications completely dead** — treat the warning as a release blocker. `eas.json` cannot carry comments, so this table is the canonical reminder. |
+| `GOOGLE_SERVICES_JSON` | Optional path override for `google-services.json`; defaults to `./google-services.json` in the repo root. **REQUIRED for Android push** — when missing, config evaluation prints a warning and the build ships with Android push completely dead (and `getDevicePushTokenAsync` throws at runtime). Treat the warning as a release blocker. |
 
 ### Runtime client vars (`EXPO_PUBLIC_*`, inlined into the JS bundle)
 
-Set per profile in `eas.json` — replace every `REPLACE_ME_*` value before building.
+Set them in `.env` (copy `.env.example`) before building — Expo inlines them at bundling time.
 
-> **Guard:** `constants/config.ts` now throws at app startup in production
+> **Guard:** `constants/config.ts` throws at app startup in production
 > builds if ANY consumed `EXPO_PUBLIC_*` value still contains `REPLACE_ME`
-> (case-insensitive). A production build made from an unedited `eas.json`
-> crashes immediately with the offending variable names instead of shipping
-> with every network call silently pointed at a placeholder.
+> (case-insensitive) — a build made from an unedited template crashes
+> immediately with the offending variable names instead of shipping with
+> every network call silently pointed at a placeholder.
 
 | Variable | Used in | Purpose |
 |---|---|---|
@@ -66,31 +67,31 @@ work` warning and the resulting Android binary has **zero push**. For a
 courier app whose core loop is "get alerted to a new order with the phone in
 your pocket", do not ship a build that printed that warning.
 
+**Delivery model (decided):** the app registers NATIVE device tokens via
+`getDevicePushTokenAsync` — the FCM registration token on Android and the raw
+APNs device token on iOS, routed by the `deviceType` field. The backend sends
+via Firebase Admin (Android) and directly via APNs (iOS) with its own platform
+keys (already provisioned backend-side). The Expo push service is NOT used
+anywhere, and `ExponentPushToken[...]` values must never reach the backend —
+it rejects and deactivates them.
+
 1. Create a Firebase project, add an Android app with package `app.zbr.courier`,
-   and download `google-services.json`.
-2. Provide the file to the build — either:
-   - upload it as an EAS **file** secret named `GOOGLE_SERVICES_JSON`
-     (`eas env:create --scope project --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json`), or
-   - commit `google-services.json` to the repo root (it contains no private
-     keys, only project identifiers — committing is Google's documented default).
-3. Upload the FCM V1 service-account key to Expo: `eas credentials` → Android →
-   Push Notifications (required for `expo-notifications` delivery via FCM).
-4. iOS: `eas credentials` provisions the APNs key automatically during the first
-   production build; make sure Push Notifications capability is enabled on the
-   App ID. `ITSAppUsesNonExemptEncryption: false` is declared in
-   `app.config.ts` so App Store Connect skips the export-compliance prompt.
-5. **Backend contract check:** the app registers an `ExponentPushToken[...]`
-   at `POST /api/v1/device-tokens` — the Spring backend must send via Expo's
-   Push API, not raw FCM/APNs. See `docs/BACKEND_VERIFICATION.md` item on
-   device tokens before launch.
+   and download `google-services.json` → put it at the **repo root** (it
+   contains no private keys, only project identifiers — committing it is
+   Google's documented default). `app.config.ts` wires it into the Android
+   build automatically; prebuild copies it to `android/app/`.
+2. iOS: enable the Push Notifications capability on the `app.zbr.courier`
+   App ID in the Apple Developer portal. `app.config.ts` pins the
+   `aps-environment: production` entitlement for store builds, and
+   `ITSAppUsesNonExemptEncryption: false` skips the export-compliance prompt.
+3. Verify on real devices after the first build: register (log in), have the
+   backend send a test push to the registered token for BOTH platforms, with
+   the app in foreground, background, and killed states.
 
-## 4. EAS project ID
+## 4. ~~EAS project ID~~ (not applicable)
 
-1. Run `eas init` (or create the project on expo.dev) to obtain the project UUID.
-2. Set it in two places:
-   - `EAS_PROJECT_ID` build-time secret → `extra.eas.projectId` in `app.config.ts`.
-   - `EXPO_PUBLIC_PROJECT_ID` in each `eas.json` profile (used at runtime by
-     `services/pushNotification.ts`).
+EAS is not used. No Expo project ID is required anywhere — push tokens are
+native (`getDevicePushTokenAsync` needs no `projectId`).
 
 ## 5. Privacy Policy & Terms hosting
 
@@ -102,46 +103,44 @@ Privacy URL must be entered in App Store Connect and the Play Console listing.
 
 ## 6. Build & submit
 
+Local builds, manual store uploads:
+
 ```sh
-eas build --profile production --platform all
-eas submit --platform ios
-eas submit --platform android
+cp .env.example .env        # fill in real values first (once)
+npx expo prebuild --clean   # regenerates android/ and ios/ from app.config.ts
+
+# Android — signed AAB for Play Console
+cd android && ./gradlew bundleRelease
+# → android/app/build/outputs/bundle/release/app-release.aab
+# Configure release signing per RN docs (keystore in ~/.gradle/gradle.properties)
+
+# iOS — archive in Xcode
+open ios/ZBRCourier.xcworkspace
+# Product → Archive → Distribute App → App Store Connect
 ```
 
-`appVersionSource: remote` + `autoIncrement` in `eas.json` bump
-`ios.buildNumber` / `android.versionCode` automatically on production builds
-(the values in `app.config.ts` are the initial baseline).
+**Version bumps are manual now:** increment `version`, `ios.buildNumber`, and
+`android.versionCode` in `app.config.ts` before every store upload — the
+stores reject re-used build numbers.
 
-## 6a. OTA updates (EAS Update) — explicit pre-launch decision required
+## 6a. OTA updates — explicit pre-launch decision required
 
-**Current state: OTA is NOT available.** `expo-updates` is not installed, and
-the `channel` keys that previously sat in `eas.json` build profiles have been
-removed — without the package they were inert metadata that made it look like
-OTA was configured when it wasn't. Consequence: **every JS fix ships as a full
-store build + review cycle.** For a v1 launch to real couriers, that means a
-bad-payload crash or locale bug stays live for however long store review takes.
+**Current state: OTA is NOT available.** `expo-updates` is not installed and
+EAS is not used. Consequence: **every JS fix ships as a full store build +
+review cycle.** For a v1 launch to real couriers, that means a bad-payload
+crash or locale bug stays live for however long store review takes.
 
 Decide before launch, and record the decision here:
 
 - **Option A — launch without OTA (current state).** Zero native-config risk.
   Accept store-review latency for every hotfix. Nothing to do.
-- **Option B — adopt EAS Update.** Install path (do this BEFORE the final
-  store builds — it changes native config, so it cannot be added via OTA
-  itself):
-  1. `npx expo install expo-updates`
-  2. `eas update:configure` (writes `updates.url` + `runtimeVersion` policy
-     into `app.config.ts`)
-  3. Re-add `"channel": "development" | "preview" | "production"` to the
-     matching build profiles in `eas.json`.
-  4. Rebuild all profiles (the runtime version / updates URL are baked into
-     the binary), then publish with `eas update --channel production`.
-  5. Set a `runtimeVersion` policy of `"appVersion"` (safest with bare
-     workflow-adjacent native deps like react-native-maps) so an OTA bundle
-     never lands on an incompatible binary.
-
-Do **not** install `expo-updates` casually right before submission: it adds
-native modules on both platforms and changes startup behavior (update checks),
-which deserves at least one full QA pass on physical devices.
+- **Option B — adopt `expo-updates` with a self-hosted or EAS update server.**
+  Must be done BEFORE the final store builds (it changes native config, so it
+  cannot be added via OTA itself): `npx expo install expo-updates`, configure
+  `updates.url` + `runtimeVersion` in `app.config.ts`, re-run
+  `npx expo prebuild --clean`, and stand up the update server. Note this
+  partially re-introduces the EAS/hosting dependency that was deliberately
+  dropped — weigh against Option A's review latency.
 
 ## 7. Permissions rationale (store review)
 

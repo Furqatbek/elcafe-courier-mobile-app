@@ -5,7 +5,6 @@
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL, API_ENDPOINTS, APP_CONFIG } from '@/constants/config';
@@ -24,13 +23,12 @@ export interface DeviceTokenRequest {
 
 /**
  * Typed result so callers can distinguish "user denied permission" from
- * "this build is misconfigured (no EAS projectId)".
+ * an actual token-acquisition failure.
  */
 export type PushTokenResult =
   | { status: 'success'; token: string }
   | { status: 'unsupported' }         // web or non-physical device
   | { status: 'permission-denied' }
-  | { status: 'misconfigured' }       // no EAS projectId in this build
   | { status: 'error'; error: unknown };
 
 /**
@@ -42,20 +40,17 @@ function getDeviceType(): DeviceType {
   return 'WEB';
 }
 
-let warnedMissingProjectId = false;
-
 /**
- * Resolve the EAS projectId for this build. Required by
- * Notifications.getExpoPushTokenAsync in production builds.
- */
-function getProjectId(): string | undefined {
-  return Constants.expoConfig?.extra?.eas?.projectId ?? process.env.EXPO_PUBLIC_PROJECT_ID;
-}
-
-/**
- * Request notification permissions and get push token.
- * Returns a typed result so callers can distinguish "no permission"
- * from "misconfigured build".
+ * Request notification permissions and get the NATIVE device push token.
+ *
+ * The backend sends via Firebase Admin (Android) and directly via APNs
+ * (iOS) using its own platform keys — it does NOT use the Expo push
+ * service, and it rejects/deactivates ExponentPushToken[...] formats.
+ * getDevicePushTokenAsync returns exactly what the backend needs:
+ *   Android → the FCM registration token (requires google-services.json
+ *             baked into the build; the call throws without it)
+ *   iOS     → the raw APNs device token
+ * The backend routes on the deviceType field we send alongside.
  */
 export async function getPushTokenResult(): Promise<PushTokenResult> {
   // Skip on web or non-physical devices
@@ -85,27 +80,15 @@ export async function getPushTokenResult(): Promise<PushTokenResult> {
       return { status: 'permission-denied' };
     }
 
-    // The projectId is mandatory for push tokens in standalone builds — a
-    // missing one means push is silently dead in production, so fail loudly.
-    const projectId = getProjectId();
-    if (!projectId) {
-      if (!warnedMissingProjectId) {
-        warnedMissingProjectId = true;
-        logger.warn(
-          '[pushNotification] No EAS projectId found (expoConfig.extra.eas.projectId ' +
-          'or EXPO_PUBLIC_PROJECT_ID). Push notifications are DISABLED in this build. ' +
-          'Configure the projectId in app config / env to enable push.'
-        );
-      }
-      return { status: 'misconfigured' };
-    }
+    // Native token: FCM registration token on Android (throws when the build
+    // is missing google-services.json — surfaced as 'error' below, loudly),
+    // raw APNs device token on iOS. No Expo push service involved.
+    const tokenData = await Notifications.getDevicePushTokenAsync();
+    const token = typeof tokenData.data === 'string' ? tokenData.data : JSON.stringify(tokenData.data);
 
-    // Get the push token (FCM on Android, APNs on iOS)
-    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-
-    return { status: 'success', token: tokenData.data };
+    return { status: 'success', token };
   } catch (error) {
-    logger.error('Failed to get push token:', error);
+    logger.error('Failed to get native device push token (Android: is google-services.json baked into this build?):', error);
     return { status: 'error', error };
   }
 }
@@ -159,9 +142,6 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
 
     if (tokenResult.status !== 'success') {
       switch (tokenResult.status) {
-        case 'misconfigured':
-          logger.warn('[pushNotification] Skipping device token registration: build is missing an EAS projectId');
-          break;
         case 'permission-denied':
           logger.log('[pushNotification] Skipping device token registration: notification permission denied');
           break;
@@ -169,7 +149,7 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
           logger.log('[pushNotification] Skipping device token registration: unsupported platform/device');
           break;
         default:
-          logger.error('[pushNotification] Skipping device token registration: failed to obtain push token');
+          logger.error('[pushNotification] Skipping device token registration: failed to obtain native push token');
       }
       return false;
     }
