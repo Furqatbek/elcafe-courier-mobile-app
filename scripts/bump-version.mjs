@@ -2,8 +2,9 @@
 /**
  * bump-version.mjs - keep app.config.ts's three version fields in lockstep.
  *
- * Without EAS there is no `autoIncrement`, so `version`, `android.versionCode`
- * and `ios.buildNumber` are edited by hand before every upload. Forgetting
+ * Builds here are local (`expo prebuild` + Gradle), so nothing auto-increments
+ * anything: `version`, `android.versionCode` and `ios.buildNumber` are edited
+ * before every upload, and they must move together. Forgetting
  * `android.versionCode` is the single most common local-release mistake:
  * Google Play rejects an AAB whose versionCode has already been used, and the
  * only fix is to bump and rebuild.
@@ -33,20 +34,27 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG = resolve(__dirname, '..', 'app.config.ts');
 
 /** Fields we rewrite, each with a regex that must match exactly once. */
+/*
+ * Quote style: app.config.ts currently uses DOUBLE quotes (`version: "1.0.0",`),
+ * but it has been reformatted before. These patterns accept either `'` or `"`
+ * so a Prettier run cannot silently break the release tooling. The quote is
+ * kept inside the prefix/suffix capture groups, so whichever style the file
+ * uses is preserved verbatim on write.
+ */
 const FIELDS = {
   version: {
-    // e.g. "  version: '1.0.0'," at the top level of the ExpoConfig object.
-    pattern: /^(\s*version:\s*')(\d+\.\d+\.\d+)('\s*,)$/gm,
+    // e.g. `  version: "1.0.0",` at the top level of the ExpoConfig object.
+    pattern: /^(\s*version:\s*['"])(\d+\.\d+\.\d+)(['"]\s*,)$/gm,
     label: 'version (Play version name)',
   },
   versionCode: {
-    // e.g. "    versionCode: 1," inside android: { ... }
+    // e.g. `    versionCode: 1,` inside android: { ... }
     pattern: /^(\s*versionCode:\s*)(\d+)(\s*,)$/gm,
     label: 'android.versionCode',
   },
   buildNumber: {
-    // e.g. "    buildNumber: '1'," inside ios: { ... }
-    pattern: /^(\s*buildNumber:\s*')(\d+)('\s*,)$/gm,
+    // e.g. `    buildNumber: "1",` inside ios: { ... }
+    pattern: /^(\s*buildNumber:\s*['"])(\d+)(['"]\s*,)$/gm,
     label: 'ios.buildNumber',
   },
 };
@@ -95,8 +103,15 @@ function main(argv) {
     configIndex === -1 ? DEFAULT_CONFIG : resolve(process.cwd(), args[configIndex + 1]);
 
   // Anything left over that is not a flag or the --config value is the version.
+  //
+  // NOTE the `configIndex !== -1` guard. Without it, `indexOf` returning -1 for
+  // an absent `--config` made this skip index `-1 + 1 === 0`, i.e. the FIRST
+  // positional argument - so `bump-version.mjs 1.1.0` silently dropped the
+  // version, bumped only the codes, and exited 0. It also let a malformed or
+  // duplicated version through unvalidated.
+  const configValueIndex = configIndex === -1 ? -1 : configIndex + 1;
   const positional = args.filter(
-    (arg, i) => !arg.startsWith('--') && i !== configIndex + 1
+    (arg, i) => !arg.startsWith('--') && i !== configValueIndex
   );
   if (positional.length > 1) {
     fail(`expected at most one version argument, got: ${positional.join(', ')}`);

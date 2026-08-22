@@ -1,29 +1,67 @@
-import { Audio, AVPlaybackSource } from 'expo-av';
+/**
+ * Sound Service
+ *
+ * Plays the bundled "new order" alert. Playback only — the app never records.
+ *
+ * Migrated from expo-av (deprecated in SDK 54, removed in SDK 55) to expo-audio.
+ * expo-av's config plugin unconditionally injected `android.permission.RECORD_AUDIO`
+ * into the manifest, which is an unjustifiable permission for a delivery app and a
+ * Play data-safety red flag. expo-audio is configured in app.config.ts with
+ * `recordAudioAndroid: false` / `microphonePermission: false`, and its library
+ * manifest's RECORD_AUDIO + media-playback service are stripped by
+ * `android.blockedPermissions` and plugins/withAndroidNoUnusedAudioServices.js.
+ *
+ * The public API is unchanged for callers in components/OrderOfferModal.tsx and
+ * app/(tabs)/orders.tsx.
+ */
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioSource } from 'expo-audio';
 import { Platform } from 'react-native';
 import logger from '@/lib/logger';
 
 // Bundled alert sound (44.1kHz 16-bit mono WAV, two-tone urgent alert).
-// Shipped with the app — no network audio in production.
-const NEW_ORDER_SOUND: AVPlaybackSource = require('@/assets/sounds/new-order.wav');
+// Shipped with the app — no network audio in production. Metro resolves
+// require() statically, so this asset must exist in the repo.
+const NEW_ORDER_SOUND: AudioSource = require('@/assets/sounds/new-order.wav');
 
 class SoundService {
-  private newOrderSound: Audio.Sound | null = null;
+  private newOrderSound: AudioPlayer | null = null;
   private isLoaded: boolean = false;
   private isPlaying: boolean = false;
-  private soundSource: AVPlaybackSource = NEW_ORDER_SOUND;
+  private soundSource: AudioSource = NEW_ORDER_SOUND;
   private webAudioContext: AudioContext | null = null;
 
   /**
    * Initialize audio settings for the app
    */
   async initialize(): Promise<void> {
+    // Web uses the Web Audio API (playWebSound) and never loads the native
+    // player, so there is no native audio session to configure.
+    if (Platform.OS === 'web') return;
+
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true, // Play even in silent mode
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+      await setAudioModeAsync({
+        // The app never records. Keeps RECORD_AUDIO out of the runtime path as
+        // well as out of the manifest.
+        allowsRecording: false,
+        // On Android this only decides whether players pause when the activity
+        // backgrounds (AudioModule.kt `OnActivityEntersBackground`) — it does
+        // NOT start a media-playback foreground service. Keeping it true
+        // preserves the pre-migration expo-av behaviour: a pending offer keeps
+        // ringing if the courier switches apps.
+        shouldPlayInBackground: true,
+        // iOS ONLY. Android ignores this: AudioModule.kt reads just
+        // shouldPlayInBackground / interruptionMode / shouldRouteThroughEarpiece,
+        // and AudioMode has no silent-mode field at all. So on Android a courier
+        // whose phone is on silent will NOT hear this alert — the modal's
+        // vibration and the push notification channel are what reach them.
+        // Making the alert survive Android silent mode needs the alarm audio
+        // usage / a dedicated notification channel, which expo-audio does not
+        // expose. Tracked as a known limitation, not a migration regression:
+        // expo-av behaved identically here.
+        playsInSilentMode: true,
+        // Duck navigation/music rather than stopping it outright.
+        interruptionMode: 'duckOthers',
+        shouldRouteThroughEarpiece: false,
       });
       logger.log('[SoundService] Audio mode configured');
 
@@ -38,15 +76,14 @@ class SoundService {
    * Load the new order notification sound
    */
   async loadNewOrderSound(): Promise<void> {
+    if (Platform.OS === 'web') return;
     if (this.isLoaded) return;
 
     try {
-      const { sound } = await Audio.Sound.createAsync(this.soundSource, {
-        shouldPlay: false,
-        isLooping: true, // Loop until stopped
-        volume: 1.0,
-      });
-      this.newOrderSound = sound;
+      const player = createAudioPlayer(this.soundSource);
+      player.loop = true; // Loop until stopped
+      player.volume = 1.0;
+      this.newOrderSound = player;
       this.isLoaded = true;
       logger.log('[SoundService] New order sound loaded');
     } catch (error) {
@@ -124,8 +161,8 @@ class SoundService {
       }
 
       if (this.newOrderSound && !this.isPlaying) {
-        await this.newOrderSound.setPositionAsync(0);
-        await this.newOrderSound.playAsync();
+        await this.newOrderSound.seekTo(0);
+        this.newOrderSound.play();
         this.isPlaying = true;
         logger.log('[SoundService] Playing new order sound');
       }
@@ -140,7 +177,10 @@ class SoundService {
   async stopNewOrderSound(): Promise<void> {
     try {
       if (this.newOrderSound && this.isPlaying) {
-        await this.newOrderSound.stopAsync();
+        // expo-audio has no stop(): pause and rewind so the next offer starts
+        // the alert from the beginning.
+        this.newOrderSound.pause();
+        await this.newOrderSound.seekTo(0);
         this.isPlaying = false;
         logger.log('[SoundService] Stopped new order sound');
       }
@@ -159,16 +199,17 @@ class SoundService {
     }
 
     try {
-      const { sound } = await Audio.Sound.createAsync(this.soundSource, {
-        shouldPlay: true,
-        isLooping: false,
-        volume: 1.0,
-      });
+      const player = createAudioPlayer(this.soundSource);
+      player.loop = false;
+      player.volume = 1.0;
+      player.play();
 
-      // Unload after playing
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
+      // Release the one-shot player once the clip has finished. createAudioPlayer
+      // (unlike the useAudioPlayer hook) does not auto-release.
+      const subscription = player.addListener('playbackStatusUpdate', (status) => {
+        if (status.didJustFinish) {
+          subscription.remove();
+          player.remove();
         }
       });
     } catch (error) {
@@ -182,7 +223,7 @@ class SoundService {
   async cleanup(): Promise<void> {
     try {
       if (this.newOrderSound) {
-        await this.newOrderSound.unloadAsync();
+        this.newOrderSound.remove();
         this.newOrderSound = null;
         this.isLoaded = false;
         this.isPlaying = false;

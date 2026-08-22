@@ -1909,11 +1909,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch, fetchStats, fetchOrders, fetchCourierProfile, orders]);
 
   // Report an issue with an order
+  // No photo attachment: the app has no image picker (expo-image-picker was
+  // removed) and the Play Data safety form declares that no photos are
+  // collected. Keeping a `photos` field here would be a latent contradiction
+  // of that declaration the moment someone wired a caller to it.
   const reportOrderIssue = useCallback(async (
     orderId: number | string,
     issueType: IssueType,
-    description: string,
-    photos?: string[]
+    description: string
   ): Promise<{ message: string } | null> => {
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.ISSUE(orderId), {
@@ -1921,7 +1924,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         body: JSON.stringify({
           issueType,
           description,
-          photos,
         }),
       });
       const result = await response.json();

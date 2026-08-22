@@ -58,6 +58,7 @@ if [ ! -f "$AAB" ]; then
 fi
 
 AAB_ABS="$(cd "$(dirname "$AAB")" && pwd)/$(basename "$AAB")"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [ -z "${BUNDLETOOL:-}" ]; then
   if command -v bundletool >/dev/null 2>&1; then
@@ -155,72 +156,206 @@ else
 fi
 
 # ---------------------------------------------------- 3. merged permissions --
+#
+# The permission list Play shows on the store listing is a MERGE of three
+# sources, and only the first one is written by hand:
+#
+#   1. `android.permissions` in app.config.ts, plus whatever the config plugins
+#      add on top (expo-location adds the location set, expo-audio adds
+#      MODIFY_AUDIO_SETTINGS, expo adds INTERNET). Visible in
+#      `npx expo config --type prebuild --json`.
+#   2. Every dependency's own library AndroidManifest.xml, merged in by the
+#      Android Gradle Plugin at build time. These NEVER appear in the resolved
+#      config and never appear in android/app/src/main/AndroidManifest.xml -
+#      only in the built artifact. expo-notifications alone contributes
+#      POST_NOTIFICATIONS and RECEIVE_BOOT_COMPLETED this way, and expo-image
+#      contributes ACCESS_NETWORK_STATE.
+#   3. Maven AARs that are not in node_modules at all - firebase-messaging
+#      (pulled by expo-notifications), play-services-maps/-location and
+#      androidx.work (pulled by react-native-maps). Their manifests cannot be
+#      read without a full Gradle dependency resolve, so this script cannot
+#      predict them; it reports them and explains where they come from.
+#
+# A hardcoded "expected" list goes stale the moment a dependency is added or
+# removed, and then cries wolf about permissions that are legitimately present.
+# So nothing below is hardcoded: (1) and (2) are re-derived from the current
+# tree on every run, and whatever is left over is reported as a decision to
+# make, with its likely source named, rather than as a failure.
 
 section "3. Merged manifest permissions"
 
-EXPECTED_PERMS="android.permission.ACCESS_BACKGROUND_LOCATION
-android.permission.ACCESS_COARSE_LOCATION
-android.permission.ACCESS_FINE_LOCATION
-android.permission.FOREGROUND_SERVICE
-android.permission.FOREGROUND_SERVICE_LOCATION
-android.permission.INTERNET
-android.permission.MODIFY_AUDIO_SETTINGS
-android.permission.POST_NOTIFICATIONS
-android.permission.READ_EXTERNAL_STORAGE
-android.permission.VIBRATE
-android.permission.WRITE_EXTERNAL_STORAGE"
+DECLARED_F="$WORKDIR/declared.txt"; : > "$DECLARED_F"
+BLOCKED_F="$WORKDIR/blocked.txt";   : > "$BLOCKED_F"
+LIBRARY_F="$WORKDIR/library.txt";   : > "$LIBRARY_F"
+ATTRIB_F="$WORKDIR/attrib.txt";     : > "$ATTRIB_F"
+CONFIG_RESOLVED=0
 
-# Permissions that must NOT survive the merge. app.config.ts lists these under
-# android.blockedPermissions; each one would add a Play declaration or a
-# sensitive-permission review if it leaked through.
-BLOCKED_PERMS="android.permission.RECORD_AUDIO
-android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK
-android.permission.SCHEDULE_EXACT_ALARM
-android.permission.SYSTEM_ALERT_WINDOW"
+# --- source 1: the resolved Expo config -------------------------------------
+# Derived, not hardcoded, so this stays correct when a dependency that carries
+# permissions (e.g. expo-image-picker and its CAMERA) is added or dropped.
+if [ -d "$REPO_ROOT/node_modules/expo" ] && command -v node >/dev/null 2>&1; then
+  if (cd "$REPO_ROOT" && npx --no-install expo config --type prebuild --json) \
+       > "$WORKDIR/expo-config.json" 2>"$WORKDIR/expo-config.err"; then
+    if node -e '
+      const fs = require("fs");
+      const cfg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      const q = (p) => (p.includes(".") ? p : "android.permission." + p);
+      const uniq = (a) => [...new Set((a || []).map(q))].sort();
+      fs.writeFileSync(process.argv[2], uniq(cfg?.android?.permissions).join("\n") + "\n");
+      fs.writeFileSync(process.argv[3], uniq(cfg?.android?.blockedPermissions).join("\n") + "\n");
+    ' "$WORKDIR/expo-config.json" "$DECLARED_F" "$BLOCKED_F" 2>/dev/null; then
+      CONFIG_RESOLVED=1
+    fi
+  fi
+fi
+
+if [ "$CONFIG_RESOLVED" -eq 1 ]; then
+  pass "resolved app.config.ts: $(grep -c . "$DECLARED_F") declared, $(grep -c . "$BLOCKED_F") blocked"
+else
+  warn "could not run 'npx expo config --type prebuild --json' in $REPO_ROOT"
+  info "Without it the declared/blocked sets are unknown, so everything in the"
+  info "bundle is reported as unclassified below. Run this script from a checkout"
+  info "with node_modules installed to get the full comparison."
+  [ -s "$WORKDIR/expo-config.err" ] && sed -n '1,5p' "$WORKDIR/expo-config.err" | sed 's/^/        /'
+fi
+
+# --- source 2: library manifests in node_modules ----------------------------
+# Every <pkg>/android/src/main/AndroidManifest.xml. This is a slight
+# over-approximation (it does not check autolinking), which is the safe
+# direction: it can only suppress a false alarm, never hide a blocked
+# permission - the blocked check below is exact and independent.
+if [ -d "$REPO_ROOT/node_modules" ]; then
+  while IFS= read -r m; do
+    pkg="${m#"$REPO_ROOT/node_modules/"}"; pkg="${pkg%%/android/*}"
+    grep -h 'uses-permission' "$m" 2>/dev/null \
+      | grep -oE 'android:name="[^"]+"' | tr -d '"' | sed 's/^android:name=//' \
+      | while IFS= read -r p; do printf '%s\t%s\n' "$p" "$pkg"; done
+  done < <(find "$REPO_ROOT/node_modules" -maxdepth 5 \
+             -path '*/android/src/main/AndroidManifest.xml' 2>/dev/null | sort) \
+    | sort -u > "$ATTRIB_F"
+  cut -f1 "$ATTRIB_F" | sort -u > "$LIBRARY_F"
+  info "$(grep -c . "$LIBRARY_F") permission(s) declared by library manifests in node_modules"
+else
+  warn "no node_modules/ - cannot derive the library-merged permission set"
+fi
+
+# Names the node_modules package(s) that declare a permission, for the report.
+attribute() {
+  local p="$1" srcs
+  srcs="$(awk -F'\t' -v p="$p" '$1==p {printf "%s ", $2}' "$ATTRIB_F")"
+  if [ -n "$srcs" ]; then printf 'library manifest: %s' "${srcs% }"; else printf ''; fi
+}
 
 if [ -n "$BUNDLETOOL" ]; then
   $BUNDLETOOL dump manifest --bundle="$AAB_ABS" > "$WORKDIR/manifest.xml" 2>/dev/null
-  grep -oE 'android:name="android\.permission\.[A-Z_]+"' "$WORKDIR/manifest.xml" \
-    | sed 's/.*"\(.*\)"/\1/' | sort -u > "$WORKDIR/actual-perms.txt"
 
-  info "Permissions in the merged manifest:"
-  sed 's/^/          /' "$WORKDIR/actual-perms.txt"
+  # Match EVERY uses-permission, not just the android.permission.* ones - a
+  # vendor permission (com.google.android.c2dm.permission.RECEIVE, an OEM badge
+  # permission) shows on the listing exactly like a platform one, and the old
+  # android-only regex here could not see them at all.
+  grep -hE '<uses-permission(-sdk-23)?[^>]*' "$WORKDIR/manifest.xml" \
+    | grep -oE 'android:name="[^"]+"' | tr -d '"' | sed 's/^android:name=//' \
+    | sort -u > "$WORKDIR/actual-perms.txt"
 
+  ACTUAL_N="$(grep -c . "$WORKDIR/actual-perms.txt")"
+
+  sort -u "$DECLARED_F" "$LIBRARY_F" | grep . > "$WORKDIR/expected-perms.txt"
+  # A blocked permission is never expected, even if a library declares it.
+  if [ -s "$BLOCKED_F" ]; then
+    comm -23 "$WORKDIR/expected-perms.txt" <(sort -u "$BLOCKED_F" | grep .) \
+      > "$WORKDIR/expected-net.txt"
+    mv "$WORKDIR/expected-net.txt" "$WORKDIR/expected-perms.txt"
+  fi
+
+  # ---- the report: every permission in the bundle, and why it is there ----
+  info "$ACTUAL_N permission(s) in the merged manifest:"
+  UNCLASSIFIED=""
+  while IFS= read -r perm; do
+    [ -z "$perm" ] && continue
+    if grep -qxF "$perm" "$BLOCKED_F" 2>/dev/null; then
+      printf '          %-56s %s\n' "$perm" "BLOCKED - must not be here"
+    elif grep -qxF "$perm" "$DECLARED_F" 2>/dev/null; then
+      printf '          %-56s %s\n' "$perm" "declared in app.config.ts"
+    elif grep -qxF "$perm" "$LIBRARY_F" 2>/dev/null; then
+      printf '          %-56s %s\n' "$perm" "$(attribute "$perm")"
+    else
+      printf '          %-56s %s\n' "$perm" "UNCLASSIFIED - see below"
+      UNCLASSIFIED="$UNCLASSIFIED $perm"
+    fi
+  done < "$WORKDIR/actual-perms.txt"
+
+  # ---- hard check: nothing blocked may survive the merge ----
   LEAKED=""
   while IFS= read -r perm; do
     [ -z "$perm" ] && continue
-    if grep -qx "$perm" "$WORKDIR/actual-perms.txt"; then
-      LEAKED="$LEAKED $perm"
-    fi
-  done <<< "$BLOCKED_PERMS"
+    grep -qxF "$perm" "$WORKDIR/actual-perms.txt" && LEAKED="$LEAKED $perm"
+  done < "$BLOCKED_F"
 
   if [ -n "$LEAKED" ]; then
     fail "blocked permission(s) leaked into the merged manifest:$LEAKED"
-    info "android.blockedPermissions in app.config.ts did not take effect."
-  else
-    pass "none of the blockedPermissions survived the merge"
+    info "android.blockedPermissions in app.config.ts emits tools:node=\"remove\","
+    info "so a leak means the merge directive did not reach the library manifest."
+    info "Check that prebuild ran after the last app.config.ts edit."
+  elif [ "$CONFIG_RESOLVED" -eq 1 ]; then
+    pass "none of the $(grep -c . "$BLOCKED_F") blockedPermissions survived the merge"
   fi
 
-  printf '%s\n' "$EXPECTED_PERMS" | sort -u > "$WORKDIR/expected-perms.txt"
-  UNEXPECTED="$(comm -13 "$WORKDIR/expected-perms.txt" "$WORKDIR/actual-perms.txt")"
-  if [ -n "$UNEXPECTED" ]; then
-    warn "permission(s) present that this script did not expect:"
-    printf '%s\n' "$UNEXPECTED" | sed 's/^/          /'
-    info "A new dependency added these. Decide for each one: keep it and cover it"
-    info "in Data safety, or add it to android.blockedPermissions in app.config.ts."
-  else
-    pass "no unexpected permissions"
+  # ---- hard check: everything we declared actually shipped ----
+  MISSING=""
+  while IFS= read -r perm; do
+    [ -z "$perm" ] && continue
+    grep -qxF "$perm" "$WORKDIR/actual-perms.txt" || MISSING="$MISSING $perm"
+  done < "$DECLARED_F"
+
+  if [ -n "$MISSING" ]; then
+    fail "declared permission(s) missing from the merged manifest:$MISSING"
+    info "app.config.ts asks for these but the bundle does not have them, so the"
+    info "matching feature will fail at runtime. Usually a stale android/ -"
+    info "rerun 'npx expo prebuild --platform android --clean' and rebuild."
+  elif [ "$CONFIG_RESOLVED" -eq 1 ]; then
+    pass "all $(grep -c . "$DECLARED_F") declared permissions are present"
+  fi
+
+  # ---- soft check: explain the leftovers instead of crying wolf ----
+  if [ -n "$UNCLASSIFIED" ]; then
+    warn "permission(s) not traceable to app.config.ts or a node_modules manifest:"
+    for perm in $UNCLASSIFIED; do printf '            %s\n' "$perm"; done
+    info "This is NOT automatically a problem. The usual source is a Maven AAR,"
+    info "which this script cannot read without a Gradle resolve:"
+    info "  WAKE_LOCK, RECEIVE_BOOT_COMPLETED, ACCESS_NETWORK_STATE  androidx.work"
+    info "                                            (via react-native-maps)"
+    info "  com.google.android.c2dm.permission.RECEIVE  firebase-messaging"
+    info "                                            (via expo-notifications)"
+    info "  ACCESS_NETWORK_STATE                       play-services-maps"
+    info "Find the real source with:"
+    info "  cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath"
+    info "Then decide, per permission: keep it and cover it in Data safety, or add"
+    info "it to android.blockedPermissions in app.config.ts and rebuild."
+  elif [ "$CONFIG_RESOLVED" -eq 1 ]; then
+    pass "every permission in the bundle traces to app.config.ts or a library manifest"
+  fi
+
+  # ---- informational: expected but absent ----
+  ABSENT="$(comm -23 "$WORKDIR/expected-perms.txt" "$WORKDIR/actual-perms.txt")"
+  if [ -n "$ABSENT" ]; then
+    info "declared by a library in node_modules but NOT in the bundle (fine - the"
+    info "library is not autolinked into the release variant):"
+    printf '%s\n' "$ABSENT" | sed 's/^/            /'
   fi
 
   # ACCESS_BACKGROUND_LOCATION is the highest-risk declaration on this app.
-  if grep -qx "android.permission.ACCESS_BACKGROUND_LOCATION" "$WORKDIR/actual-perms.txt"; then
+  if grep -qxF "android.permission.ACCESS_BACKGROUND_LOCATION" "$WORKDIR/actual-perms.txt"; then
     warn "ACCESS_BACKGROUND_LOCATION is declared"
     info "Play requires a background-location declaration form, a prominent"
     info "in-app disclosure shown BEFORE the permission request, and a demo"
-    info "video. Confirm the app has a shipping feature that actually needs it."
+    info "video. See docs/PLAY_STORE_SUBMISSION.md. The store listing must also"
+    info "carry the disclosure sentence - check with:"
+    info "  python3 store-assets/check_copy.py"
   fi
 else
   warn "bundletool not configured - skipping (set BUNDLETOOL or BUNDLETOOL_JAR)"
+  info "The declared/blocked/library sets above were still derived, so you can"
+  info "sanity-check them without a bundle."
 fi
 
 # ----------------------------------------------- 4. 16 KB page-size aligned --
@@ -341,7 +476,6 @@ fi
 
 # Uncompressed native libs are what make 16 KB alignment work at runtime.
 # expo.useLegacyPackaging=false (the SDK 54 default) produces this.
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -f "$REPO_ROOT/android/gradle.properties" ]; then
   if grep -q '^expo.useLegacyPackaging=false' "$REPO_ROOT/android/gradle.properties"; then
     pass "expo.useLegacyPackaging=false (native libs stored uncompressed)"

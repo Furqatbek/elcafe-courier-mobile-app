@@ -4,10 +4,12 @@ Everything that goes into **Play Console → Grow → Store presence → Main st
 plus the graphic assets and the screenshot capture plan.
 
 - Package / applicationId: `app.zbr.courier`
-- Version for this listing: `1.0.0` (`versionCode` 1 — `app.config.ts:67`)
+- Version for this listing: `1.0.0`, `versionCode` 1 (`version` / `android.versionCode` in `app.config.ts`)
 - Listing locales: **en-US (default), ru-RU, uz** — the app ships `i18n/locales/{en,ru,uz}.json`
   and the market is Uzbekistan.
-- Build/upload model: local `npx expo prebuild` + Gradle, AAB uploaded by hand. No EAS.
+- Build/upload model: local `npx expo prebuild` + Gradle, AAB uploaded by hand.
+  There is no EAS in this repo — no `eas.json`, no `projectId`. See
+  [`ANDROID_RELEASE.md`](./ANDROID_RELEASE.md).
 
 **Source of truth for the text is [`store-assets/listing-copy.json`](../store-assets/listing-copy.json).**
 The copy is reproduced verbatim below for reading. Re-verify every character count with:
@@ -16,15 +18,23 @@ The copy is reproduced verbatim below for reading. Re-verify every character cou
 python3 store-assets/check_copy.py
 ```
 
-which fails non-zero if any field exceeds Play's limit or if the background-location
-disclosure sentence has gone missing from a locale.
+which fails non-zero if any field exceeds Play's limit, or if the background-location
+disclosure sentence disagrees with what the app actually declares — it is **required**
+while `ACCESS_BACKGROUND_LOCATION` is in the resolved config and **forbidden** if that
+permission is ever dropped. See §2.4.
 
 ---
 
 ## 1. Field-by-field summary
 
-Counts below are the real output of `python3 store-assets/check_copy.py`. Play counts
-characters (not bytes) and counts a newline as one character.
+Counts below were recounted independently from
+[`store-assets/listing-copy.json`](../store-assets/listing-copy.json) — Unicode
+**codepoints**, which is what Play counts (not bytes, and a newline counts as one). They
+match `python3 store-assets/check_copy.py`, which prints the same numbers.
+
+Worth knowing for the Cyrillic copy: the ru full description is 2403 characters but **4325
+UTF-8 bytes**. If a tool ever tells you a field is over 4000, check which unit it is
+counting — Play counts characters, so ru has 1597 characters of headroom, not −325.
 
 | Field | Locale | Limit | Value | Chars |
 |---|---|---:|---|---:|
@@ -45,8 +55,9 @@ characters (not bytes) and counts a newline as one character.
 | Phone screenshots | all | 2–8 | **not yet captured** — see §5 | — |
 
 The app name is deliberately the same string in all three locales: it is the brand, it
-matches `name: 'ZBR Courier'` in `app.config.ts:47`, and it matches the Android launcher
-label, which is what a Play reviewer compares against. There is 19 characters of headroom
+matches `name: "ZBR Courier"` in `app.config.ts`, and it matches the Android launcher label
+(`android:label="@string/app_name"` in the generated manifest), which is what a Play
+reviewer compares against. There is 19 characters of headroom
 if marketing later wants a descriptive suffix (e.g. `ZBR Courier: Delivery Partner`, 29) —
 but keep it free of keyword stuffing, which Play's *Store Listing and Promotion* policy
 treats as a metadata violation.
@@ -186,9 +197,18 @@ Play's own guidance models:
 present in all three full descriptions and fails the run if one is deleted.
 
 This disclosure is required as long as the shipped manifest declares
-`ACCESS_BACKGROUND_LOCATION` — which it does today, because `app.config.ts` passes
-`isAndroidBackgroundLocationEnabled: true` to the `expo-location` plugin
-(`app.config.ts:201`). See §7 for why that is currently a **release blocker**.
+`ACCESS_BACKGROUND_LOCATION` — which it does today. Verified in the current tree:
+`app.config.ts` lists `ACCESS_BACKGROUND_LOCATION` in `android.permissions` **and** passes
+`isAndroidBackgroundLocationEnabled: true` to the `expo-location` plugin, and
+`npx expo config --type prebuild --json` resolves
+`android.permission.ACCESS_BACKGROUND_LOCATION` in `android.permissions`.
+
+`check_copy.py` reads that same resolved config and enforces the rule **in both
+directions**: while the permission is declared the sentence is mandatory in all three
+locales, and if the permission is ever dropped the sentence becomes forbidden — a listing
+claiming background collection the app does not perform is a misrepresentation, and would
+contradict the Data safety form. So the listing copy and the manifest cannot silently
+disagree.
 
 ---
 
@@ -196,18 +216,21 @@ This disclosure is required as long as the shipped manifest declares
 
 ### 3.1 Source images already in the repo
 
-Real values, from `python3 -c "from PIL import Image; ..."` over `assets/images/`:
+Real values, re-measured by opening every file in `assets/images/` with PIL:
 
 | File | Size | Mode | Notes |
 |---|---|---|---|
-| `icon.png` | 1024×1024 | RGB | Opaque. Source for the Play icon. |
+| `icon.png` | 1024×1024 | RGB | Opaque. `app.config.ts` `icon`, and the source for both Play graphics. |
 | `adaptive-icon.png` | 1024×1024 | RGBA | Android launcher foreground — **not** the Play icon. |
-| `splash-icon.png` | 1024×1024 | RGBA | Splash screen. |
-| `logo.png` | 1081×1035 | RGBA | In-app `components/Logo.tsx`; not square, unusable as a store icon. |
-| `notification-icon.png` | 96×96 | RGBA | Small notification icon. |
-| `favicon.png` | 16×16 | RGBA | Web only. |
-| `icon.svg` | vector | — | Bolt + speed lines on a `#059669 → #047857` gradient. |
-| `zbr-logo.svg` | vector | — | Same mark with a "ZBR / COURIER" wordmark. |
+| `splash.png` | 1284×2778 | RGBA | Splash image, referenced by `splash` and the `expo-splash-screen` plugin. |
+| `splash-icon.png` | 512×512 | RGBA | Not referenced by `app.config.ts`. |
+| `logo.png` | 1081×1035 | RGBA | In-app logo; not square, unusable as a store icon. |
+| `notification-icon.png` | 96×96 | RGBA | Small notification icon (`expo-notifications` plugin). |
+| `favicon.png` | 48×48 | RGBA | Web only. |
+
+There are **no SVGs under `assets/images/`.** The repo's only vector file is `favicon.svg`
+at the repo root (a 100-unit viewBox: bolt + speed lines on a `#059669 → #047857`
+gradient). It is *not* the current app mark — see the note in §3.2.
 
 ### 3.2 Generated for Play
 
@@ -220,10 +243,13 @@ python3 store-assets/generate_assets.py
 Real, re-opened output of that command:
 
 ```
-  feature graphic lockup: x 152..872 of 1024 (safe margins 152px left, 152px right)
-store-assets/play-icon-512.png: size=(512, 512) mode=RGBA format=PNG bytes=23548 alpha_min_max=(255, 255)
-store-assets/feature-graphic-1024x500.png: size=(1024, 500) mode=RGB format=PNG bytes=73166
+  feature graphic lockup: x 102..922 of 1024 (safe margins 102px left, 102px right)
+store-assets/play-icon-512.png: size=(512, 512) mode=RGBA format=PNG bytes=21698 alpha_min_max=(255, 255)
+store-assets/feature-graphic-1024x500.png: size=(1024, 500) mode=RGB format=PNG bytes=73186
 ```
+
+Both were re-opened with PIL afterwards and independently confirmed: `play-icon-512.png` is
+**exactly 512×512**, `feature-graphic-1024x500.png` is **exactly 1024×500**, both PNG.
 
 **`play-icon-512.png`** — 512×512, 32-bit PNG. Downsampled with Lanczos from the
 1024×1024 `assets/images/icon.png`. Before resizing, the source is composited onto solid
@@ -234,17 +260,25 @@ rounded-corner mask — the artwork is a full-bleed square with the mark inset, 
 cannot clip it.
 
 **`feature-graphic-1024x500.png`** — 1024×500, 24-bit RGB PNG. Composed at 4× (4096×2000)
-and downsampled, so the type and the bolt outline are properly antialiased. Contents:
+and downsampled, so the type and the tile edge are properly antialiased. Contents:
 
 - diagonal `#059669 → #047857` gradient ground,
-- the icon's "speed line" motif raked across the panel at 4–6% white — full-bleed and
-  directional, so it still reads if Play crops an edge,
-- the bolt mark, drawn from the exact path coordinates in `assets/images/icon.svg`
-  (`M 430 180 L 640 430 …`) with the same amber gradient and white stroke,
+- abstract motion streaks raked across the panel at 4–6% white — full-bleed and
+  directional, so it still reads if Play crops an edge, and carrying no product claim,
+- **the app icon itself**, as a rounded tile (22% corner radius, matching the proportion
+  Play's own masks use),
 - `DELIVERY PARTNER APP` / **ZBR Courier** / `Orders, routes and earnings`, with an amber rule.
 
-The whole lockup sits between x=152 and x=872 of 1024 — a 152 px margin on both sides,
-well inside the region Play is guaranteed not to crop. Nothing in it is a screenshot.
+The whole lockup sits between x=102 and x=922 of 1024 — a 102 px margin on both sides, just
+over 10%, inside the region Play is guaranteed not to crop. Nothing in it is a screenshot.
+
+> **Why the mark is the icon file and not a redrawing of it.** `generate_assets.py`
+> previously hand-drew a lightning bolt from `favicon.svg`'s path. `assets/images/icon.png`
+> has since been changed to a white map pin, so the feature graphic was still advertising a
+> mark the installed app no longer has — the two Play assets had silently diverged.
+> Both now derive from `assets/images/icon.png` through the same `load_app_icon()` helper,
+> so they cannot drift apart again. **Re-run `generate_assets.py` whenever the app icon
+> changes**, and re-check the two files into the repo.
 
 Type is set in **DejaVu Sans Bold / Regular** (`/usr/share/fonts/truetype/dejavu/`),
 confirmed present via `fc-list`; PIL's bitmap default was **not** used. The script warns
@@ -313,8 +347,9 @@ ZBR Courier'ning birinchi ommaviy versiyasi.
 Takliflarni «Sozlamalar» → «Yordam» orqali yuboring.
 ```
 
-The "Settings → Help Center" pointer is real: `app/(tabs)/settings.tsx:195` pushes
-`/help-center`, and `app/help-center.tsx` exists.
+The "Settings → Help Center" pointer is real: `app/(tabs)/settings.tsx` has a row calling
+`router.push('/help-center')`, and `app/help-center.tsx` exists. Verify before each release —
+if that route is ever removed, all three release-note blocks point users at nothing.
 
 ---
 
@@ -388,13 +423,13 @@ The order tells the courier's shift as a story: go online → get offered work �
 
 | # | Screen | Source file | What must be visible |
 |---|---|---|---|
-| 1 | Orders tab, **online** | `app/(tabs)/orders.tsx` | The ONLINE toggle switched on (`orders.tsx:303`), the online/offline label, and 2–3 available order cards below it. The hero shot. |
-| 2 | **Location disclosure** dialog | the disclosure modal, over `app/(tabs)/orders.tsx` | The in-app disclosure shown *before* the OS location prompt, with the toggle behind it. This is the shot that shows a reviewer the app does prominent disclosure properly. Capture on a fresh install. |
-| 3 | **Incoming order offer** | `components/OrderOfferModal.tsx` | The offer modal with pickup, drop-off, distance, and the pay figure (`OrderOfferModal.tsx:237`), plus the accept/decline actions. |
-| 4 | Available order detail | `app/available-order/[id].tsx` | Pickup block, drop-off block, total distance (`available-orders.tsx:190`), earnings. |
-| 5 | **Active order** | `app/order/[id].tsx` | An order in `ACCEPTED`/`PICKED_UP` state with the status badge, the amount, and the **CASH** payment badge (`order/[id].tsx:248`) so cash-on-delivery is visibly part of the job. |
+| 1 | Orders tab, **online** | `app/(tabs)/orders.tsx` | The ONLINE toggle switched on (the `Switch` bound to `toggleOnline`), the online/offline label, and 2–3 available order cards below it. The hero shot. |
+| 2 | **Location disclosure** dialog | `components/LocationDisclosureModal.tsx`, over `app/(tabs)/orders.tsx` | The in-app disclosure shown *before* the OS location prompt, with the toggle behind it. This is the shot that shows a reviewer the app does prominent disclosure properly. **Capture on a fresh install** — the modal is gated by `LOCATION_DISCLOSURE_ACCEPTED_KEY`, so it will not reappear once accepted; clear app storage to get it back. |
+| 3 | **Incoming order offer** | `components/OrderOfferModal.tsx` | The offer modal with pickup, drop-off, distance and the pay figure, plus the accept/decline actions. |
+| 4 | Available order detail | `app/available-order/[id].tsx` | Pickup block, drop-off block, total distance, earnings. |
+| 5 | **Active order** | `app/order/[id].tsx` | An order in `COURIER_ASSIGNED`/`PICKED_UP` state with the status badge, the amount, and the **CASH** payment badge (`order.isPaid ? paid : order.paymentMethod ?? 'CASH'`) so cash-on-delivery is visibly part of the job. |
 | 6 | **Map navigation** | `app/map-navigation/[orderId].tsx` | The map with the courier position and the destination pin, and the button that hands off to Google Maps. |
-| 7 | **Earnings** | `app/(tabs)/finance.tsx` | The period card (today / week / month) with a delivery count, plus the all-time stats block (`finance.tsx:160`). Use plausible seeded UZS figures, never a real courier's. |
+| 7 | **Earnings** | `app/(tabs)/finance.tsx` | The period card (today / week / month) with a delivery count, plus the all-time stats block (`earnings.totalDeliveries`). Use plausible seeded UZS figures, never a real courier's. |
 | 8 | Delivery rated / language | `app/order-rating/[orderId].tsx` or `app/language.tsx` | Either the post-delivery rating screen closing the loop, or the language picker showing English / Русский / O'zbek to advertise the trilingual UI. |
 
 Capture each with:
@@ -464,30 +499,35 @@ These live next to the copy above and are **human decisions**, not code:
 ## 7. Truthfulness audit — what was checked, and what was left out
 
 The full descriptions were written against the code, not against a feature wishlist.
-Verified claims:
+
+> **Evidence is cited by file and symbol, not by line number.** Line numbers in this
+> document went stale within a day the last time they were used, and a stale citation is
+> worse than none — it reads as verified when it is not. Re-check with `grep`, not by
+> jumping to a line.
 
 | Claim in the copy | Evidence |
 |---|---|
-| Online/offline shift toggle gates order visibility | `app/(tabs)/orders.tsx:303-321` — the `Switch` calls `toggleOnline`, and the list renders `isOnline ? availableOrders : []` |
-| Push notification for new offers | `services/pushNotification.ts` registers a token against `POST /api/v1/device-tokens` (`constants/config.ts:59`) |
-| Offer card shows pickup, drop-off, distance, pay incl. tip | `app/available-orders.tsx:154,173,190`; `components/OrderOfferModal.tsx:237,241` |
-| Hand-off to Google Maps for turn-by-turn | `app/map-navigation/[orderId].tsx:142` (`google.navigation:q=…`) with a `https://www.google.com/maps/dir/` fallback at :155 |
-| Call the customer / pickup point | `app/map-navigation/[orderId].tsx:230` (`tel:`) |
-| Confirm pickup, then confirm delivery | `app/order/[id].tsx:83-88` — `ACCEPTED`/`READY` → `PICKED_UP` → delivered |
-| Status goes to dispatch over a live connection | STOMP subscriptions in `services/websocket.ts`, wired in `context/CourierContext.tsx:871` |
-| Payment method / paid state shown per order | `app/order/[id].tsx:248` and `components/OrderCard.tsx:87` render `CASH` or `Paid` |
-| Today / week / month / all-time earnings with delivery counts | `app/(tabs)/finance.tsx:42-75,160-175` against `GET /api/v1/couriers/me/earnings` |
-| English, Russian, Uzbek, switchable in Settings | `i18n/locales/{en,ru,uz}.json` (576 keys each); `app/(tabs)/settings.tsx:172` → `app/language.tsx` |
-| Admin verification required before working | `app/verification-pending.tsx` |
-| Phone-OTP **or** email registration | `constants/config.ts:11-17` — `auth/login`, `auth/register`, `auth/phone/request-otp`, `auth/phone/verify-otp` |
+| Online/offline shift toggle gates order visibility | `app/(tabs)/orders.tsx` — the `Switch` calls `toggleOnline`; the available-orders list is gated on `isOnline` |
+| Push notification for new offers | `services/pushNotification.ts` registers a native FCM token against `POST /api/v1/device-tokens` (`API_ENDPOINTS.DEVICE_TOKENS.REGISTER` in `constants/config.ts`) |
+| Offer card shows pickup, drop-off, distance, pay incl. tip | `app/available-orders.tsx`, `components/OrderOfferModal.tsx` |
+| Hand-off to Google Maps for turn-by-turn | `app/map-navigation/[orderId].tsx` — `google.navigation:q=…` with a `https://www.google.com/maps/dir/` fallback |
+| Call the customer / pickup point | `app/map-navigation/[orderId].tsx` — `tel:` link |
+| Confirm pickup, then confirm delivery | `app/order/[id].tsx`; endpoints `ORDERS.PICKUP` / `ORDERS.TRANSIT` / `ORDERS.COMPLETE` in `constants/config.ts` |
+| Status goes to dispatch over a live connection | STOMP subscriptions in `services/websocket.ts`, wired in `context/CourierContext.tsx` |
+| Payment method / paid state shown per order | `app/order/[id].tsx` and `components/OrderCard.tsx` render `CASH` / paid state |
+| Today / week / month / all-time earnings with delivery counts | `app/(tabs)/finance.tsx` against `GET /api/v1/couriers/me/earnings` (`COURIER.EARNINGS`) |
+| English, Russian, Uzbek, switchable in Settings | `i18n/locales/{en,ru,uz}.json` — **697 keys each**, counted in the current tree; `app/(tabs)/settings.tsx` → `app/language.tsx` |
+| Admin verification required before working | `app/verification-pending.tsx`; `COURIER_STATUS.PENDING_APPROVAL` in `constants/config.ts` |
+| Phone-OTP **or** email registration | `constants/config.ts` `API_ENDPOINTS.AUTH` — `login`, `register`, `phone/request-otp`, `phone/verify-otp` |
+| Location collected only while on shift, permission revocable | `components/LocationDisclosureModal.tsx` gates the first request; `lib/backgroundLocation.ts` starts/stops the tracking task |
 
 Claims **deliberately excluded** because the code does not support them:
 
-- **In-app chat with the customer.** `app/chat.tsx` exists and `app/order/[id].tsx:215`
-  links to it, but the messages are hardcoded local state
-  (`app/chat.tsx:50` — `useState<Message[]>([ … ])`) with no API or STOMP subscription
-  behind them. Advertising it would be a false claim, and a reviewer who taps into it sees
-  a non-functional feature. **Do not add it to the listing until it is wired up.**
+- **In-app chat with the customer.** `app/chat.tsx` is now an inert `<Redirect href="/(tabs)/orders" />`
+  (it was a client-side mock with canned replies), and **nothing links to it** — a
+  repo-wide search for `/chat` in `app/` returns no navigation to it. So a reviewer cannot
+  reach a non-functional screen. Keep it out of the listing until a real messaging backend
+  exists.
 - **Live tracking shown to the customer.** The copy says status reaches *ZBR dispatch*,
   which is what this repo can prove. What the customer app then shows is a backend
   question this repo cannot verify.
@@ -496,30 +536,45 @@ Claims **deliberately excluded** because the code does not support them:
 - **"Earn up to X" / income guarantees.** None made. Play treats unverifiable earnings
   claims in a gig-work listing as deceptive.
 
-### Blockers that affect this listing
+### 7.1 Metadata policy lint
 
-1. **Background location is declared but never used.** `app.config.ts:201` sets
-   `isAndroidBackgroundLocationEnabled: true`, and the generated manifest carried
-   `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION`.
-   But the only location code in the JS is a **foreground** `Location.watchPositionAsync`
-   in `context/CourierContext.tsx:1372`, started from
-   `Location.requestForegroundPermissionsAsync` at :1347. There is no `expo-task-manager`
-   task and no `startLocationUpdatesAsync` anywhere in the tree. Either:
-   - implement the background task the disclosure describes, **or**
-   - drop `isAndroidBackgroundLocationEnabled` and delete the background-location
-     paragraph's "even when the app is closed or not in use" sentence from all three
-     locales (and the corresponding Data safety answer).
+The copy was re-checked against Play's *Store Listing and Promotion* policy. Every field in
+all three locales was scanned; findings: **none**.
 
-   Shipping the permission unused invites a background-location rejection; shipping the
-   listing sentence without the behaviour makes the listing inaccurate. **They must agree
-   before upload.** Re-run `python3 store-assets/check_copy.py` after any such edit.
-2. **In-app account deletion does not delete anything.** `app/security.tsx:138-156`
-   shows a confirmation and then a second alert — no `DELETE` request is issued, and
-   `constants/config.ts` has no user-deletion endpoint (only `users/me/logout-all`). Play
-   requires an in-app deletion route *and* a web URL for it. This is not a listing field,
-   but it is a launch blocker sitting one screen from the copy above.
-3. **No Google Maps API key is configured.** `app.config.ts` sets no
-   `android.config.googleMaps.apiKey`, and `components/OrderMap.native.tsx:161` uses
-   `PROVIDER_DEFAULT`, which on Android is Google Maps. Without a key the map renders
-   grey — which makes screenshots 1, 6 and the map in 5 unusable, and makes the
-   "opens on a map" claim look false to a reviewer.
+| Rule | Result |
+|---|---|
+| Superlatives / ranking claims ("best", "#1", "fastest", "leading") | none in any locale |
+| Competitor names | none |
+| Emoji | none. The `•` in the release notes is a bullet, not an emoji, and is not repeated for decoration |
+| ALL-CAPS | only the section headers (`WORK YOUR OWN SHIFT`, `ГЕОЛОКАЦИЯ`, `JOYLASHUV`, …), which Play permits as structure. No all-caps sentences, no all-caps app name |
+| Keyword stuffing | the app name is the bare brand in all three locales; no keyword lists, no repeated terms for ranking |
+| Income guarantees / "earn up to X" | none — the copy describes *where earnings are displayed*, never an amount |
+| Store-performance references ("Editor's Choice", "top app", "download now") | none |
+| Price / promotion claims | none |
+
+Two things to keep that way when the copy is edited: the app name must stay free of a
+keyword suffix (there is 19 characters of headroom, and Play treats using it for keywords
+as a metadata violation), and nothing in the Earnings paragraphs may acquire a number.
+
+### 7.2 Previously reported blockers — all three are resolved
+
+An earlier draft of this document listed three release blockers. **All three were verified
+against the current tree and none of them still holds.** They are recorded here so the
+stale version is not re-applied from a cached copy:
+
+| Was reported as | Actual state now |
+|---|---|
+| "Background location is declared but never used — no `expo-task-manager` task, no `startLocationUpdatesAsync`" | **False.** `lib/backgroundLocation.ts` defines a real task via `TaskManager.defineTask` at module scope and starts it with `Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, { … foregroundService: { … } })`. `expo-task-manager` is a dependency. The disclosure in §2.4 describes behaviour the app actually has. |
+| "In-app account deletion does not delete anything — `app/security.tsx` only shows alerts" | **False.** `app/(tabs)/settings.tsx` `handleDeleteAccount` confirms, then issues `authenticatedFetch('/api/v1/users/me', { method: 'DELETE' })`, checks `response.ok`, and logs out to `/login` on success. `app/security.tsx` is now an inert `<Redirect href="/(tabs)/settings" />`. |
+| "No Google Maps API key is configured — `app.config.ts` sets no `android.config.googleMaps.apiKey`" | **False.** `app.config.ts` sets `android.config.googleMaps.apiKey` from `process.env.GOOGLE_MAPS_API_KEY`, and warns loudly at config-evaluation time when the variable is empty. |
+
+The Maps key does leave one **real, non-code action**: the *value* still has to be supplied
+at build time.
+
+- [ACTION REQUIRED: export `GOOGLE_MAPS_API_KEY` (Android Maps SDK key, restricted to
+  `app.zbr.courier` + both signing-certificate fingerprints) in the shell that runs
+  `expo prebuild`, or put it in `.env`.]
+
+Build without it and the maps render as blank grey tiles — which would make screenshots 1,
+6 and the map in 5 unusable and the "opens on a map" claim look false to a reviewer. The
+prebuild log says so explicitly; see `ANDROID_RELEASE.md` §3.2.
