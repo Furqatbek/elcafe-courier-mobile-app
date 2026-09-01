@@ -524,7 +524,9 @@ tell the reviewer to take it.
 
 1. **A permanent demo courier account** with a real email and password. Not time-limited, not
    rate-limited, no forced password rotation. Play re-reviews on every update for the life of the app.
-   Suggested: `play-review@<your-domain>`, on a domain you control.
+   **Provided: `demo_courier@zbr.uz` / `Rcsda123!`** — confirm it exists server-side and that the
+   password never expires. Treat it as a demo-only identity: no real courier data, no real cash
+   operations, and rotate the password if this repository ever becomes public.
 2. **Server-side pre-verification.** The account's profile must return `verified: true` from
    `GET /api/v1/couriers/me` so `app/_layout.tsx:46` routes it to `/(tabs)/orders`. Verify on a clean install.
 3. **Seeded test orders.** The Available list is empty unless the courier is online *and* the backend
@@ -558,8 +560,8 @@ Play Console → **App content → App access** → **"All or some functionality
 > 1. Install and open the app.
 > 2. Swipe through or tap "Skip" on the onboarding screens.
 > 3. On the login screen enter:
->      Email:    [ACTION REQUIRED: play-review@your-domain.com]
->      Password: [ACTION REQUIRED: reviewer password]
+>      Email:    demo_courier@zbr.uz
+>      Password: Rcsda123!
 >    and tap Log in.
 > 4. This account is already approved by our operations team, so you go
 >    straight to the Orders screen. You will NOT see the "verification

@@ -474,6 +474,131 @@ fail your release build** — it just produces an unusable artifact. This is pre
 
 ---
 
+### 2.6 Windows / PowerShell — the same steps, native commands
+
+Everything above in PowerShell. Run PowerShell as your normal user (no admin needed).
+
+**Find `keytool`.** It ships with the JDK bundled inside Android Studio, so you rarely need
+a separate JDK install:
+
+```powershell
+$keytool = "$env:ProgramFiles\Android\Android Studio\jbr\bin\keytool.exe"
+Test-Path $keytool          # must print True
+& $keytool -help            # sanity check
+```
+
+If that path does not exist, use your own JDK (`(Get-Command keytool).Source`) and set
+`$keytool` to it.
+
+**Generate the upload keystore** — once, outside the repo. The backtick `` ` `` is
+PowerShell's line-continuation character:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\keys\zbr" | Out-Null
+Set-Location "$env:USERPROFILE\keys\zbr"
+
+& $keytool -genkeypair -v `
+  -keystore zbr-upload.keystore `
+  -alias zbr-upload `
+  -keyalg RSA -keysize 4096 `
+  -sigalg SHA256withRSA `
+  -validity 10000 `
+  -storetype PKCS12 `
+  -dname "CN=ZBR Courier, OU=Mobile, O=<your legal entity>, L=Tashkent, ST=Tashkent, C=UZ"
+```
+
+It prompts for a keystore password and a key password. Generate both in your password
+manager and save them there **before** you close the window — neither is recoverable.
+
+Record the fingerprint you will later compare against Play Console:
+
+```powershell
+& $keytool -list -v -keystore zbr-upload.keystore -alias zbr-upload
+```
+
+**Back it up now, not later.** Losing this file means you can never upload an update to the
+same listing under your own upload key (Play can reset it, but only through a support
+round-trip):
+
+```powershell
+Copy-Item zbr-upload.keystore "$env:USERPROFILE\OneDrive\backup\zbr-upload.keystore"
+# plus one copy somewhere offline — an encrypted USB drive or your password manager's file vault
+```
+
+**Wire it into Gradle** at the user level, never in the repo:
+
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.gradle" | Out-Null
+notepad "$env:USERPROFILE\.gradle\gradle.properties"
+```
+
+Paste, with your real values:
+
+```properties
+# ZBR Courier upload signing. Lives in $env:USERPROFILE, NEVER in the repo.
+# Use FORWARD slashes - see the warning below.
+ZBR_UPLOAD_STORE_FILE=C:/Users/you/keys/zbr/zbr-upload.keystore
+ZBR_UPLOAD_STORE_PASSWORD=<keystore password>
+ZBR_UPLOAD_KEY_ALIAS=zbr-upload
+ZBR_UPLOAD_KEY_PASSWORD=<key password>
+```
+
+> **Use forward slashes in that path.** `gradle.properties` is a Java properties file, where
+> `\` is an escape character: `C:\Users\...` makes Gradle read `\U` as an escape and the
+> build fails with a confusing "keystore not found". `C:/Users/...` is correct on Windows.
+> Doubling them (`C:\\Users\\...`) also works. The path must be **absolute** — Gradle's
+> `file()` resolves relative paths against `android/app/`, which prebuild deletes.
+
+Lock the file down (the PowerShell equivalent of `chmod 600`):
+
+```powershell
+$gp = "$env:USERPROFILE\.gradle\gradle.properties"
+icacls $gp /inheritance:r /grant:r "$($env:USERNAME):(R,W)"
+```
+
+**Build the AAB:**
+
+```powershell
+Set-Location <repo>\android
+.\gradlew.bat :app:bundleRelease
+```
+
+Note `.\gradlew.bat`, not `./gradlew` — PowerShell will not run a script from the current
+directory without the `.\` prefix.
+
+**Verify the artifact is signed with YOUR key, not the debug key.** This is the check that
+catches the single most common cause of a rejected first upload:
+
+```powershell
+& $keytool -printcert -jarfile ".\app\build\outputs\bundle\release\app-release.aab"
+```
+
+The `Owner:` line must show your `CN=ZBR Courier, ...` distinguished name. If it says
+`CN=Android Debug, O=Android, C=US`, your `ZBR_UPLOAD_*` properties were not picked up —
+the build fell back to the debug keystore and printed a `[ZBR]` warning that scrolled past.
+Fix the properties and rebuild; do not upload that file.
+
+**One-off build without persisting secrets to disk** (note: arguments are visible in process
+listings, so prefer `gradle.properties` for routine use):
+
+```powershell
+.\gradlew.bat :app:bundleRelease `
+  "-PZBR_UPLOAD_STORE_FILE=C:/Users/you/keys/zbr/zbr-upload.keystore" `
+  "-PZBR_UPLOAD_STORE_PASSWORD=$env:ZBR_STORE_PASSWORD" `
+  "-PZBR_UPLOAD_KEY_ALIAS=zbr-upload" `
+  "-PZBR_UPLOAD_KEY_PASSWORD=$env:ZBR_KEY_PASSWORD"
+```
+
+**Setting build-time env vars for prebuild** (PowerShell syntax, current session only):
+
+```powershell
+$env:GOOGLE_MAPS_API_KEY = "AIza..."
+npx expo prebuild --platform android --clean
+```
+
+A `.env` file at the repo root is the better home for these — Expo loads it automatically
+for both config evaluation and bundling. See [§3.1](#31-environment-variables).
+
 ## 3. Build
 
 ### 3.1 Environment variables

@@ -80,8 +80,12 @@ Set every one of these in the shell that runs `npx expo prebuild` **and** Gradle
 - [ ] `[ACTION REQUIRED]` **`EXPO_PUBLIC_ROUTING_URL`** — a routing host **you operate**. Unset in
       production, route polylines silently disappear (no data leaks, but the map looks broken on your
       demo video). → §4 Note A
-- [ ] `[ACTION REQUIRED]` **`EXPO_PUBLIC_PRIVACY_URL`** — with it unset the in-app privacy link is
-      hidden entirely. → §10.2
+- [x] **`EXPO_PUBLIC_PRIVACY_URL` — DECIDED: `https://app.zbrr.uz/privacy`.** Put it in `.env`.
+      Setting it also lights up the in-app privacy link in `app/onboarding.tsx:165` at zero extra
+      cost, which is what Play's User Data policy expects for an app handling location and phone
+      numbers — so there is nothing to "skip" here. Just confirm the URL is publicly reachable
+      (no login wall, no geo-block) before you submit.
+
 - [ ] `[ACTION REQUIRED]` **Decide on `EXPO_PUBLIC_CRASH_ENDPOINT`.** Set = crash reports POST to your
       own endpoint → Data safety **Crash logs: Yes**. Unset = nothing leaves the device → **No**. Decide
       *before* filing the form. → §1.3
