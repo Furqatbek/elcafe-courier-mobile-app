@@ -507,8 +507,14 @@ Set-Location "$env:USERPROFILE\keys\zbr"
   -dname "CN=ZBR Courier, OU=Mobile, O=<your legal entity>, L=Tashkent, ST=Tashkent, C=UZ"
 ```
 
-It prompts for a keystore password and a key password. Generate both in your password
-manager and save them there **before** you close the window — neither is recoverable.
+It prompts for a keystore password **once** (twice, to confirm). Because this is a
+**PKCS12** keystore, there is no separate key password — the store password protects the key
+too. `keytool` will not ask you for a second one. Generate the password in your password
+manager and save it there **before** you close the window; it is not recoverable.
+
+That single password goes into **both** `ZBR_UPLOAD_STORE_PASSWORD` and
+`ZBR_UPLOAD_KEY_PASSWORD` below. Gradle requires both properties; they simply hold the same
+value.
 
 Record the fingerprint you will later compare against Play Console:
 
@@ -544,12 +550,10 @@ writes the file with the correct path format:
 $store = "$env:USERPROFILE\keys\zbr\zbr-upload.keystore"
 if (-not (Test-Path $store)) { throw "Keystore not found at $store - generate it first (2.6 above)" }
 
-$storeSecure = Read-Host "Keystore password" -AsSecureString
-$keySecure   = Read-Host "Key password"      -AsSecureString
-$storePw = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($storeSecure))
-$keyPw   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($keySecure))
+# PKCS12 keystores have ONE password, used for both the store and the key.
+$pwSecure = Read-Host "Keystore password (the one you set with keytool)" -AsSecureString
+$pw = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pwSecure))
 
 $gradleDir = "$env:USERPROFILE\.gradle"
 New-Item -ItemType Directory -Force -Path $gradleDir | Out-Null
@@ -561,9 +565,9 @@ $storeForGradle = $store -replace '\\', '/'
 $block = @"
 # ZBR Courier upload signing - NEVER commit this file.
 ZBR_UPLOAD_STORE_FILE=$storeForGradle
-ZBR_UPLOAD_STORE_PASSWORD=$storePw
+ZBR_UPLOAD_STORE_PASSWORD=$pw
 ZBR_UPLOAD_KEY_ALIAS=zbr-upload
-ZBR_UPLOAD_KEY_PASSWORD=$keyPw
+ZBR_UPLOAD_KEY_PASSWORD=$pw
 "@
 
 if (Test-Path $gp) {
@@ -584,7 +588,7 @@ The resulting file looks like this — this is what the file *contains*, not wha
 ZBR_UPLOAD_STORE_FILE=C:/Users/Asus/keys/zbr/zbr-upload.keystore
 ZBR_UPLOAD_STORE_PASSWORD=<your keystore password>
 ZBR_UPLOAD_KEY_ALIAS=zbr-upload
-ZBR_UPLOAD_KEY_PASSWORD=<your key password>
+ZBR_UPLOAD_KEY_PASSWORD=<the SAME keystore password - PKCS12 has only one>
 ```
 
 Check it, then close the window (the passwords are on screen):
