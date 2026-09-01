@@ -525,23 +525,81 @@ Copy-Item zbr-upload.keystore "$env:USERPROFILE\OneDrive\backup\zbr-upload.keyst
 # plus one copy somewhere offline — an encrypted USB drive or your password manager's file vault
 ```
 
-**Wire it into Gradle** at the user level, never in the repo:
+**Wire it into Gradle** at the user level, never in the repo.
+
+> ### These four `ZBR_UPLOAD_*` lines are FILE CONTENT, not commands
+>
+> They go **inside** `%USERPROFILE%\.gradle\gradle.properties`. Pasting them into a
+> PowerShell prompt gives you
+> `"ZBR_UPLOAD_STORE_FILE=..." is not recognized as the name of a cmdlet`, and `export` is
+> bash — PowerShell has no such command. Use the script below and you never have to think
+> about it.
+
+Run this once. It finds your keystore, prompts for the passwords without echoing them, and
+writes the file with the correct path format:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.gradle" | Out-Null
-notepad "$env:USERPROFILE\.gradle\gradle.properties"
+# Point this at YOUR keystore (note: C:/Users/you/... in the sample file below is a
+# placeholder - $env:USERPROFILE expands to your real profile, e.g. C:\Users\Asus)
+$store = "$env:USERPROFILE\keys\zbr\zbr-upload.keystore"
+if (-not (Test-Path $store)) { throw "Keystore not found at $store - generate it first (2.6 above)" }
+
+$storeSecure = Read-Host "Keystore password" -AsSecureString
+$keySecure   = Read-Host "Key password"      -AsSecureString
+$storePw = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($storeSecure))
+$keyPw   = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($keySecure))
+
+$gradleDir = "$env:USERPROFILE\.gradle"
+New-Item -ItemType Directory -Force -Path $gradleDir | Out-Null
+$gp = Join-Path $gradleDir "gradle.properties"
+
+# Java properties files need forward slashes; backslashes are escape characters
+$storeForGradle = $store -replace '\\', '/'
+
+$block = @"
+# ZBR Courier upload signing - NEVER commit this file.
+ZBR_UPLOAD_STORE_FILE=$storeForGradle
+ZBR_UPLOAD_STORE_PASSWORD=$storePw
+ZBR_UPLOAD_KEY_ALIAS=zbr-upload
+ZBR_UPLOAD_KEY_PASSWORD=$keyPw
+"@
+
+if (Test-Path $gp) {
+  Write-Warning "$gp already exists - appending. Check for duplicate ZBR_UPLOAD_* keys."
+  Add-Content -Path $gp -Value $block -Encoding Ascii
+} else {
+  Set-Content -Path $gp -Value $block -Encoding Ascii
+}
+
+icacls $gp /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
+Write-Host "Wrote $gp" -ForegroundColor Green
 ```
 
-Paste, with your real values:
+The resulting file looks like this — this is what the file *contains*, not what you type:
 
 ```properties
-# ZBR Courier upload signing. Lives in $env:USERPROFILE, NEVER in the repo.
-# Use FORWARD slashes - see the warning below.
-ZBR_UPLOAD_STORE_FILE=C:/Users/you/keys/zbr/zbr-upload.keystore
-ZBR_UPLOAD_STORE_PASSWORD=<keystore password>
+# ZBR Courier upload signing - NEVER commit this file.
+ZBR_UPLOAD_STORE_FILE=C:/Users/Asus/keys/zbr/zbr-upload.keystore
+ZBR_UPLOAD_STORE_PASSWORD=<your keystore password>
 ZBR_UPLOAD_KEY_ALIAS=zbr-upload
-ZBR_UPLOAD_KEY_PASSWORD=<key password>
+ZBR_UPLOAD_KEY_PASSWORD=<your key password>
 ```
+
+Check it, then close the window (the passwords are on screen):
+
+```powershell
+Get-Content "$env:USERPROFILE\.gradle\gradle.properties"
+```
+
+> **Encoding matters.** The script writes ASCII deliberately. PowerShell 5.1's
+> `-Encoding UTF8` prepends a byte-order mark, which Java's properties parser treats as part
+> of the *first key name* — Gradle then cannot find `ZBR_UPLOAD_STORE_FILE` and silently
+> falls back to the debug keystore.
+>
+> **If a password contains a backslash**, double it in the file (`\\`) — `\` is an escape
+> character in properties files. Avoid backslashes in these passwords entirely if you can.
 
 > **Use forward slashes in that path.** `gradle.properties` is a Java properties file, where
 > `\` is an escape character: `C:\Users\...` makes Gradle read `\U` as an escape and the
