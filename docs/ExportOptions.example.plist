@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Export options for producing an App Store .ipa to upload with Transporter.
+
+  Copy this file somewhere OUTSIDE ios/ before using it — `expo prebuild`
+  deletes and regenerates the whole ios/ directory, so anything kept in there
+  is lost on the next build. Keeping it at the repo root works:
+
+      cp docs/ExportOptions.example.plist ExportOptions.plist
+
+  Then fill in teamID (Apple Developer → Membership → Team ID, 10 characters).
+-->
+<plist version="1.0">
+<dict>
+    <!-- App Store Connect distribution. Use "ad-hoc" only for device testing. -->
+    <key>method</key>
+    <string>app-store-connect</string>
+
+    <key>teamID</key>
+    <string>REPLACE_ME_TEAM_ID</string>
+
+    <!-- Let Xcode pick the distribution certificate and provisioning profile.
+         Set to "manual" and add provisioningProfiles only if you manage them
+         yourself. -->
+    <key>signingStyle</key>
+    <string>automatic</string>
+
+    <!-- We export the .ipa and hand it to Transporter ourselves, so xcodebuild
+         must NOT upload it. -->
+    <key>destination</key>
+    <string>export</string>
+
+    <!-- Symbols let App Store Connect symbolicate crash reports. Harmless to
+         include and useful the first time the app crashes in the field. -->
+    <key>uploadSymbols</key>
+    <true/>
+
+    <!-- Leave the JS bundle alone: Hermes bytecode is already compiled and
+         Bitcode has been removed from Xcode entirely since version 14. -->
+    <key>compileBitcode</key>
+    <false/>
+
+    <key>stripSwiftSymbols</key>
+    <true/>
+</dict>
+</plist>

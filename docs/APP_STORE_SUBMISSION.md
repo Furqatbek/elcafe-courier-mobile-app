@@ -233,29 +233,104 @@ correct: the app uses only standard HTTPS/TLS, which is exempt.
 
 ---
 
-## 9. Build and upload (macOS required)
+## 9. Build the .ipa and upload with Transporter
 
-Prebuild is cross-platform, but archiving is not — you need a Mac with Xcode.
+**A Mac with Xcode is required.** Prebuild runs anywhere, but archiving and
+code-signing an iOS app are macOS-only — there is no Windows or Linux path.
+
+Verified names from a real prebuild: project `ios/ZBRCourier.xcodeproj`, scheme
+**`ZBRCourier`**. The `.xcworkspace` does not exist until `pod install` has run —
+after that, always open the **workspace**, never the project, or the CocoaPods
+dependencies are missing.
+
+### 9.1 Before every build
+
+1. `.env` must be present at the repo root — `EXPO_PUBLIC_*` values are inlined
+   into the JS bundle at build time, and a production build with placeholders
+   throws at startup by design.
+2. **Bump `ios.buildNumber` in `app.config.ts`**, not in Xcode. Prebuild
+   regenerates `Info.plist` from the config, so an edit made in Xcode is
+   silently discarded on the next run. App Store Connect **rejects a
+   `CFBundleVersion` it has already seen**, even from a build you deleted, so
+   every upload needs a fresh one. `node scripts/bump-version.mjs` bumps the iOS
+   build number, the Android versionCode and the version together.
 
 ```bash
 npx expo prebuild --platform ios --clean
 cd ios && pod install && cd ..
+```
+
+### 9.2 Route A — Xcode (fewest moving parts)
+
+```bash
 open ios/ZBRCourier.xcworkspace
 ```
 
-In Xcode: select **Any iOS Device (arm64)** → Product → Archive → Distribute App
-→ App Store Connect → Upload.
+1. Select the **ZBRCourier** target → *Signing & Capabilities* → pick your Team.
+   Leave *Automatically manage signing* on.
+2. Confirm **Push Notifications** appears in the capabilities list. It comes
+   from the `aps-environment: production` entitlement in `app.config.ts`, but
+   signing fails unless the App ID has the capability enabled in the developer
+   portal.
+3. Set the run destination to **Any iOS Device (arm64)** — Archive is greyed out
+   while a simulator is selected.
+4. **Product → Archive.**
+5. In Organizer: select the archive → **Distribute App** → **App Store Connect**
+   → **Export** (not *Upload* — Export writes the `.ipa` to disk for Transporter).
+6. Choose a destination folder. You get `ZBRCourier.ipa`.
 
-- **Signing:** let Xcode manage it, with the team that owns the App ID.
-- **Version/build:** `version` and `ios.buildNumber` live in `app.config.ts` and
-  are bumped manually (no EAS). `buildNumber` must increase on every upload —
-  App Store Connect rejects a reused one. `scripts/bump-version.mjs` bumps
-  version, `android.versionCode` and `ios.buildNumber` together.
-- **TestFlight first.** Internal testing needs no review; external testing needs
-  a lightweight review. Use it to confirm push and background location on real
-  hardware before submitting for App Review.
+While you are in Organizer, right-click the archive → **Generate Privacy
+Report**. It aggregates your `PrivacyInfo.xcprivacy` with every SDK's own
+manifest — check nothing unexpected is declared before you ship.
 
----
+### 9.3 Route B — command line
+
+Reusable and scriptable. Copy the export config out of `docs/` first, because
+prebuild wipes `ios/`:
+
+```bash
+cp docs/ExportOptions.example.plist ExportOptions.plist
+# fill in teamID (Apple Developer → Membership → Team ID)
+
+xcodebuild -workspace ios/ZBRCourier.xcworkspace \
+  -scheme ZBRCourier \
+  -configuration Release \
+  -archivePath build/ZBRCourier.xcarchive \
+  -destination "generic/platform=iOS" \
+  archive
+
+xcodebuild -exportArchive \
+  -archivePath build/ZBRCourier.xcarchive \
+  -exportOptionsPlist ExportOptions.plist \
+  -exportPath build/ipa
+```
+
+The `.ipa` lands in `build/ipa/`.
+
+### 9.4 Upload with Transporter
+
+1. Install **Transporter** from the Mac App Store (free, by Apple).
+2. Sign in with the Apple ID that has access to the app record. If the account
+   has two-factor auth, generate an **app-specific password** at
+   appleid.apple.com and use that, not the account password.
+3. The app record must already exist in App Store Connect with bundle id
+   `app.zbr.courier` — Transporter matches on it and rejects an unknown bundle.
+4. Drag the `.ipa` in, or use **+** → *Add App*, then **Deliver**.
+5. Transporter validates first. Common rejections at this stage: a reused
+   `CFBundleVersion`, a missing Push Notifications capability on the App ID, or
+   an icon with an alpha channel (ours is RGB with none — verified).
+6. After delivery, the build takes roughly 5–30 minutes to appear under
+   TestFlight while Apple processes it. You may get an email about missing
+   compliance — ours is pre-answered by `ITSAppUsesNonExemptEncryption: false`.
+
+### 9.5 TestFlight before App Review
+
+Internal TestFlight testing needs no review and is the only realistic way to
+confirm the two things that have never run on real hardware: **APNs push
+delivery** (the backend sends to the raw APNs token from
+`getDevicePushTokenAsync`, with `apns-topic` = `app.zbr.courier`) and
+**background location** under real iOS suspension. Do this before submitting for
+review — a rejection round-trip costs days, a TestFlight install costs minutes.
 
 ## 10. Definition of done
 
