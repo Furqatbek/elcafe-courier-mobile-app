@@ -1077,7 +1077,7 @@ The merged manifest is authoritative — regenerate it (§1.6) and dump it (§1.
 | Permission | Source | Used? | Justification |
 |---|---|---|---|
 | `INTERNET` | template | Yes | All API, WebSocket, and push traffic. Normal permission, no declaration. |
-| `ACCESS_FINE_LOCATION` | config + expo-location | **Yes** | `context/CourierContext.tsx:1635` requests `Location.Accuracy.High`. Street-level accuracy is needed to match a courier to the nearest order and place them on the customer's tracking map. |
+| `ACCESS_FINE_LOCATION` | config + expo-location | **Yes** | `context/CourierContext.tsx:1635` requests `Location.Accuracy.High`. Street-level accuracy is needed to place the courier on the customer's live tracking map and to show pickup/drop-off distances on the order screen. |
 | `ACCESS_COARSE_LOCATION` | config + expo-location | Yes | Paired with FINE per Android convention; supports couriers who grant approximate-only. |
 | `ACCESS_BACKGROUND_LOCATION` | expo-location plugin (`isAndroidBackgroundLocationEnabled: true`) | **Yes — implemented** | `lib/backgroundLocation.ts` (§5.1). Live tracking while the courier is inside a navigation app mid-delivery. **Triggers the Location permissions declaration + demo video (§5).** |
 | `FOREGROUND_SERVICE` | expo-location plugin (`isAndroidForegroundServiceEnabled: true`) | **Yes** | `lib/backgroundLocation.ts:126-130` declares the `foregroundService` block; its persistent notification tells the courier tracking is active. |
