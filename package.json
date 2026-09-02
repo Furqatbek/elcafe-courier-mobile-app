@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "check:firebase": "node scripts/check-firebase-config.mjs"
   },
   "jest": {
     "preset": "jest-expo",
