@@ -12,7 +12,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "check:firebase": "node scripts/check-firebase-config.mjs",
-    "prebuild": "expo prebuild --platform android --clean"
+    "prebuild": "node scripts/bump-version.mjs && expo prebuild --platform android --clean",
+    "bump": "node scripts/bump-version.mjs",
+    "prebuild:ios": "node scripts/bump-version.mjs && expo prebuild --platform ios --clean",
+    "prebuild:nobump": "expo prebuild --clean"
   },
   "jest": {
     "preset": "jest-expo",

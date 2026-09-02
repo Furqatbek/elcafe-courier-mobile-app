@@ -245,18 +245,41 @@ dependencies are missing.
 
 ### 9.1 Before every build
 
+> ### Build numbers auto-increment
+>
+> `npm run prebuild` runs `scripts/bump-version.mjs` before prebuilding, so
+> `android.versionCode` and `ios.buildNumber` both increase by one on every
+> invocation. Both stores reject a build number they have already seen — even
+> from a build you deleted — and forgetting to bump is the most common local
+> release mistake.
+>
+> - `npm run prebuild` — Android, with bump
+> - `npm run prebuild:ios` — iOS, with bump
+> - `npm run prebuild:nobump` — no bump, for iterating during development
+> - `npm run bump` — bump alone
+>
+> **Gaps are fine.** Stores require build numbers to *increase*, not to be
+> contiguous, so prebuilding twice before an upload costs nothing. The
+> user-visible `version` ("1.0.0") is deliberately NOT auto-incremented — that
+> is a release decision. Pass it explicitly when it changes:
+> `node scripts/bump-version.mjs 1.1.0`.
+>
+> Bumping edits `app.config.ts`, which is version-controlled — commit the change
+> with the release so the number that shipped is recorded.
+
+
 1. `.env` must be present at the repo root — `EXPO_PUBLIC_*` values are inlined
    into the JS bundle at build time, and a production build with placeholders
    throws at startup by design.
-2. **Bump `ios.buildNumber` in `app.config.ts`**, not in Xcode. Prebuild
-   regenerates `Info.plist` from the config, so an edit made in Xcode is
-   silently discarded on the next run. App Store Connect **rejects a
-   `CFBundleVersion` it has already seen**, even from a build you deleted, so
-   every upload needs a fresh one. `node scripts/bump-version.mjs` bumps the iOS
-   build number, the Android versionCode and the version together.
+2. **Never bump the build number in Xcode.** Prebuild regenerates `Info.plist`
+   from `app.config.ts`, so an edit made in Xcode is silently discarded on the
+   next run. `npm run prebuild:ios` bumps it in the config for you (see the
+   note above); if you archive without prebuilding, bump with `npm run bump`
+   first. App Store Connect **rejects a `CFBundleVersion` it has already
+   seen**, even from a build you deleted.
 
 ```bash
-npx expo prebuild --platform ios --clean
+npm run prebuild:ios          # bumps ios.buildNumber, then prebuilds
 cd ios && pod install && cd ..
 ```
 

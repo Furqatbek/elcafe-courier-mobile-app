@@ -755,6 +755,29 @@ You can override the location with `GOOGLE_SERVICES_JSON=/abs/path/google-servic
 
 ### 3.3 Generate the native project
 
+> ### Build numbers auto-increment
+>
+> `npm run prebuild` runs `scripts/bump-version.mjs` before prebuilding, so
+> `android.versionCode` and `ios.buildNumber` both increase by one on every
+> invocation. Both stores reject a build number they have already seen — even
+> from a build you deleted — and forgetting to bump is the most common local
+> release mistake.
+>
+> - `npm run prebuild` — Android, with bump
+> - `npm run prebuild:ios` — iOS, with bump
+> - `npm run prebuild:nobump` — no bump, for iterating during development
+> - `npm run bump` — bump alone
+>
+> **Gaps are fine.** Stores require build numbers to *increase*, not to be
+> contiguous, so prebuilding twice before an upload costs nothing. The
+> user-visible `version` ("1.0.0") is deliberately NOT auto-incremented — that
+> is a release decision. Pass it explicitly when it changes:
+> `node scripts/bump-version.mjs 1.1.0`.
+>
+> Bumping edits `app.config.ts`, which is version-controlled — commit the change
+> with the release so the number that shipped is recorded.
+
+
 ```bash
 cd /path/to/elcafe-courier-mobile-app
 npx expo prebuild --platform android --clean
