@@ -37,6 +37,9 @@ if (!hasGoogleServicesFile) {
 // map-less courier app. Deliberately NOT fatal: dev machines without the key
 // must still be able to prebuild and run everything except the map.
 const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY ?? "";
+// lib/crashReporting.ts is a no-op unless this is set, so the iOS privacy
+// manifest below declares crash collection only when the build actually does it.
+const collectsCrashData = !!process.env.EXPO_PUBLIC_CRASH_ENDPOINT;
 if (!googleMapsApiKey) {
   console.warn(
     "[app.config] GOOGLE_MAPS_API_KEY is not set — com.google.android.geo.API_KEY " +
@@ -68,6 +71,83 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // environment for store builds (Xcode flips debug builds automatically).
     entitlements: {
       "aps-environment": "production",
+    },
+    // Apple has required a privacy manifest since May 2024. Without it App
+    // Store Connect flags the upload, and any "required reason API" used by the
+    // app or its SDKs must be declared with an approved reason code.
+    //
+    // NSPrivacyTracking is false: this app has no ad or analytics SDK and never
+    // links data to third-party data for advertising, so no App Tracking
+    // Transparency prompt is required either.
+    privacyManifests: {
+      NSPrivacyTracking: false,
+      NSPrivacyTrackingDomains: [],
+      NSPrivacyCollectedDataTypes: [
+        {
+          // Background + foreground location while on shift
+          NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePreciseLocation",
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        },
+        {
+          NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        },
+        {
+          NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        },
+        {
+          NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePhoneNumber",
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        },
+        {
+          // deviceId/deviceName sent to POST /device-tokens for push routing
+          NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeDeviceID",
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        },
+        ...(collectsCrashData
+          ? [
+              {
+                NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeCrashData",
+                NSPrivacyCollectedDataTypeLinked: false,
+                NSPrivacyCollectedDataTypeTracking: false,
+                NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+              },
+            ]
+          : []),
+      ],
+      NSPrivacyAccessedAPITypes: [
+        {
+          // expo-file-system / React Native asset handling
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",
+          NSPrivacyAccessedAPITypeReasons: ["C617.1"],
+        },
+        {
+          // AsyncStorage and Expo modules reading app-owned defaults
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",
+          NSPrivacyAccessedAPITypeReasons: ["CA92.1"],
+        },
+        {
+          // React Native / Hermes timing
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategorySystemBootTime",
+          NSPrivacyAccessedAPITypeReasons: ["35F9.1"],
+        },
+        {
+          // expo-file-system writing to app storage
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",
+          NSPrivacyAccessedAPITypeReasons: ["E174.1"],
+        },
+      ],
     },
     infoPlist: {
       // App uses HTTPS only (exempt encryption) — declaring it here skips the

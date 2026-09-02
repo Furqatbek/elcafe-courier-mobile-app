@@ -1,3 +1,9 @@
+> **iOS:** this index covers Google Play. The App Store Connect counterpart is
+> `docs/APP_STORE_SUBMISSION.md` — different forms, different review culture,
+> and one hard iOS-only requirement (the privacy manifest, already wired into
+> `app.config.ts`). The developer-account gate below is Play-specific; Apple has
+> no equivalent testing requirement.
+
 # ZBR Courier — Google Play production release: START HERE
 
 This is the single entry point for the whole submission. Work top to bottom. Everything else is a
