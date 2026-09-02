@@ -178,155 +178,157 @@ export default function RegisterScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.header}>
-              <Logo size={80} />
-              <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
-              <Text style={styles.subtitle}>{t('register.create_account_subtitle')}</Text>
-            </View>
-
-            {/* General error message */}
-            {errors.general && (
-              <View style={styles.generalErrorContainer}>
-                <Text style={styles.generalErrorText}>{errors.general}</Text>
+            <View style={styles.card}>
+              <View style={styles.header}>
+                <Logo size={80} />
+                <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
+                <Text style={styles.subtitle}>{t('register.create_account_subtitle')}</Text>
               </View>
-            )}
 
-            <View style={styles.form}>
-              <View style={styles.row}>
-                <View style={styles.halfWidthContainer}>
-                  <View style={[styles.inputContainer, errors.firstName && styles.inputContainerError]}>
-                    <User size={20} color={errors.firstName ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder={t('register.first_name_placeholder')}
-                      placeholderTextColor={Colors.textLight}
-                      value={firstName}
-                      onChangeText={(v) => handleFieldChange('firstName', v, setFirstName)}
-                      autoCapitalize="words"
-                    />
+              {/* General error message */}
+              {errors.general && (
+                <View style={styles.generalErrorContainer}>
+                  <Text style={styles.generalErrorText}>{errors.general}</Text>
+                </View>
+              )}
+
+              <View style={styles.form}>
+                <View style={styles.row}>
+                  <View style={styles.halfWidthContainer}>
+                    <View style={[styles.inputContainer, errors.firstName && styles.inputContainerError]}>
+                      <User size={20} color={errors.firstName ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder={t('register.first_name_placeholder')}
+                        placeholderTextColor={Colors.textLight}
+                        value={firstName}
+                        onChangeText={(v) => handleFieldChange('firstName', v, setFirstName)}
+                        autoCapitalize="words"
+                      />
+                    </View>
+                    <ErrorText error={errors.firstName} />
                   </View>
-                  <ErrorText error={errors.firstName} />
+
+                  <View style={styles.halfWidthContainer}>
+                    <View style={[styles.inputContainer, errors.lastName && styles.inputContainerError]}>
+                      <User size={20} color={errors.lastName ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        placeholder={t('register.last_name_placeholder')}
+                        placeholderTextColor={Colors.textLight}
+                        value={lastName}
+                        onChangeText={(v) => handleFieldChange('lastName', v, setLastName)}
+                        autoCapitalize="words"
+                      />
+                    </View>
+                    <ErrorText error={errors.lastName} />
+                  </View>
                 </View>
 
-                <View style={styles.halfWidthContainer}>
-                  <View style={[styles.inputContainer, errors.lastName && styles.inputContainerError]}>
-                    <User size={20} color={errors.lastName ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder={t('register.last_name_placeholder')}
-                      placeholderTextColor={Colors.textLight}
-                      value={lastName}
-                      onChangeText={(v) => handleFieldChange('lastName', v, setLastName)}
-                      autoCapitalize="words"
-                    />
-                  </View>
-                  <ErrorText error={errors.lastName} />
+                <View style={[styles.inputContainer, errors.email && styles.inputContainerError]}>
+                  <Mail size={20} color={errors.email ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('register.email_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={email}
+                    onChangeText={(v) => handleFieldChange('email', v, setEmail)}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
                 </View>
-              </View>
+                <ErrorText error={errors.email} />
 
-              <View style={[styles.inputContainer, errors.email && styles.inputContainerError]}>
-                <Mail size={20} color={errors.email ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('register.email_placeholder')}
-                  placeholderTextColor={Colors.textLight}
-                  value={email}
-                  onChangeText={(v) => handleFieldChange('email', v, setEmail)}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-              <ErrorText error={errors.email} />
+                <View style={[styles.inputContainer, errors.phone && styles.inputContainerError]}>
+                  <Phone size={20} color={errors.phone ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('register.phone_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={phone}
+                    onChangeText={(v) => handleFieldChange('phone', v, setPhone)}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                <ErrorText error={errors.phone} />
 
-              <View style={[styles.inputContainer, errors.phone && styles.inputContainerError]}>
-                <Phone size={20} color={errors.phone ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('register.phone_placeholder')}
-                  placeholderTextColor={Colors.textLight}
-                  value={phone}
-                  onChangeText={(v) => handleFieldChange('phone', v, setPhone)}
-                  keyboardType="phone-pad"
-                />
-              </View>
-              <ErrorText error={errors.phone} />
+                <View style={[styles.inputContainer, errors.password && styles.inputContainerError]}>
+                  <Lock size={20} color={errors.password ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('register.password_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={password}
+                    onChangeText={(v) => handleFieldChange('password', v, setPassword)}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color={Colors.textLight} />
+                    ) : (
+                      <Eye size={20} color={Colors.textLight} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <ErrorText error={errors.password} />
 
-              <View style={[styles.inputContainer, errors.password && styles.inputContainerError]}>
-                <Lock size={20} color={errors.password ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('register.password_placeholder')}
-                  placeholderTextColor={Colors.textLight}
-                  value={password}
-                  onChangeText={(v) => handleFieldChange('password', v, setPassword)}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  {showPassword ? (
-                    <EyeOff size={20} color={Colors.textLight} />
+                <View style={[styles.inputContainer, errors.confirmPassword && styles.inputContainerError]}>
+                  <Lock size={20} color={errors.confirmPassword ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('register.confirm_password_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={confirmPassword}
+                    onChangeText={(v) => handleFieldChange('confirmPassword', v, setConfirmPassword)}
+                    secureTextEntry={!showConfirmPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={20} color={Colors.textLight} />
+                    ) : (
+                      <Eye size={20} color={Colors.textLight} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <ErrorText error={errors.confirmPassword} />
+
+                <Text style={styles.termsText}>
+                  {t('register.by_signing_up')}{' '}
+                  {TERMS_URL ? (
+                    <Text style={styles.linkText} onPress={() => Linking.openURL(TERMS_URL)}>{t('register.terms')}</Text>
                   ) : (
-                    <Eye size={20} color={Colors.textLight} />
+                    <Text>{t('register.terms')}</Text>
+                  )}{' '}
+                  {t('register.and')}{' '}
+                  {PRIVACY_URL ? (
+                    <Text style={styles.linkText} onPress={() => Linking.openURL(PRIVACY_URL)}>{t('register.privacy')}</Text>
+                  ) : (
+                    <Text>{t('register.privacy')}</Text>
                   )}
+                </Text>
+
+                <Button
+                  title={t('register.register_button')}
+                  onPress={handleRegister}
+                  isLoading={isLoading}
+                  style={styles.registerButton}
+                />
+              </View>
+
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>{t('register.have_account')}</Text>
+                <TouchableOpacity onPress={() => router.back()}>
+                  <Text style={styles.linkTextFooter}>{t('register.login')}</Text>
                 </TouchableOpacity>
               </View>
-              <ErrorText error={errors.password} />
-
-              <View style={[styles.inputContainer, errors.confirmPassword && styles.inputContainerError]}>
-                <Lock size={20} color={errors.confirmPassword ? Colors.danger : Colors.textLight} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder={t('register.confirm_password_placeholder')}
-                  placeholderTextColor={Colors.textLight}
-                  value={confirmPassword}
-                  onChangeText={(v) => handleFieldChange('confirmPassword', v, setConfirmPassword)}
-                  secureTextEntry={!showConfirmPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff size={20} color={Colors.textLight} />
-                  ) : (
-                    <Eye size={20} color={Colors.textLight} />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <ErrorText error={errors.confirmPassword} />
-
-              <Text style={styles.termsText}>
-                {t('register.by_signing_up')}{' '}
-                {TERMS_URL ? (
-                  <Text style={styles.linkText} onPress={() => Linking.openURL(TERMS_URL)}>{t('register.terms')}</Text>
-                ) : (
-                  <Text>{t('register.terms')}</Text>
-                )}{' '}
-                {t('register.and')}{' '}
-                {PRIVACY_URL ? (
-                  <Text style={styles.linkText} onPress={() => Linking.openURL(PRIVACY_URL)}>{t('register.privacy')}</Text>
-                ) : (
-                  <Text>{t('register.privacy')}</Text>
-                )}
-              </Text>
-
-              <Button
-                title={t('register.register_button')}
-                onPress={handleRegister}
-                isLoading={isLoading}
-                style={styles.registerButton}
-              />
-            </View>
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>{t('register.have_account')}</Text>
-              <TouchableOpacity onPress={() => router.back()}>
-                <Text style={styles.linkTextFooter}>{t('register.login')}</Text>
-              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -344,18 +346,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     padding: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
+    // Symmetric so the centred block is not biased downwards
+    paddingVertical: 32,
+  },
+  // Centres the column and stops inputs stretching edge to edge on tablets
+  // and in web mode.
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
     marginBottom: 32,
-  },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 24,
   },
   appName: {
     fontSize: 32,

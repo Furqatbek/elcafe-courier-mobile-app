@@ -167,98 +167,100 @@ export default function LoginOtpScreen() {
           <ArrowLeft size={24} color={Colors.text} />
         </TouchableOpacity>
 
-        <View style={styles.header}>
-          <View style={styles.iconContainer}>
-            <Phone size={32} color={Colors.primary} />
-          </View>
-          <Text style={styles.title}>
-            {step === 'phone' ? t('login_otp.title') : t('login_otp.verify_title')}
-          </Text>
-          <Text style={styles.subtitle}>
-            {step === 'phone'
-              ? t('login_otp.subtitle')
-              : t('login_otp.verify_subtitle', { phone })}
-          </Text>
-        </View>
-
-        {step === 'phone' ? (
-          <View style={styles.form}>
-            <View style={styles.phoneInputContainer}>
-              <Text style={styles.phonePrefix}>+998</Text>
-              <TextInput
-                style={styles.phoneInput}
-                placeholder={t('login_otp.phone_placeholder')}
-                placeholderTextColor={Colors.textLight}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                autoFocus
-                maxLength={12}
-              />
+        <View style={styles.card}>
+          <View style={styles.header}>
+            <View style={styles.iconContainer}>
+              <Phone size={32} color={Colors.primary} />
             </View>
-
-            <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
-              onPress={handleRequestOtp}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color={Colors.surface} />
-              ) : (
-                <>
-                  <Text style={styles.buttonText}>{t('login_otp.send_code')}</Text>
-                  <ArrowRight size={20} color={Colors.surface} />
-                </>
-              )}
-            </TouchableOpacity>
+            <Text style={styles.title}>
+              {step === 'phone' ? t('login_otp.title') : t('login_otp.verify_title')}
+            </Text>
+            <Text style={styles.subtitle}>
+              {step === 'phone'
+                ? t('login_otp.subtitle')
+                : t('login_otp.verify_subtitle', { phone })}
+            </Text>
           </View>
-        ) : (
-          <View style={styles.form}>
-            <View style={styles.otpContainer}>
-              {otp.map((digit, index) => (
+
+          {step === 'phone' ? (
+            <View style={styles.form}>
+              <View style={styles.phoneInputContainer}>
+                <Text style={styles.phonePrefix}>+998</Text>
                 <TextInput
-                  key={index}
-                  ref={(ref) => { otpInputRefs.current[index] = ref; }}
-                  style={[styles.otpInput, digit && styles.otpInputFilled]}
-                  value={digit}
-                  onChangeText={(value) => handleOtpChange(value, index)}
-                  onKeyPress={(e) => handleOtpKeyPress(e, index)}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  selectTextOnFocus
+                  style={styles.phoneInput}
+                  placeholder={t('login_otp.phone_placeholder')}
+                  placeholderTextColor={Colors.textLight}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  autoFocus
+                  maxLength={12}
                 />
-              ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.button, isLoading && styles.buttonDisabled]}
+                onPress={handleRequestOtp}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={Colors.surface} />
+                ) : (
+                  <>
+                    <Text style={styles.buttonText}>{t('login_otp.send_code')}</Text>
+                    <ArrowRight size={20} color={Colors.surface} />
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
+          ) : (
+            <View style={styles.form}>
+              <View style={styles.otpContainer}>
+                {otp.map((digit, index) => (
+                  <TextInput
+                    key={index}
+                    ref={(ref) => { otpInputRefs.current[index] = ref; }}
+                    style={[styles.otpInput, digit && styles.otpInputFilled]}
+                    value={digit}
+                    onChangeText={(value) => handleOtpChange(value, index)}
+                    onKeyPress={(e) => handleOtpKeyPress(e, index)}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    selectTextOnFocus
+                  />
+                ))}
+              </View>
 
-            <TouchableOpacity
-              style={[styles.button, isLoading && styles.buttonDisabled]}
-              onPress={handleVerifyOtp}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color={Colors.surface} />
-              ) : (
-                <Text style={styles.buttonText}>{t('login_otp.verify')}</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, isLoading && styles.buttonDisabled]}
+                onPress={handleVerifyOtp}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={Colors.surface} />
+                ) : (
+                  <Text style={styles.buttonText}>{t('login_otp.verify')}</Text>
+                )}
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.resendButton}
-              onPress={handleResendOtp}
-              disabled={resendTimer > 0}
-            >
-              <Text style={[styles.resendText, resendTimer > 0 && styles.resendTextDisabled]}>
-                {resendTimer > 0
-                  ? t('login_otp.resend_in', { seconds: resendTimer })
-                  : t('login_otp.resend_code')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+              <TouchableOpacity
+                style={styles.resendButton}
+                onPress={handleResendOtp}
+                disabled={resendTimer > 0}
+              >
+                <Text style={[styles.resendText, resendTimer > 0 && styles.resendTextDisabled]}>
+                  {resendTimer > 0
+                    ? t('login_otp.resend_in', { seconds: resendTimer })
+                    : t('login_otp.resend_code')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-        <TouchableOpacity style={styles.switchMethod} onPress={() => router.replace('/login')}>
-          <Text style={styles.switchMethodText}>{t('login_otp.use_email')}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.switchMethod} onPress={() => router.replace('/login')}>
+            <Text style={styles.switchMethodText}>{t('login_otp.use_email')}</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -273,6 +275,16 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 24,
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
+  },
+  // Auto margins centre this block in whatever space is left AFTER the back
+  // button, so the button stays pinned at the top. They collapse to 0 when the
+  // content outgrows the screen, which then simply scrolls.
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    marginTop: 'auto',
+    marginBottom: 'auto',
   },
   backButton: {
     width: 44,
