@@ -832,7 +832,7 @@ So the OS prompt provably cannot fire before the disclosure is accepted.
 
 > **Title:** Location Sharing
 >
-> **Body:** To dispatch nearby orders and share your live position with restaurants and customers, this
+> **Body:** To assign you deliveries and share your live position with dispatch, restaurants and customers, this
 > app collects location data while you are online — including when the app is in the background or closed.
 >
 > **Note:** Your location is not collected while you are offline.
@@ -849,7 +849,7 @@ location in the background.
 | Requirement | Met? | Where |
 |---|---|---|
 | Describes the data collected | **Yes** | *"collects location data"* |
-| Explains use and sharing | **Yes** | *"To dispatch nearby orders and share your live position with restaurants and customers"* |
+| Explains use and sharing | **Yes** | *"To assign you deliveries and share your live position with dispatch, restaurants and customers"* |
 | Includes the term "location" | **Yes** | *"location data"*, and the title *"Location Sharing"* |
 | Carries an accepted background phrase | **Yes** | *"including when the app is in the background or closed"* — contains both **"background"** and **"closed"**, and Google's list requires only one |
 | Lists the features using background location | **Yes** | proximity dispatch of nearby orders, and live position sharing with restaurants and customers — these are exactly the two uses §5.2 justifies |

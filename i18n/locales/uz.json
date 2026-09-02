@@ -775,7 +775,7 @@
   },
   "location_disclosure": {
     "title": "Joylashuvni ulashish",
-    "description": "Yaqin-atrofdagi buyurtmalarni taklif qilish va joylashuvingizni restoranlar hamda mijozlarga uzatish uchun ilova siz onlayn bo'lganingizda joylashuv ma'lumotlarini to'playdi — jumladan, ilova fonda ishlayotganda yoki yopiq bo'lganda ham.",
+    "description": "Sizga yetkazib berishlarni tayinlash va joylashuvingizni dispetcher, restoranlar hamda mijozlarga uzatish uchun ilova siz onlayn bo'lganingizda joylashuv ma'lumotlarini to'playdi — jumladan, ilova fonda ishlayotganda yoki yopiq bo'lganda ham.",
     "offline_note": "Siz oflayn bo'lganingizda joylashuvingiz to'planmaydi.",
     "agree": "Roziman",
     "not_now": "Hozir emas"
