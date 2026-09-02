@@ -777,22 +777,24 @@ Console gives you a free-text box (roughly 500 characters — check the live lim
 > ZBR Courier is a workforce app used only by delivery couriers under contract to our dispatch service.
 > Background location is core, not optional: while a courier is on an active delivery they navigate
 > inside Google Maps, so our app is not in the foreground, yet dispatch and the waiting customer need
-> the courier's live position for accurate tracking and ETA. It also lets us offer each new order to
-> the nearest available courier. Tracking runs only while the courier has explicitly toggled themselves
-> online, and stops the moment they go offline.
+> the courier's live position for accurate tracking and ETA, and dispatch must be able to spot a
+> stalled or off-route delivery and answer "where is my order?" calls. Tracking runs only while the
+> courier has explicitly toggled themselves online, and stops the moment they go offline.
 
 If you are given more room:
 
-> **Feature requiring background location:** live delivery tracking and proximity-based order dispatch.
+> **Feature requiring background location:** live delivery tracking for the customer and dispatch
+> during an active delivery.
 >
 > **Why foreground-only access is insufficient:** the courier's core task is driving. From the moment
 > they accept an order they are in a turn-by-turn navigation app — the app deliberately hands off to
 > Google Maps, because riding through Tashkent traffic requires a real navigation app, not our map
 > view. ZBR Courier is therefore backgrounded for most of every delivery. During exactly that window,
 > three things depend on the courier's position: (1) the customer's live tracking map, (2) dispatch's
-> ability to detect a stalled or off-route delivery, and (3) matching the next order to the nearest
-> courier. A foreground-only implementation would report the courier's location only while they are
-> staring at our app, which is precisely when they are not delivering.
+> ability to detect a stalled or off-route delivery, and (3) answering "where is my order?" support
+> calls without phoning the rider mid-traffic. A foreground-only implementation would report the
+> courier's location only while they are staring at our app, which is precisely when they are not
+> delivering.
 >
 > **How it is implemented:** an `expo-task-manager` background task registered as
 > `courier-location-task`, started via `Location.startLocationUpdatesAsync` with an Android foreground
