@@ -1,7 +1,23 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import Svg, { Circle, Path, Rect, Text, Defs, LinearGradient, Stop, G } from 'react-native-svg';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import Colors from '@/constants/colors';
+
+/**
+ * The ZBR brand mark.
+ *
+ * Renders the approved mark (white Z on the emerald rounded square) from a
+ * single raster source, which is the same artwork the app icon, adaptive icon,
+ * splash and web favicon are generated from — so every surface stays in sync.
+ * Source of truth: assets/ZBR Mark Concepts-selection.png.
+ *
+ * Previously this drew a different mark (an amber lightning bolt) in inline
+ * SVG, which meant the logo users saw in the app did not match the icon on
+ * their home screen.
+ */
+
+// 1024x1024 so it stays crisp at every size this component is used at
+// (currently 80-120px) on 3x displays.
+const MARK = require('@/assets/images/logo-mark.png');
 
 interface LogoProps {
   size?: number;
@@ -11,107 +27,45 @@ interface LogoProps {
 
 export function Logo({ size = 100, showText = false, showSubtitle = false }: LogoProps) {
   return (
-    <View style={[styles.container, { width: size, height: showText ? size * 1.3 : size }]}>
-      <Svg width={size} height={showText ? size * 1.3 : size} viewBox={showText ? "0 0 100 130" : "0 0 100 100"}>
-        <Defs>
-          <LinearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor={Colors.primary} />
-            <Stop offset="100%" stopColor={Colors.primaryDark} />
-          </LinearGradient>
-          <LinearGradient id="flashGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#FBBF24" />
-            <Stop offset="100%" stopColor={Colors.accent} />
-          </LinearGradient>
-        </Defs>
-
-        {/* Main circle background */}
-        <Circle cx="50" cy="50" r="46" fill="url(#bgGrad)" />
-
-        {/* Lightning bolt */}
-        <Path
-          d="M 42 18 L 62 42 L 52 42 L 58 82 L 38 52 L 48 52 Z"
-          fill="url(#flashGrad)"
-          stroke="white"
-          strokeWidth="1.5"
-        />
-
-        {/* Speed lines */}
-        <Rect x="12" y="42" width="16" height="3" rx="1.5" fill="white" opacity="0.6" />
-        <Rect x="16" y="48" width="12" height="3" rx="1.5" fill="white" opacity="0.4" />
-        <Rect x="14" y="54" width="14" height="3" rx="1.5" fill="white" opacity="0.5" />
-
-        {/* ZBR text */}
-        {showText && (
-          <G>
-            <Text
-              x="50"
-              y="115"
-              fontFamily="Arial"
-              fontSize="18"
-              fontWeight="900"
-              fill={Colors.text}
-              textAnchor="middle"
-            >
-              ZBR
-            </Text>
-            {showSubtitle && (
-              <Text
-                x="50"
-                y="128"
-                fontFamily="Arial"
-                fontSize="8"
-                fontWeight="600"
-                fill={Colors.textSecondary}
-                textAnchor="middle"
-              >
-                COURIER
-              </Text>
-            )}
-          </G>
-        )}
-      </Svg>
+    <View style={styles.container}>
+      <Image
+        source={MARK}
+        style={{ width: size, height: size }}
+        resizeMode="contain"
+        accessibilityRole="image"
+        accessibilityLabel="ZBR"
+      />
+      {showText && (
+        <Text style={[styles.wordmark, { fontSize: size * 0.18, marginTop: size * 0.08 }]}>
+          ZBR
+        </Text>
+      )}
+      {showText && showSubtitle && (
+        <Text style={[styles.subtitle, { fontSize: size * 0.09 }]}>COURIER</Text>
+      )}
     </View>
   );
 }
 
-// Icon-only version for smaller displays
+/** Icon-only alias kept for callers that want an explicit small mark. */
 export function LogoIcon({ size = 48 }: { size?: number }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Defs>
-        <LinearGradient id="bgGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor={Colors.primary} />
-          <Stop offset="100%" stopColor={Colors.primaryDark} />
-        </LinearGradient>
-        <LinearGradient id="flashGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor="#FBBF24" />
-          <Stop offset="100%" stopColor={Colors.accent} />
-        </LinearGradient>
-      </Defs>
-
-      {/* Main circle background */}
-      <Circle cx="50" cy="50" r="46" fill="url(#bgGradIcon)" />
-
-      {/* Lightning bolt */}
-      <Path
-        d="M 42 18 L 62 42 L 52 42 L 58 82 L 38 52 L 48 52 Z"
-        fill="url(#flashGradIcon)"
-        stroke="white"
-        strokeWidth="1.5"
-      />
-
-      {/* Speed lines */}
-      <Rect x="12" y="42" width="16" height="3" rx="1.5" fill="white" opacity="0.6" />
-      <Rect x="16" y="48" width="12" height="3" rx="1.5" fill="white" opacity="0.4" />
-      <Rect x="14" y="54" width="14" height="3" rx="1.5" fill="white" opacity="0.5" />
-    </Svg>
-  );
+  return <Logo size={size} />;
 }
 
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  wordmark: {
+    fontWeight: '900',
+    color: Colors.text,
+    letterSpacing: 1,
+  },
+  subtitle: {
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    letterSpacing: 2,
   },
 });
 
