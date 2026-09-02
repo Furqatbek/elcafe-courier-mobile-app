@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Lock, Mail, Eye, EyeOff, Smartphone } from 'lucide-react-native';
@@ -45,81 +45,93 @@ export default function LoginScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.content}
+          style={styles.flex}
         >
-          <View style={styles.header}>
-            <Logo size={100} />
-            <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
-            <Text style={styles.subtitle}>{t('login.app_subtitle')}</Text>
-          </View>
+          {/* flexGrow + justifyContent centres the block while there is room,
+              and lets it scroll instead of clipping once the keyboard is up */}
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <View style={styles.card}>
+              <View style={styles.header}>
+                <Logo size={100} />
+                <Text style={styles.appName}>ZBR <Text style={styles.appNameHighlight}>Courier</Text></Text>
+                <Text style={styles.subtitle}>{t('login.app_subtitle')}</Text>
+              </View>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Mail size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('login.email_placeholder')}
-                placeholderTextColor={Colors.textLight}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-            </View>
+              <View style={styles.form}>
+                <View style={styles.inputContainer}>
+                  <Mail size={20} color={Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('login.email_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                </View>
             
-            <View style={styles.inputContainer}>
-              <Lock size={20} color={Colors.textLight} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder={t('login.password_placeholder')}
-                placeholderTextColor={Colors.textLight}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                {showPassword ? (
-                  <EyeOff size={20} color={Colors.textLight} />
-                ) : (
-                  <Eye size={20} color={Colors.textLight} />
-                )}
-              </TouchableOpacity>
-            </View>
+                <View style={styles.inputContainer}>
+                  <Lock size={20} color={Colors.textLight} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('login.password_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color={Colors.textLight} />
+                    ) : (
+                      <Eye size={20} color={Colors.textLight} />
+                    )}
+                  </TouchableOpacity>
+                </View>
             
-            <TouchableOpacity style={styles.forgotPassword} onPress={() => router.push('/forgot-password')}>
-              <Text style={styles.forgotPasswordText}>{t('login.forgot_password')}</Text>
-            </TouchableOpacity>
+                <TouchableOpacity style={styles.forgotPassword} onPress={() => router.push('/forgot-password')}>
+                  <Text style={styles.forgotPasswordText}>{t('login.forgot_password')}</Text>
+                </TouchableOpacity>
 
-            <Button
-              title={t('login.login_button')}
-              onPress={handleLogin}
-              isLoading={isLoading}
-              style={styles.loginButton}
-            />
+                <Button
+                  title={t('login.login_button')}
+                  onPress={handleLogin}
+                  isLoading={isLoading}
+                  style={styles.loginButton}
+                />
 
-            <TouchableOpacity
-              style={styles.phoneLoginButton}
-              onPress={() => router.push('/login-otp')}
-            >
-              <Smartphone size={20} color={Colors.primary} />
-              <Text style={styles.phoneLoginText}>
-                {t('login.login_with_phone', 'Log in with phone number')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <TouchableOpacity
+                  style={styles.phoneLoginButton}
+                  onPress={() => router.push('/login-otp')}
+                >
+                  <Smartphone size={20} color={Colors.primary} />
+                  <Text style={styles.phoneLoginText}>
+                    {t('login.login_with_phone', 'Log in with phone number')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>{t('login.no_account')}</Text>
-            <TouchableOpacity onPress={() => router.push('/register')}>
-              <Text style={styles.linkText}>{t('login.sign_up')}</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>{t('login.no_account')}</Text>
+                <TouchableOpacity onPress={() => router.push('/register')}>
+                  <Text style={styles.linkText}>{t('login.sign_up')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </View>
     </TouchableWithoutFeedback>
@@ -131,19 +143,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
+  flex: {
     flex: 1,
-    padding: 24,
+  },
+  content: {
+    flexGrow: 1,
     justifyContent: 'center',
+    padding: 24,
+  },
+  // Centres the column horizontally and stops the inputs stretching edge to
+  // edge on tablets and in web mode.
+  card: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
-  },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 24,
+    marginBottom: 40,
   },
   appName: {
     fontSize: 32,
@@ -160,7 +177,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   form: {
-    marginBottom: 32,
+    marginBottom: 0,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -221,7 +238,10 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 'auto',
+    // Was marginTop:'auto', which absorbed all the free vertical space and
+    // defeated the container's justifyContent:'center' — the reason this
+    // screen sat pinned to the top.
+    marginTop: 32,
   },
   footerText: {
     color: Colors.textSecondary,
