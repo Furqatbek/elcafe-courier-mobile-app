@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Phone, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink } from 'lucide-react-native';
+import { Phone, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink, Store } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { ISSUE_TYPES } from '@/constants/config';
 import { useCourier, Order, IssueType } from '@/context/CourierContext';
@@ -66,10 +66,11 @@ export default function OrderDetailScreen() {
 
   const restaurantName = order.restaurantName ?? '-';
   const restaurantAddress = order.restaurantAddress ?? '-';
-  // The order payload carries no restaurant phone, so the pickup card is
-  // intentionally non-callable — the only call action is to the customer.
   const customerName = order.customerName ?? '-';
   const customerPhone = order.customerPhone ?? null;
+  // Distinct from customerPhone — the kitchen's own number, used when the
+  // courier arrives before the food is ready.
+  const restaurantPhone = order.restaurantPhone ?? null;
   const deliveryAddr = order.deliveryAddress ?? '-';
   const deliveryInstructions = order.deliveryInstructions ?? null;
   const orderNumber = order.externalOrderNo ?? order.orderNumber ?? '-';
@@ -105,9 +106,18 @@ export default function OrderDetailScreen() {
       logger.error('[OrderDetail] Error in handleSlideComplete:', error);
       const msg = error?.message || '';
       if (msg.toLowerCase().includes('not ready for pickup')) {
+        // Surface the backend's own wording (written for end users) and offer
+        // the kitchen's number. Stay on this screen so the courier can simply
+        // retry the slider when the food appears.
         Alert.alert(
           t('order_detail.not_ready_title'),
-          t('order_detail.not_ready_message')
+          msg || t('order_detail.not_ready_message'),
+          restaurantPhone
+            ? [
+                { text: t('order_detail.call_restaurant', 'Call restaurant'), onPress: handleCallRestaurant },
+                { text: t('common.ok'), style: 'cancel' },
+              ]
+            : [{ text: t('common.ok') }]
         );
       } else {
         Alert.alert(t('common.error'), msg || t('order_detail.status_update_failed'));
@@ -229,6 +239,12 @@ export default function OrderDetailScreen() {
     };
 
     tryOpenUrl(navigationUrls);
+  };
+
+  const handleCallRestaurant = () => {
+    if (restaurantPhone) {
+      Linking.openURL(`tel:${restaurantPhone}`);
+    }
   };
 
   const handleCallCustomer = () => {
@@ -359,6 +375,12 @@ export default function OrderDetailScreen() {
           <>
             <View style={styles.contactRow}>
               {renderContactButton(<Phone size={20} color="white" />, t('order_detail.call_customer', 'Call customer'), Colors.primary, handleCallCustomer)}
+              {restaurantPhone && renderContactButton(
+                <Store size={20} color="white" />,
+                t('order_detail.call_restaurant', 'Call restaurant'),
+                Colors.secondary,
+                handleCallRestaurant
+              )}
             </View>
             <View style={styles.reportIssueContainer}>
               <TouchableOpacity

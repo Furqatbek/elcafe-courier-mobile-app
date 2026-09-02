@@ -68,6 +68,8 @@ export interface OrderDto {
   deliveryInstructions?: string;
   customerName?: string;
   customerPhone?: string;
+  // Kitchen's number, distinct from customerPhone
+  restaurantPhone?: string;
   notes?: string | null;
   estimatedPrepTimeMinutes?: number;
   estimatedDeliveryTime?: string;

@@ -147,6 +147,9 @@ export interface Order {
   deliveryLng: number;
   customerName: string;
   customerPhone: string;
+  // Kitchen's number — distinct from customerPhone. Used when a courier
+  // arrives before the food is ready.
+  restaurantPhone?: string;
   deliveryInstructions?: string;
   deliveryFee: number;
   tipAmount: number;
@@ -186,6 +189,9 @@ export interface AvailableOrder {
   deliveryLng: number;
   customerName: string;
   customerPhone: string;
+  // Kitchen's number — distinct from customerPhone. Used when a courier
+  // arrives before the food is ready.
+  restaurantPhone?: string;
   deliveryInstructions?: string;
   status: string;
   deliveryFee: number;
@@ -1034,6 +1040,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
                   status: orderDto.status as OrderStatus,
                   customerName: orderDto.customerName ?? order.customerName,
                   customerPhone: orderDto.customerPhone ?? order.customerPhone,
+                  restaurantPhone: (orderDto as any).restaurantPhone ?? order.restaurantPhone,
                   deliveryFee: orderDto.deliveryFee ?? order.deliveryFee,
                   tipAmount: orderDto.tipAmount ?? order.tipAmount,
                   total: orderDto.total ?? order.total,

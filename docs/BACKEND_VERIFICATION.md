@@ -292,3 +292,59 @@ Backend note: expect `deviceToken` values that are NOT `ExponentPushToken[…]`
 strings. Route on `deviceType` (`ANDROID` → Firebase Admin, `IOS` → APNs).
 Verify one test push per platform (foreground, background, killed) during the
 staging pass.
+
+---
+
+# Backend clarifications (2026-09-02)
+
+Three corrections from the backend team, after they re-read the source.
+
+## Timestamps — the integration doc was wrong, the javadoc was right
+
+Real format: `2026-09-01T13:06:32Z` — **trailing Z, second precision, no
+fractional seconds**. `JacksonConfig` registers a custom
+`LocalDateTimeSerializer` with pattern `yyyy-MM-dd'T'HH:mm:ss'Z'`, and the
+backend now has a test that fails the build if that changes.
+
+So `new Date(raw)` is correct on its own: do not append a Z, do not strip one.
+`lib/formatting.ts parseServerDate()` is a pass-through for this format and is
+kept only as insurance against a future regression to a naive string.
+
+**Milliseconds are truncated, not rounded.** Two events in the same second are
+indistinguishable by these values, so nothing in this app sorts by them — the
+list endpoints arrive already ordered by the server and that order is preserved.
+
+*For the other apps:* appending `Z` defensively is a harmless no-op on a string
+that already ends in Z, but stripping or reformatting is not — worth checking
+in the customer and vendor clients.
+
+## appId — send the real bundle id, though nothing filters on it
+
+Push targets every active token for the user
+(`findByUserIdAndActiveTrue`), with no `appId` condition. The field is used in
+exactly one place: on iOS it becomes the `apns-topic` header, and **APNs
+rejects a push whose topic is not the app's own bundle id**. We send
+`Application.applicationId` (`app.zbr.courier`), which costs nothing while
+Android-only and means iOS works on the day it ships. The `uz.zbr.courier` in
+the earlier doc was an invented placeholder.
+
+**Known consequence:** a courier *is* a consumer account — the same user row. If
+someone installs both the courier app and the customer app under one phone
+number, a courier push lands on **both**. `appId` is the field that would let
+the backend route by app, and today nothing does. Report it to the backend team
+if it starts showing up in testing.
+
+## restaurantPhone — added to the payload
+
+`CourierOrderDto` previously carried only `customerPhone`, which is why the
+restaurant-call affordance was removed from the order screen: it dialled the
+customer. The backend added `restaurantPhone` to **every** courier order
+endpoint (available-orders, active, history, single order), with a test
+asserting the two numbers actually differ — "field exists but is always null"
+being the exact bug class worth guarding.
+
+App side: `restaurantPhone` is now on the `Order`/`AvailableOrder` interfaces
+and the WS `OrderDto`, a "Call restaurant" action is back on the order screen
+(rendered only when a number is present), and the *not ready for pickup* flow
+keeps the courier on the order screen, surfaces the backend's own message, and
+offers the kitchen's number so they can chase the food and retry the slider.

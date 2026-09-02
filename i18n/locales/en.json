@@ -265,7 +265,8 @@
     "no_phone": "Phone number not available",
     "your_earnings": "Your earnings (fee + tip)",
     "order_total": "Order total",
-    "call_customer": "Call customer"
+    "call_customer": "Call customer",
+    "call_restaurant": "Call restaurant"
   },
   "personal_info": {
     "title": "Personal Information",

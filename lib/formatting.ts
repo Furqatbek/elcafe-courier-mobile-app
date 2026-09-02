@@ -70,14 +70,21 @@ export const formatDuration = (seconds: number): string => {
 /**
  * Parse a timestamp from the backend.
  *
- * The API serialises Java LocalDateTime as UTC but WITHOUT a timezone suffix
- * ("2026-08-31T09:42:19.821"). JavaScript parses such a naive string as LOCAL
- * time, which in Tashkent (UTC+5) puts every value 5 hours out — an order
- * created a minute ago renders as "5h ago". Appending "Z" pins it to UTC.
+ * CONFIRMED FORMAT: "2026-09-01T13:06:32Z" — trailing Z, second precision, no
+ * fractional part. JacksonConfig pins it with a custom LocalDateTimeSerializer
+ * (pattern yyyy-MM-dd'T'HH:mm:ss'Z'), and the backend has a test that fails
+ * the build if it ever changes. So `new Date(raw)` is already correct and this
+ * helper is a pass-through for real payloads.
  *
- * Tolerates a suffix already being present, since the backend has said in one
- * place that it now emits a trailing "Z"; this handles either form rather than
- * betting on which is live.
+ * It stays because the fallback is cheap insurance: a naive, suffix-less
+ * timestamp is parsed by JavaScript as LOCAL time, which in Tashkent (UTC+5)
+ * would silently put every value 5 hours out — an order created a minute ago
+ * rendering as "5h ago". If the serializer is ever changed, this degrades to
+ * "still correct" instead of "quietly wrong everywhere".
+ *
+ * NOTE: second precision means two events in the same second are
+ * indistinguishable here. Never sort by these values — the list endpoints are
+ * already ordered by the server; keep their order.
  */
 export const parseServerDate = (value: Date | string): Date => {
   if (value instanceof Date) return value;

@@ -125,10 +125,17 @@ describe('formatDuration', () => {
 });
 
 describe('parseServerDate', () => {
-  it('treats a suffix-less backend timestamp as UTC, not local time', () => {
-    // The backend serialises LocalDateTime as UTC with no zone designator.
-    // Raw `new Date()` would read this as local time and, in Tashkent (UTC+5),
-    // place every order 5 hours in the past.
+  it('parses the real backend format (trailing Z, second precision)', () => {
+    // JacksonConfig pins yyyy-MM-dd'T'HH:mm:ss'Z'. Milliseconds are truncated,
+    // not rounded — which is why nothing in the app sorts by these values.
+    const parsed = parseServerDate('2026-09-01T13:06:32Z');
+    expect(parsed.toISOString()).toBe('2026-09-01T13:06:32.000Z');
+  });
+
+  it('treats a suffix-less timestamp as UTC, not local time', () => {
+    // Defensive fallback only — the live format carries a Z. If the serializer
+    // ever regressed to a naive string, raw `new Date()` would read it as local
+    // time and, in Tashkent (UTC+5), place every order 5 hours in the past.
     const parsed = parseServerDate('2026-08-31T09:42:19.821');
     expect(parsed.toISOString()).toBe('2026-08-31T09:42:19.821Z');
   });

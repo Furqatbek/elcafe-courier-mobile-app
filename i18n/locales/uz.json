@@ -265,7 +265,8 @@
     "no_phone": "Telefon raqami mavjud emas",
     "your_earnings": "Sizning daromadingiz (yetkazish + choychaqa)",
     "order_total": "Buyurtma summasi",
-    "call_customer": "Mijozga qo'ng'iroq qilish"
+    "call_customer": "Mijozga qo'ng'iroq qilish",
+    "call_restaurant": "Restoranga qo'ng'iroq qilish"
   },
   "personal_info": {
     "title": "Shaxsiy ma'lumotlar",
