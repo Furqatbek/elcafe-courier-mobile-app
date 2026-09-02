@@ -11,6 +11,7 @@ import websocketService, { NewOrderNotification, OrderTakenNotification, Availab
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
+import { distanceMeters } from '@/lib/formatting';
 
 export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 // OFFLINE / AVAILABLE / ON_BREAK are courier-selectable. BUSY is set by the
@@ -348,6 +349,9 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Track if initial data has been loaded
   const hasLoadedInitialData = useRef(false);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Last fix actually PUT to the backend — drives the send gate in the
+  // location watcher (see LOCATION_CONFIG.MIN_SEND_*).
+  const lastSentFixRef = useRef<{ latitude: number; longitude: number; at: number } | null>(null);
   const locationSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
@@ -1672,6 +1676,27 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       },
       (location) => {
         const { latitude, longitude, accuracy, heading, speed } = location.coords;
+
+        // The OS delivers fixes far more often than the backend needs them.
+        // Send at most one every MIN_SEND_INTERVAL_MS, and only when the
+        // courier has actually moved — with a heartbeat so a stationary
+        // courier's position does not go stale. This is their battery and
+        // their mobile data; a phone that dies mid-shift cannot deliver.
+        const now = Date.now();
+        const last = lastSentFixRef.current;
+        if (last) {
+          const elapsed = now - last.at;
+          if (elapsed < LOCATION_CONFIG.MIN_SEND_INTERVAL_MS) return;
+          const moved = distanceMeters(last, { latitude, longitude });
+          if (
+            moved < LOCATION_CONFIG.MIN_SEND_DISTANCE_M &&
+            elapsed < LOCATION_CONFIG.SEND_HEARTBEAT_MS
+          ) {
+            return;
+          }
+        }
+        lastSentFixRef.current = { latitude, longitude, at: now };
+
         updateLocationOnServer(
           latitude,
           longitude,

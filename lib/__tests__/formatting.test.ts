@@ -4,6 +4,7 @@ import {
   hasTip,
   formatDistance,
   formatDuration,
+  parseServerDate,
 } from '@/lib/formatting';
 
 // formatCurrency groups thousands with a non-breaking space (U+00A0) so
@@ -120,5 +121,31 @@ describe('formatDuration', () => {
 
   it('formats whole hours without minutes', () => {
     expect(formatDuration(7200)).toBe('2 hr');
+  });
+});
+
+describe('parseServerDate', () => {
+  it('treats a suffix-less backend timestamp as UTC, not local time', () => {
+    // The backend serialises LocalDateTime as UTC with no zone designator.
+    // Raw `new Date()` would read this as local time and, in Tashkent (UTC+5),
+    // place every order 5 hours in the past.
+    const parsed = parseServerDate('2026-08-31T09:42:19.821');
+    expect(parsed.toISOString()).toBe('2026-08-31T09:42:19.821Z');
+  });
+
+  it('does not double-append when the timestamp already carries Z', () => {
+    const parsed = parseServerDate('2026-08-31T09:42:19.821Z');
+    expect(parsed.toISOString()).toBe('2026-08-31T09:42:19.821Z');
+  });
+
+  it('respects an explicit numeric offset', () => {
+    // 14:42 at +05:00 is 09:42 UTC
+    expect(parseServerDate('2026-08-31T14:42:19+05:00').toISOString())
+      .toBe('2026-08-31T09:42:19.000Z');
+  });
+
+  it('passes a Date through untouched', () => {
+    const d = new Date('2026-08-31T09:42:19.821Z');
+    expect(parseServerDate(d)).toBe(d);
   });
 });

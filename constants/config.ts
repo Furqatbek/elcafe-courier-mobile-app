@@ -287,7 +287,16 @@ export const LOCATION_CONFIG = {
   ACTIVE_INTERVAL: 5000, // 5 seconds during active delivery
   FAST_INTERVAL: 3000, // 3 seconds when moving fast
   BACKGROUND_INTERVAL: 60000, // 60 seconds in background
-  DISTANCE_FILTER: 10, // meters
+  DISTANCE_FILTER: 10, // meters — OS delivery hint for watchPositionAsync
+  // Client-side send gate. The OS hands us fixes far more often than the
+  // backend needs them; this runs on the courier's battery and mobile data, so
+  // a fix is only PUT when it is both new enough and far enough from the last
+  // one we sent.
+  MIN_SEND_INTERVAL_MS: 12000, // at most one update every ~12s
+  MIN_SEND_DISTANCE_M: 20, // and only if moved ~20m
+  // ...unless this long has passed, so a stationary courier's position does
+  // not go stale server-side.
+  SEND_HEARTBEAT_MS: 120000,
   ACCURACY: 'high' as const,
 } as const;
 

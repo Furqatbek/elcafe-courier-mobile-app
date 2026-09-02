@@ -67,9 +67,46 @@ export const formatDuration = (seconds: number): string => {
   return `${hours} hr ${remainingMinutes} min`;
 };
 
+/**
+ * Parse a timestamp from the backend.
+ *
+ * The API serialises Java LocalDateTime as UTC but WITHOUT a timezone suffix
+ * ("2026-08-31T09:42:19.821"). JavaScript parses such a naive string as LOCAL
+ * time, which in Tashkent (UTC+5) puts every value 5 hours out — an order
+ * created a minute ago renders as "5h ago". Appending "Z" pins it to UTC.
+ *
+ * Tolerates a suffix already being present, since the backend has said in one
+ * place that it now emits a trailing "Z"; this handles either form rather than
+ * betting on which is live.
+ */
+export const parseServerDate = (value: Date | string): Date => {
+  if (value instanceof Date) return value;
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value);
+  return new Date(hasZone ? value : `${value}Z`);
+};
+
+/**
+ * Great-circle distance in metres between two coordinates (haversine).
+ * Used to decide whether a location fix is worth sending to the backend.
+ */
+export const distanceMeters = (
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
+): number => {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLng = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
 // Time formatting
 export const formatTime = (date: Date | string, locale: string = 'en-US'): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = parseServerDate(date);
   return d.toLocaleTimeString(locale, {
     hour: '2-digit',
     minute: '2-digit',
@@ -78,7 +115,7 @@ export const formatTime = (date: Date | string, locale: string = 'en-US'): strin
 
 // Date formatting
 export const formatDate = (date: Date | string, locale: string = 'en-US'): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = parseServerDate(date);
   return d.toLocaleDateString(locale, {
     year: 'numeric',
     month: 'short',
@@ -88,7 +125,7 @@ export const formatDate = (date: Date | string, locale: string = 'en-US'): strin
 
 // Relative time formatting (e.g., "2 hours ago", "in 5 minutes")
 export const formatRelativeTime = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = parseServerDate(date);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffSeconds = Math.floor(diffMs / 1000);

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { AvailableOrder } from '@/context/CourierContext';
-import { formatCurrency, courierEarnings } from '@/lib/formatting';
+import { formatCurrency, courierEarnings, parseServerDate } from '@/lib/formatting';
 
 interface AvailableOrderCardProps {
   order: AvailableOrder;
@@ -23,7 +23,9 @@ export const AvailableOrderCard = React.memo(function AvailableOrderCard({ order
 
   const formatTime = (dateString: string | undefined) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
+    // Backend timestamps are UTC without a suffix; parsing them raw would put
+    // every order 5 hours in the past for a courier in Tashkent.
+    const date = parseServerDate(dateString);
     const now = new Date();
     const diffMinutes = Math.floor((now.getTime() - date.getTime()) / 60000);
 
