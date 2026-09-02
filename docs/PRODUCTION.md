@@ -46,15 +46,59 @@ to `https://` and `ws://` to `wss://` (`enforceSecureTransport` in
 `constants/config.ts`, also applied in `lib/routing.ts` and
 `lib/crashReporting.ts`).
 
-## 2. Google Maps (Android)
+## 2. Google Maps (Android only)
+
+### Why a Google key is needed even though routing is OpenStreetMap
+
+Three different jobs, three different providers — it is easy to assume OSM covers all of them:
+
+| Job | Provider | Needs a Google key? |
+|---|---|---|
+| The **base map canvas** drawn in the app (tiles, labels, gestures) | `react-native-maps` with `PROVIDER_DEFAULT` (`components/OrderMap.native.tsx:242`) | **Android: yes.** react-native-maps only implements Google Maps on Android, so `PROVIDER_DEFAULT` resolves to the Google Maps SDK. **iOS: no** — it resolves to Apple MapKit, which is why no iOS maps key is configured. |
+| The **route line** drawn on top of that canvas | OSRM — `lib/routing.ts:94`, `/route/v1/driving/...` | No. OSRM returns *geometry only* (a coordinate list rendered as a `<Polyline>`). It serves no tiles. |
+| **Turn-by-turn navigation** | Handed off to an external app (Google Maps / Waze / Apple Maps) | No. It renders nothing inside our app. |
+
+So OSRM and the external-app handoff cover routing and navigation, but nothing covers the
+**in-app map imagery on Android**. Without the key that MapView renders as a grey rectangle —
+markers and the route polyline may draw, but on an empty background — and logcat shows an
+authorization failure. In a map-centric courier app a reviewer reads that as broken.
+
+If you want to remove the Google dependency entirely, the real option is migrating
+`OrderMap.native.tsx` to MapLibre (`@maplibre/maplibre-react-native`) with an OSM tile source.
+That is a native dependency swap plus a tile provider decision (OSM's public tile server
+forbids app-scale usage; MapTiler/Stadia have free tiers with attribution requirements) — a
+deliberate post-launch project, not a release-week change.
+
+### Steps
 
 1. In Google Cloud Console, create/select a project and enable **Maps SDK for Android**.
-2. Create an API key restricted to Android apps with package `app.zbr.courier`
-   and the SHA-1 of your upload/signing certificate (`eas credentials` shows it).
-3. Store it as an EAS secret: `eas env:create --name GOOGLE_MAPS_API_KEY --value <key> --environment production`
-   (repeat for preview/development or scope accordingly).
-4. iOS uses Apple Maps via `react-native-maps` default provider — no key required
-   unless the Google provider is explicitly enabled on iOS.
+   A billing-enabled project is required to mint a key at all. Check current Maps Platform
+   pricing for your usage — native mobile map display has historically been the cheapest
+   tier by far, but Google revised the pricing model in 2025, so verify rather than assume.
+2. Create an API key and restrict it to **Android apps**: package `app.zbr.courier` plus the
+   signing-certificate SHA-1 fingerprints (see the warning below).
+3. Put it in `.env` at the repo root as `GOOGLE_MAPS_API_KEY=...`. It is consumed by
+   `app.config.ts` at prebuild time and lands in the manifest as
+   `com.google.android.geo.API_KEY`. `app.config.ts` prints a loud warning when it is missing.
+4. iOS needs no key — Apple MapKit via the default provider.
+
+> ### The SHA-1 trap that greys out maps in production
+>
+> **Play App Signing re-signs your app.** The certificate on the build that reaches users is
+> Google's **app signing certificate**, not your upload certificate. If you restrict the Maps
+> key to the SHA-1 of your *upload* keystore only, maps work in your local builds and are
+> **grey for every real user**.
+>
+> Add both fingerprints to the key restriction:
+> - **App signing certificate SHA-1** — Play Console → your app → **Test and release → Setup →
+>   App integrity → App signing key certificate**. Available after your first upload.
+> - **Upload certificate SHA-1** — so locally built debug/release APKs also render:
+>   `keytool -list -v -keystore <your>.keystore -alias zbr-upload`
+>
+> Because the app signing SHA-1 only exists after the first upload, the practical order is:
+> ship to the **internal testing** track first with an unrestricted (or package-only) key,
+> then tighten the restriction once Play shows you the fingerprint — and re-test the map on
+> an internal-track build before promoting.
 
 ## 3. Push notifications (FCM / APNs) — **RELEASE BLOCKER until done**
 
