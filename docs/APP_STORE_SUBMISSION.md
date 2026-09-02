@@ -346,6 +346,52 @@ The `.ipa` lands in `build/ipa/`.
    TestFlight while Apple processes it. You may get an email about missing
    compliance — ours is pre-answered by `ITSAppUsesNonExemptEncryption: false`.
 
+### 9.4a "Upload Symbols Failed" for React / Hermes — expected, not a failure
+
+After a successful delivery Apple often emails warnings like:
+
+```
+The archive did not include a dSYM for the React.framework with the UUIDs [...]
+The archive did not include a dSYM for the ReactNativeDependencies.framework ...
+The archive did not include a dSYM for the hermes.framework ...
+```
+
+**This does not block the upload, TestFlight, or App Review.** The build
+processes normally and is submittable. Do not rebuild because of it.
+
+**Why it happens.** React Native 0.81 no longer compiles its core on your
+machine: `React`, `ReactNativeDependencies` and `hermes` arrive as prebuilt
+XCFrameworks (React core and the dependency bundle are fetched from Maven,
+Hermes as a release tarball — see
+`node_modules/react-native/scripts/cocoapods/rncore.rb` and
+`rndependencies.rb`). Prebuilt binaries ship without debug symbols, so the
+archive has no dSYM to hand Apple. It is a property of how RN is distributed,
+not of this project's configuration.
+
+**What it costs.** Only crashes occurring *inside React Native's own native
+frames* come back unsymbolicated in App Store Connect. Your app's code
+(`ZBRCourier`) still has its dSYM and symbolicates normally, and JavaScript
+stack traces are unaffected — those come from the Hermes bytecode map, not
+from these dSYMs. For most triage you lose nothing.
+
+**If you want them anyway**, build React Native from source instead of using
+the prebuilt artifacts. Verified flag names for the RN version in this repo —
+anything other than `"1"` selects a source build:
+
+```bash
+cd ios
+RCT_USE_PREBUILT_RNCORE=0 RCT_USE_RN_DEP=0 pod install
+cd .. && open ios/ZBRCourier.xcworkspace   # then archive as usual
+```
+
+The cost is a much longer clean build (tens of minutes instead of a few) on
+every machine and every CI run. Hermes has its own prebuilt tarball and may
+keep warning even then; that one is cosmetic.
+
+**Do not** silence the emails by setting `uploadSymbols` to `false` in
+`ExportOptions.plist`. That stops symbol upload for *your own* code too, which
+is the half you actually need when a courier's phone crashes in the field.
+
 ### 9.5 TestFlight before App Review
 
 Internal TestFlight testing needs no review and is the only realistic way to
