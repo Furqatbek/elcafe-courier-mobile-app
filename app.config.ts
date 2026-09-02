@@ -178,7 +178,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         // full-colour launcher icon squashed into the status bar as a grey blob.
         icon: "./assets/images/notification-icon.png",
         color: "#059669",
-        defaultChannel: "default",
+        // Fallback channel for any FCM message that does not name one. The
+        // backend targets `orders_v2` explicitly, but if it ever omits the
+        // field the push should still land on the order channel rather than a
+        // quieter generic one. Keep in step with
+        // ORDER_CONFIG.ANDROID_ORDER_CHANNEL_ID.
+        defaultChannel: "orders_v2",
       },
     ],
     [
