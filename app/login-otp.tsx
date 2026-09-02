@@ -37,7 +37,7 @@ export default function LoginOtpScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
-  const { requestOtp, verifyOtp } = useCourier();
+  const { requestOtp, verifyOtp, fetchCourierProfile } = useCourier();
 
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
@@ -129,6 +129,18 @@ export default function LoginOtpScreen() {
         toast.error(result.message || t('login_otp.verification_failed'));
         return;
       }
+
+      // OTP alone only produces a CONSUMER account — the backend cannot tell
+      // which app the code came from. A courier is a consumer PLUS a courier
+      // profile created by POST /couriers/register, so anyone without that
+      // profile must complete the courier application before entering the app.
+      // Skipping this is why the platform ends up with users but no couriers.
+      const profile = await fetchCourierProfile();
+      if (!profile) {
+        router.replace('/become-courier');
+        return;
+      }
+      // AuthNavigator sends unverified couriers to verification-pending
       router.replace('/(tabs)/orders');
     } catch (error: any) {
       toast.error(error.message || t('login_otp.verification_failed'));

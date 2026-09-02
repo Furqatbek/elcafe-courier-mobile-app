@@ -7,18 +7,52 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Application from 'expo-application';
 import { BASE_URL, API_ENDPOINTS, APP_CONFIG } from '@/constants/config';
 import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
 
 const DEVICE_TOKEN_KEY = 'fcm_device_token';
+// Stable per-install identifier. The backend keys device tokens by deviceId, so
+// this must survive app restarts (but not reinstalls — a reinstall gets a new
+// FCM token anyway).
+const DEVICE_ID_KEY = 'device_install_id';
 
 export type DeviceType = 'IOS' | 'ANDROID' | 'WEB';
 
+/**
+ * Body of POST /api/v1/device-tokens, exactly as the backend expects.
+ * Note the field names: `token`/`platform`, NOT `deviceToken`/`deviceType`.
+ */
 export interface DeviceTokenRequest {
-  deviceToken: string;
-  deviceType: DeviceType;
+  token: string;
+  platform: DeviceType;
+  deviceId: string;
+  deviceName: string;
+  appId: string;
   appVersion: string;
+}
+
+/** Random enough for a device identifier; not security-sensitive. */
+function randomId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+async function getDeviceId(): Promise<string> {
+  try {
+    const existing = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const fresh = randomId();
+    await AsyncStorage.setItem(DEVICE_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return randomId();
+  }
+}
+
+function getDeviceName(): string {
+  const parts = [Device.manufacturer, Device.modelName].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : `${Platform.OS} device`;
 }
 
 /**
@@ -157,8 +191,13 @@ export async function registerDeviceToken(accessToken: string): Promise<boolean>
     const pushToken = tokenResult.token;
 
     const payload: DeviceTokenRequest = {
-      deviceToken: pushToken,
-      deviceType: getDeviceType(),
+      token: pushToken,
+      platform: getDeviceType(),
+      deviceId: await getDeviceId(),
+      deviceName: getDeviceName(),
+      // Real applicationId of this build rather than a hard-coded string, so
+      // the backend never sees a value that disagrees with the installed app.
+      appId: Application.applicationId ?? 'app.zbr.courier',
       appVersion: APP_CONFIG.VERSION,
     };
 
@@ -196,7 +235,7 @@ export async function unregisterDeviceToken(accessToken: string): Promise<boolea
   try {
     const authToken = await resolveAuthToken(accessToken);
 
-    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.UNREGISTER_ALL}`, {
+    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.UNREGISTER}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

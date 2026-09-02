@@ -356,22 +356,6 @@ class WebSocketService {
   // ── Order Topics ──
 
   /**
-   * Subscribe to broadcast available orders (all couriers).
-   * This channel sends both new order payloads and ORDER_TAKEN alerts.
-   * Check message.type === 'ORDER_TAKEN' to distinguish.
-   */
-  subscribeToAvailableOrders(handler: WebSocketMessageHandler<AvailableOrdersChannelMessage>): () => void {
-    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.AVAILABLE_ORDERS, handler);
-  }
-
-  /**
-   * Subscribe to new orders targeted to this courier
-   */
-  subscribeToNewOrders(handler: WebSocketMessageHandler<NewOrderNotification>): () => void {
-    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.NEW_ORDERS, handler);
-  }
-
-  /**
    * Subscribe to full order updates for a specific order (full OrderDto)
    */
   subscribeToOrderUpdates(
@@ -394,13 +378,6 @@ class WebSocketService {
   // ── Notification Topics ──
 
   /**
-   * Subscribe to courier-role notifications (broadcast to all couriers)
-   */
-  subscribeToCourierNotifications(handler: WebSocketMessageHandler<WebSocketNotification>): () => void {
-    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.COURIER_NOTIFICATIONS, handler);
-  }
-
-  /**
    * Subscribe to personal user notifications
    */
   subscribeToUserNotifications(
@@ -408,13 +385,6 @@ class WebSocketService {
     handler: WebSocketMessageHandler<WebSocketNotification>
   ): () => void {
     return this.subscribe(WEBSOCKET_CONFIG.TOPICS.USER_NOTIFICATIONS(userId), handler);
-  }
-
-  /**
-   * Subscribe to platform-wide broadcast notifications
-   */
-  subscribeToBroadcastNotifications(handler: WebSocketMessageHandler<WebSocketNotification>): () => void {
-    return this.subscribe(WEBSOCKET_CONFIG.TOPICS.BROADCAST_NOTIFICATIONS, handler);
   }
 
   // ── Location Topics ──

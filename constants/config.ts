@@ -138,9 +138,11 @@ export const API_ENDPOINTS = {
   },
 
   // Device tokens for push notifications
+  // NOTE: this endpoint does NOT use the standard { success, data } envelope —
+  // it returns { success, message, tokenId } at the top level. Do not unwrap .data.
   DEVICE_TOKENS: {
     REGISTER: '/api/v1/device-tokens',
-    UNREGISTER_ALL: '/api/v1/device-tokens/all',
+    UNREGISTER: '/api/v1/device-tokens',
   },
 } as const;
 
@@ -151,7 +153,13 @@ export const COURIER_STATUS = {
   BUSY: 'BUSY',
   ON_BREAK: 'ON_BREAK',
   PENDING_APPROVAL: 'PENDING_APPROVAL',
+  SUSPENDED: 'SUSPENDED',
 } as const;
+
+// Only these three may be chosen by the courier. BUSY is set by the backend at
+// the concurrent-order limit and SUSPENDED by an admin; the backend rejects
+// self-service attempts to leave SUSPENDED or PENDING_APPROVAL.
+export const SELECTABLE_COURIER_STATUSES = ['OFFLINE', 'AVAILABLE', 'ON_BREAK'] as const;
 
 export type CourierStatusType = typeof COURIER_STATUS[keyof typeof COURIER_STATUS];
 
@@ -172,7 +180,9 @@ export type OrderStatusType = typeof ORDER_STATUS[keyof typeof ORDER_STATUS];
 
 // Vehicle Types
 export const VEHICLE_TYPES = {
+  WALKING: 'WALKING',
   BICYCLE: 'BICYCLE',
+  E_BIKE: 'E_BIKE',
   MOTORCYCLE: 'MOTORCYCLE',
   CAR: 'CAR',
 } as const;
@@ -284,6 +294,14 @@ export const LOCATION_CONFIG = {
 // Order Configuration
 export const ORDER_CONFIG = {
   REFRESH_INTERVAL: 30000, // 30 seconds
+  // GET /couriers/me/available-orders is a poll, not a stream — the backend
+  // exposes no courier-wide broadcast topic. Only runs while the app is
+  // foregrounded AND the courier is online (see CourierContext).
+  AVAILABLE_ORDERS_POLL_MS: 20000,
+  // The backend sends order pushes on this exact Android channel id. Channel
+  // importance is fixed at creation time, so renaming it requires a matching
+  // backend change — do not edit casually.
+  ANDROID_ORDER_CHANNEL_ID: 'orders_v2',
   MAX_ACTIVE_ORDERS: 3,
   NEW_ORDER_TIMEOUT: 300000, // 5 minutes to accept
   OFFER_TIMEOUT_SECONDS: 60, // client-side countdown on the new-order offer modal
@@ -324,20 +342,19 @@ export const WEBSOCKET_CONFIG = {
   MAX_RECONNECT_ATTEMPTS: 30,
   HEARTBEAT_INCOMING: 10000,
   HEARTBEAT_OUTGOING: 10000,
+  // The backend's WebSocketDestinationAuthorizer checks EVERY SUBSCRIBE frame
+  // and rejects anything outside this list with a STOMP ERROR — which closes
+  // the connection. These four are the only destinations a courier may take.
+  // Do not add a topic here without confirming the authorizer allows it.
   TOPICS: {
-    // Order topics
-    AVAILABLE_ORDERS: '/topic/couriers/orders/available',
-    NEW_ORDERS: '/user/queue/orders/new',
+    // Orders this courier is a party to
     ORDER_UPDATES: (orderId: string | number) => `/topic/orders/${orderId}`,
+    // Any authenticated user; used to drop an order from the available list
+    // the moment another courier accepts it
     ORDER_TAKEN: (orderId: string | number) => `/topic/orders/${orderId}/taken`,
-
-    // Notification topics — /topic/users/{userId}/notifications is the
-    // canonical personal destination (/user/queue/notifications is dead)
-    COURIER_NOTIFICATIONS: '/topic/roles/courier/notifications',
+    // This courier's own personal notifications, keyed by USER id
     USER_NOTIFICATIONS: (userId: string | number) => `/topic/users/${userId}/notifications`,
-    BROADCAST_NOTIFICATIONS: '/topic/broadcast/notifications',
-
-    // Location topics
+    // This courier's own location echo, keyed by COURIER PROFILE id (not user id)
     COURIER_LOCATION: (courierId: string | number) => `/topic/couriers/${courierId}/location`,
   },
 } as const;

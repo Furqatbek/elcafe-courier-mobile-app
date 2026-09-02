@@ -96,7 +96,7 @@
     "history": "Tarix",
     "no_active_orders": "Faol buyurtmalar yo'q",
     "no_history": "Yetkazib berish tarixi hali yo'q.",
-    "no_available_orders": "Yaqin atrofda mavjud buyurtmalar yo'q. Yangilash uchun pastga torting.",
+    "no_available_orders": "Hozircha ochiq buyurtmalar yo'q. Yangilash uchun pastga torting.",
     "go_online_to_see_orders": "Mavjud buyurtmalarni ko'rish uchun onlayn bo'ling",
     "just_now": "Hozirgina",
     "minutes_ago_one": "{{count}} daq oldin",
@@ -114,7 +114,7 @@
     "view": "Ko'rish",
     "earnings_label": "Daromad",
     "location_permission_title": "Joylashuvga ruxsat kerak",
-    "location_permission_message": "Onlayn bo'lish uchun joylashuvga ruxsat kerak: shu orqali sizga yaqin-atrofdagi buyurtmalarni yuboramiz va yetkazib berish paytida joylashuvingizni ulashamiz. Qurilma sozlamalarida ilova uchun joylashuvni yoqing.",
+    "location_permission_message": "Onlayn bo'lish uchun geolokatsiyaga ruxsat kerak: dispetcher va mijozlar yetkazib berishni real vaqtda kuzatadi. Qurilma sozlamalarida ilova uchun joylashuvni yoqing.",
     "open_settings": "Sozlamalarni ochish",
     "toggle_online_failed": "Holatni yangilab bo'lmadi. Internet aloqasini tekshirib, qayta urinib ko'ring.",
     "hours_ago_few": "{{count}}s oldin",
@@ -566,11 +566,13 @@
     "success": "Ariza muvaffaqiyatli yuborildi!",
     "vehicle_number_invalid": "Haqiqiy transport raqamini kiriting",
     "vehicle_number_required": "Transport vositasi raqami majburiy",
-    "verification_note": "Arizangiz jamoamiz tomonidan ko'rib chiqiladi. Bu odatda 1–2 ish kunini oladi. Tasdiqlangandan so'ng bildirishnoma olasiz."
+    "verification_note": "Arizangiz jamoamiz tomonidan ko'rib chiqiladi. Bu odatda 1–2 ish kunini oladi. Tasdiqlangandan so'ng bildirishnoma olasiz.",
+    "walking": "Piyoda",
+    "e_bike": "Elektrovelosiped"
   },
   "available_orders": {
     "title": "Mavjud buyurtmalar",
-    "subtitle": "Yaqin atrofdagi buyurtmalar",
+    "subtitle": "Ochiq buyurtmalar",
     "no_orders": "Mavjud buyurtmalar yo'q",
     "no_orders_message": "Yangi buyurtmalar shu yerda paydo bo'ladi. Onlayn qoling!",
     "refresh": "Yangilash",
@@ -595,7 +597,7 @@
     "tip": "Choy puli",
     "slide_to_accept": "Qabul qilish uchun suring",
     "fetch_error": "Buyurtmalarni yuklash imkonsiz",
-    "location_permission_required": "Joylashuvni aniqlash uchun ruxsat kerak",
+    "location_permission_required": "Ish vaqtida joylashuvingizni uzatish uchun geolokatsiyaga ruxsat kerak.",
     "order_taken_title": "Buyurtma endi mavjud emas",
     "order_taken_message": "Bu buyurtma {{courierName}} tomonidan qabul qilindi",
     "order_already_taken": "Bu buyurtma boshqa kuryer tomonidan allaqachon qabul qilingan.",
@@ -714,11 +716,13 @@
     "email": "Email",
     "chat": "Chat",
     "logout": "Chiqish",
-    "check_status": "Holatni tekshirish"
+    "check_status": "Holatni tekshirish",
+    "rejected_title": "Ariza tasdiqlanmadi",
+    "rejected_subtitle": "Kuryerlik arizangiz tasdiqlanmadi. Qo'llab-quvvatlash xizmatiga murojaat qiling — qayta ariza berish yordam bermaydi, chunki har bir hisobda faqat bitta kuryer profili bo'lishi mumkin."
   },
   "realtime": {
     "new_order": "Yangi buyurtma!",
-    "new_order_nearby": "Yaqinda yangi buyurtma mavjud",
+    "new_order_nearby": "Yangi buyurtma mavjud",
     "from_restaurant": "{{restaurant}} dan",
     "pickup_distance": "{{distance}} km olish nuqtasiga",
     "delivery_distance": "{{distance}} km yetkazib berish",

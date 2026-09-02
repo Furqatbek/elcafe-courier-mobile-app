@@ -96,7 +96,7 @@
     "history": "History",
     "no_active_orders": "No active orders",
     "no_history": "No delivery history yet.",
-    "no_available_orders": "No orders available nearby. Pull down to refresh.",
+    "no_available_orders": "No open orders right now. Pull down to refresh.",
     "go_online_to_see_orders": "Go online to see available orders",
     "just_now": "Just now",
     "minutes_ago_one": "{{count}} min ago",
@@ -114,7 +114,7 @@
     "view": "View",
     "earnings_label": "Earnings",
     "location_permission_title": "Location Permission Needed",
-    "location_permission_message": "Going online requires location access so we can send you nearby orders and share your position during deliveries. Please enable location for this app in your device settings.",
+    "location_permission_message": "Going online requires location access so dispatch and customers can follow your deliveries in real time. Please enable location for this app in your device settings.",
     "open_settings": "Open Settings",
     "toggle_online_failed": "Could not update your status. Please check your connection and try again.",
     "hours_ago_few": "{{count}}h ago",
@@ -566,7 +566,9 @@
       "vehicle_type_required": "Select a vehicle type"
     },
     "vehicle_info": "Vehicle information",
-    "work_preferences": "Work preferences"
+    "work_preferences": "Work preferences",
+    "walking": "On foot",
+    "e_bike": "E-bike"
   },
   "available_orders": {
     "title": "Available Orders",
@@ -582,7 +584,7 @@
     "view_details": "View Details",
     "order_accepted": "Order accepted! Navigate to pickup.",
     "accept_error": "Failed to accept order. Please try again.",
-    "location_permission_required": "Location permission is required to find nearby orders.",
+    "location_permission_required": "Location permission is required to share your position while you work.",
     "offline_title": "You're Offline",
     "offline_message": "Go online to start receiving order requests",
     "go_online": "Go Online",
@@ -605,7 +607,7 @@
     "earnings": "Earnings",
     "estimated_time": "~{{time}} min",
     "no_orders": "No orders available",
-    "subtitle": "Orders nearby"
+    "subtitle": "Open orders"
   },
   "order_offer": {
     "new_order": "New Order!",
@@ -714,11 +716,13 @@
     "email": "Email",
     "chat": "Chat",
     "logout": "Log Out",
-    "check_status": "Check status"
+    "check_status": "Check status",
+    "rejected_title": "Application not approved",
+    "rejected_subtitle": "Your courier application was not approved. Please contact support — re-applying will not work, as each account can only have one courier profile."
   },
   "realtime": {
     "new_order": "New Order!",
-    "new_order_nearby": "New order available nearby",
+    "new_order_nearby": "New order available",
     "from_restaurant": "From {{restaurant}}",
     "pickup_distance": "{{distance}} km to pickup",
     "delivery_distance": "{{distance}} km delivery",

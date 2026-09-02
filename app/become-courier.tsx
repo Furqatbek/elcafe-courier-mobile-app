@@ -10,15 +10,19 @@ import {
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Bike, Car, CheckCircle, AlertCircle } from 'lucide-react-native';
+import { Bike, Car, CheckCircle, AlertCircle, Footprints, Zap } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { VehicleType, DEFAULTS } from '@/constants/config';
 import { useToast } from '@/components/Toast';
 import { api } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
 
-const vehicleIcons = {
+// The backend accepts five vehicle types; all five must be offerable or a
+// courier simply cannot describe how they work.
+const vehicleIcons: Record<VehicleType, typeof Bike> = {
+  WALKING: Footprints,
   BICYCLE: Bike,
+  E_BIKE: Zap,
   MOTORCYCLE: Bike,
   CAR: Car,
 };
@@ -116,7 +120,9 @@ export default function BecomeCourierScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('become_courier.vehicle_type')}</Text>
           <View style={styles.vehicleGrid}>
+            {renderVehicleOption('WALKING', t('become_courier.walking', 'On foot'))}
             {renderVehicleOption('BICYCLE', t('become_courier.bicycle'))}
+            {renderVehicleOption('E_BIKE', t('become_courier.e_bike', 'E-bike'))}
             {renderVehicleOption('MOTORCYCLE', t('become_courier.motorcycle'))}
             {renderVehicleOption('CAR', t('become_courier.car'))}
           </View>

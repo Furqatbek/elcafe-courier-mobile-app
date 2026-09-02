@@ -7,6 +7,8 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
@@ -29,21 +31,29 @@ const hasRealSupportPhone =
   !!APP_CONFIG.SUPPORT_PHONE &&
   !PLACEHOLDER_PHONES.includes(APP_CONFIG.SUPPORT_PHONE);
 
-// Re-check verification status every 30 seconds; once the backend flips
-// `verified`, the AuthNavigator in app/_layout.tsx redirects to the main app.
-const STATUS_POLL_INTERVAL_MS = 30000;
-
 export default function VerificationPendingScreen() {
   const { t } = useTranslation();
-  const { logout, fetchCourierProfile } = useCourier();
+  const { logout, fetchCourierProfile, courierProfile } = useCourier();
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
+  // An admin approving a courier is a human action that can take hours, so
+  // re-check ON APP FOCUS rather than on a timer — a background interval here
+  // would just drain the battery of someone who is not yet allowed to work.
+  // Once `verified` flips true the AuthNavigator moves them into the app.
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchCourierProfile().catch(() => {});
-    }, STATUS_POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    fetchCourierProfile().catch(() => {});
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') {
+        fetchCourierProfile().catch(() => {});
+      }
+    });
+    return () => sub.remove();
   }, [fetchCourierProfile]);
+
+  // A rejected application lands here as SUSPENDED with verified still false.
+  // Re-registering cannot help — one user may only ever have one courier
+  // profile — so this state offers support contact, never a retry.
+  const isRejected = courierProfile?.status === 'SUSPENDED';
 
   const handleCheckStatus = async () => {
     if (isCheckingStatus) return;
@@ -91,8 +101,19 @@ export default function VerificationPendingScreen() {
         <View style={styles.iconContainer}>
           <Clock size={48} color={Colors.warning} />
         </View>
-        <Text style={styles.title}>{t('verification_pending.title')}</Text>
-        <Text style={styles.subtitle}>{t('verification_pending.subtitle')}</Text>
+        <Text style={styles.title}>
+          {isRejected
+            ? t('verification_pending.rejected_title', 'Application not approved')
+            : t('verification_pending.title')}
+        </Text>
+        <Text style={styles.subtitle}>
+          {isRejected
+            ? t(
+                'verification_pending.rejected_subtitle',
+                'Your courier application was not approved. Please contact support — re-applying will not work, as each account can only have one courier profile.'
+              )
+            : t('verification_pending.subtitle')}
+        </Text>
       </View>
 
       {/* Timeline */}
@@ -143,7 +164,8 @@ export default function VerificationPendingScreen() {
         </View>
       </View>
 
-      {/* Manual status re-check */}
+      {/* Manual status re-check — pointless once rejected */}
+      {!isRejected && (
       <TouchableOpacity
         style={styles.checkStatusButton}
         onPress={handleCheckStatus}
@@ -158,6 +180,7 @@ export default function VerificationPendingScreen() {
           {t('verification_pending.check_status', 'Check status')}
         </Text>
       </TouchableOpacity>
+      )}
 
       {/* Contact Support */}
       <View style={styles.supportSection}>

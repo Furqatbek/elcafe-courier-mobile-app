@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, WEBSOCKET_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import * as Location from 'expo-location';
 // Importing this module registers the background location task at startup
 // (TaskManager.defineTask must run at module scope, before any OS delivery)
@@ -13,7 +13,17 @@ import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
 
 export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
-export type CourierStatus = 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_BREAK';
+// OFFLINE / AVAILABLE / ON_BREAK are courier-selectable. BUSY is set by the
+// backend at the concurrent-order limit, PENDING_APPROVAL until an admin
+// verifies the profile, and SUSPENDED by an admin — the last three are
+// read-only states the app renders but never requests.
+export type CourierStatus =
+  | 'OFFLINE'
+  | 'AVAILABLE'
+  | 'BUSY'
+  | 'ON_BREAK'
+  | 'PENDING_APPROVAL'
+  | 'SUSPENDED';
 export type VerificationStatus = 'pending' | 'approved' | 'rejected';
 
 // Re-export IssueType from config for convenience
@@ -884,31 +894,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     });
   }, []);
 
-  // Handler for the broadcast available-orders channel (topic 1).
-  // This channel sends both new-order payloads AND ORDER_TAKEN alerts.
-  const handleAvailableOrdersMessage = useCallback((message: AvailableOrdersChannelMessage) => {
-    try {
-      if ((message as any).type === 'ORDER_TAKEN') {
-        handleOrderTaken(message as OrderTakenNotification);
-      } else {
-        logger.log('[CourierContext] Broadcast new order received:', (message as NewOrderNotification).orderId);
-        addNewOrderToState(message as NewOrderNotification);
-      }
-    } catch (error) {
-      logger.error('[CourierContext] Error handling available-orders message:', error);
-    }
-  }, [addNewOrderToState, handleOrderTaken]);
-
-  // Handler for targeted new-order messages (topic 2 — only new orders, no ORDER_TAKEN)
-  const handleNewOrderMessage = useCallback((notification: NewOrderNotification) => {
-    try {
-      logger.log('[CourierContext] Targeted new order received:', notification.orderId);
-      addNewOrderToState(notification);
-    } catch (error) {
-      logger.error('[CourierContext] Error handling new order message:', error);
-    }
-  }, [addNewOrderToState]);
-
   // Handler for incoming notification messages (shared by courier/user/broadcast topics 5, 6, 7)
   const handleNotificationMessage = useCallback((notification: WebSocketNotification) => {
     logger.log('[CourierContext] Notification received:', notification.id, notification.notificationType || notification.type);
@@ -933,28 +918,79 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setUnreadCount((prev) => prev + 1);
   }, []);
 
-  // Subscribe to WebSocket topics
+  // Available orders are a POLL, not a stream: there is no courier-wide
+  // broadcast topic the backend will let us subscribe to, so new work reaches
+  // the app through FCM push plus this refresh.
+  //
+  // Deliberately bounded: it runs ONLY while the app is foregrounded and the
+  // courier is online. This burns their battery and their mobile data, and a
+  // courier whose phone dies mid-shift cannot deliver.
+  const pollAvailableOrdersRef = useRef<(() => void) | null>(null);
+  pollAvailableOrdersRef.current = () => {
+    fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
+  };
+
+  useEffect(() => {
+    if (!isOnline || !accessToken) {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const start = () => {
+      if (refreshIntervalRef.current) return;
+      refreshIntervalRef.current = setInterval(() => {
+        pollAvailableOrdersRef.current?.();
+      }, ORDER_CONFIG.AVAILABLE_ORDERS_POLL_MS);
+    };
+    const stop = () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state === 'active') {
+        // Refresh immediately on focus, then resume the interval
+        pollAvailableOrdersRef.current?.();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (AppState.currentState === 'active') {
+      start();
+    }
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => {
+      sub.remove();
+      stop();
+    };
+  }, [isOnline, accessToken]);
+
+  // Subscribe to WebSocket topics.
+  //
+  // The backend authorizes every SUBSCRIBE frame and answers anything outside
+  // its allow-list with a STOMP ERROR, which closes the whole connection. Only
+  // these destinations are permitted for a courier:
+  //   /topic/orders/{orderId}            (orders they are a party to)
+  //   /topic/orders/{orderId}/taken      (any authenticated user)
+  //   /topic/users/{userId}/notifications
+  //   /topic/couriers/{courierId}/location   keyed by COURIER PROFILE id
+  //
+  // The broadcast available-orders, role-notification and platform-broadcast
+  // topics this app used to take are NOT allowed; new work now arrives via FCM
+  // push plus the foreground poll of GET /couriers/me/available-orders.
   const subscribeToWebSocketTopics = useCallback(() => {
     // Clear existing subscriptions
     wsUnsubscribeRefs.current.forEach((unsubscribe) => unsubscribe());
     wsUnsubscribeRefs.current = [];
 
-    // 1. Broadcast available orders + ORDER_TAKEN alerts (all couriers)
-    wsUnsubscribeRefs.current.push(
-      websocketService.subscribeToAvailableOrders(handleAvailableOrdersMessage)
-    );
-
-    // 2. New orders targeted to this courier specifically
-    wsUnsubscribeRefs.current.push(
-      websocketService.subscribeToNewOrders(handleNewOrderMessage)
-    );
-
-    // 5. Courier role notifications (broadcast to all couriers)
-    wsUnsubscribeRefs.current.push(
-      websocketService.subscribeToCourierNotifications(handleNotificationMessage)
-    );
-
-    // 6. Personal user notifications
+    // Personal user notifications — keyed by USER id
     const userId = user?.id || courierProfile?.userId;
     if (userId) {
       wsUnsubscribeRefs.current.push(
@@ -962,21 +998,17 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       );
     }
 
-    // 7. Platform-wide broadcast notifications
-    wsUnsubscribeRefs.current.push(
-      websocketService.subscribeToBroadcastNotifications(handleNotificationMessage)
-    );
-
-    // 8. Location update confirmations (optional)
+    // Location update confirmations — keyed by COURIER PROFILE id, which is a
+    // different number from userId; confusing the two is silently rejected.
     const courierId = courierProfile?.id;
     if (courierId) {
       wsUnsubscribeRefs.current.push(
-        websocketService.subscribeToLocationConfirmation(courierId, (confirmation) => {
+        websocketService.subscribeToLocationConfirmation(courierId, () => {
           logger.log('[CourierContext] Location update confirmed by server');
         })
       );
     }
-  }, [user, courierProfile, handleAvailableOrdersMessage, handleNewOrderMessage, handleNotificationMessage]);
+  }, [user, courierProfile, handleNotificationMessage]);
 
   // Subscribe to order-specific topics (status updates + taken) for active orders.
   // Topics 3 and 4 are subscribed/unsubscribed dynamically as orders are accepted and completed.

@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Notifications from 'expo-notifications';
+import { ORDER_CONFIG } from '@/constants/config';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 
 import { ToastProvider, useToast } from "@/components/Toast";
@@ -142,10 +143,14 @@ async function setupNotificationChannel() {
       enableLights: true,
     });
 
-    // High priority channel for new orders
-    await Notifications.setNotificationChannelAsync('orders', {
+    // New-order channel. The id MUST match what the backend sends
+    // (ORDER_CONFIG.ANDROID_ORDER_CHANNEL_ID) or Android drops the push:
+    // a notification addressed to a channel that does not exist is not shown.
+    // Channel importance is fixed at creation, so a change of importance
+    // requires a NEW channel id and a matching backend change.
+    await Notifications.setNotificationChannelAsync(ORDER_CONFIG.ANDROID_ORDER_CHANNEL_ID, {
       name: 'New Orders',
-      importance: Notifications.AndroidImportance.MAX,
+      importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 500, 200, 500],
       sound: 'default',
       lightColor: '#059669',
@@ -153,6 +158,10 @@ async function setupNotificationChannel() {
       enableVibrate: true,
       enableLights: true,
     });
+
+    // Retire the pre-v2 channel so couriers are not left with a dead
+    // "New Orders" entry in system settings that no longer receives anything.
+    await Notifications.deleteNotificationChannelAsync('orders').catch(() => {});
   }
 }
 
