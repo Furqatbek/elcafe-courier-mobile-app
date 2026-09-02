@@ -13,7 +13,10 @@
  * Optionally pass the project id the backend sends from, and it will assert
  * they match:
  *
- *   node scripts/check-firebase-config.mjs --expect-project zbr-prod
+ *   node scripts/check-firebase-config.mjs --expect-project <the-backend-project-id>
+ *
+ * Pass the id the BACKEND actually uses — not a guess. A wrong value here
+ * produces a scary-looking failure on a perfectly good file.
  */
 
 import { readFileSync, existsSync } from 'fs';
@@ -90,9 +93,13 @@ if (expectedProject) {
     ok(`Project matches the expected "${expectedProject}"`);
   } else {
     fail(
-      `Project is "${projectId}" but the backend sends from "${expectedProject}".\n` +
-      '  Push will be silently dead: tokens issued by one project cannot be\n' +
-      '  delivered to by another. Get the file from the backend\'s project.'
+      `Project is "${projectId}" but you passed --expect-project "${expectedProject}".\n` +
+      '  First check the value YOU passed — if it was a guess or a placeholder,\n' +
+      `  the file may be fine and "${projectId}" is the real project.\n` +
+      '  If the backend genuinely sends from a different project, push will be\n' +
+      '  silently dead: tokens issued by one project cannot be delivered to by\n' +
+      '  another, and nothing surfaces an error. Confirm the project id with the\n' +
+      '  backend team before rebuilding.'
     );
   }
 } else {
