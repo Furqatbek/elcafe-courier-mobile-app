@@ -6,9 +6,7 @@ import {
   FlatList, 
   Dimensions, 
   TouchableOpacity, 
-  SafeAreaView, 
   StatusBar,
-  Platform,
   Linking
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -17,6 +15,7 @@ import { Box, BellRing, Navigation as NavigationIcon, TrendingUp, ChevronRight }
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import logger from '@/lib/logger';
+import { useBottomInset } from '@/hooks/useBottomInset';
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,6 +26,7 @@ const HAS_SEEN_ONBOARDING_KEY = 'hasSeenOnboarding';
 const PRIVACY_URL = process.env.EXPO_PUBLIC_PRIVACY_URL;
 
 export default function OnboardingScreen() {
+  const footerPaddingBottom = useBottomInset(24);
   const { t } = useTranslation();
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -137,7 +137,7 @@ export default function OnboardingScreen() {
         style={styles.flatList}
       />
 
-      <SafeAreaView style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: footerPaddingBottom }]}>
         <View style={styles.pagination}>
           {slides.map((_, index) => (
             <View
@@ -185,7 +185,7 @@ export default function OnboardingScreen() {
             </View>
           )}
         </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'ios' ? 0 : 24,
+    // paddingBottom is applied at the call site from useBottomInset(24).
   },
   pagination: {
     flexDirection: 'row',

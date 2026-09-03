@@ -11,6 +11,7 @@ import { formatCurrency, courierEarnings } from '@/lib/formatting';
 import { StatusBadge } from '@/components/StatusBadge';
 import OrderMap from '@/components/OrderMap';
 import logger from '@/lib/logger';
+import { useBottomInset } from '@/hooks/useBottomInset';
 
 
 export default function OrderDetailScreen() {
@@ -18,6 +19,9 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { orders, orderHistory, updateOrderStatus, completeOrder, reportOrderIssue, fetchOrderDetails } = useCourier();
+  // Footer holds the slide-to-advance control; without the inset its lower
+  // edge falls under the system navigation bar and the slide cannot finish.
+  const footerPaddingBottom = useBottomInset(20);
   const orderId = Number(id);
   const [order, setOrder] = useState<Order | null | undefined>(
     orders.find(o => o.orderId === orderId) || orderHistory.find(o => o.orderId === orderId)
@@ -280,7 +284,7 @@ export default function OrderDetailScreen() {
         <StatusBadge status={order.status} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + footerPaddingBottom }]}>
         {/* Map View */}
         <View style={styles.mapContainer}>
           <OrderMap order={order} />
@@ -403,7 +407,7 @@ export default function OrderDetailScreen() {
         onRequestClose={() => setShowIssueModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: footerPaddingBottom }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('order_detail.report_issue')}</Text>
               <TouchableOpacity onPress={() => setShowIssueModal(false)}>
@@ -466,7 +470,7 @@ export default function OrderDetailScreen() {
 
       {/* Footer Action */}
       {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: footerPaddingBottom }]}>
           <SlideButton
             key={order.status}
             title={getButtonTitle()}
@@ -721,7 +725,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: Colors.surface,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    // paddingBottom is applied at the call site from useBottomInset(20).
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     shadowColor: '#000',
@@ -760,7 +764,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    // paddingBottom is applied at the call site from useBottomInset(20).
     maxHeight: '80%',
   },
   modalHeader: {

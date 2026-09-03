@@ -24,8 +24,12 @@ import { useCourier } from '@/context/CourierContext';
 import { courierEarnings, hasTip, formatCurrency } from '@/lib/formatting';
 import { SlideButton } from '@/components/SlideButton';
 import OrderMap from '@/components/OrderMap';
+import { useBottomInset } from '@/hooks/useBottomInset';
 
 export default function AvailableOrderDetailScreen() {
+  // See hooks/useBottomInset: the footer carries the accept control, so a
+  // dead strip at its bottom edge means orders cannot be accepted.
+  const footerPaddingBottom = useBottomInset(20);
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -162,7 +166,7 @@ export default function AvailableOrderDetailScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 + footerPaddingBottom }]}>
         {/* Map Preview */}
         <View style={styles.mapContainer}>
           <OrderMap order={mapOrder as any} showUserLocation={true} />
@@ -255,7 +259,7 @@ export default function AvailableOrderDetailScreen() {
       </ScrollView>
 
       {/* Footer with Slide to Accept */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: footerPaddingBottom }]}>
         {isAccepting ? (
           <View style={styles.acceptingContainer}>
             <ActivityIndicator size="small" color={Colors.primary} />
@@ -492,7 +496,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: Colors.surface,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    // paddingBottom is applied at the call site from useBottomInset(20).
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     shadowColor: '#000',

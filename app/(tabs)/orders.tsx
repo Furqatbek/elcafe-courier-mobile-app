@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Switch, ActivityIndicator, RefreshControl, Alert, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
 import { Bell } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
@@ -34,6 +35,11 @@ export default function OrdersScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // The tab bar is now as tall as its row PLUS the system navigation bar
+  // inset, so a hardcoded bottom padding no longer clears it and the last
+  // row of the list ends up unreachable underneath it. useBottomTabBarHeight
+  // reports the real measured height, so this tracks the tab bar itself.
+  const tabBarHeight = useBottomTabBarHeight();
   const {
     activeOrders,
     availableOrders,
@@ -448,7 +454,7 @@ export default function OrdersScreen() {
           data={isOnline ? availableOrders : []}
           keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderAvailableOrder}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 16 }]}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -482,7 +488,7 @@ export default function OrdersScreen() {
           data={activeOrders}
           keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderActiveOrder}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 16 }]}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>
@@ -498,7 +504,7 @@ export default function OrdersScreen() {
           data={orderHistory}
           keyExtractor={(item) => item.orderId.toString()}
           renderItem={renderActiveOrder}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarHeight + 16 }]}
           refreshControl={
             <RefreshControl
               refreshing={isHistoryRefreshing}

@@ -8,7 +8,6 @@ import {
   Animated,
   Vibration,
   Dimensions,
-  Platform,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import {
@@ -24,6 +23,7 @@ import { ORDER_CONFIG } from '@/constants/config';
 import { AvailableOrder } from '@/context/CourierContext';
 import { courierEarnings, hasTip, formatCurrency } from '@/lib/formatting';
 import { soundService } from '@/services/soundService';
+import { useBottomInset } from '@/hooks/useBottomInset';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,6 +46,9 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
   timeoutSeconds = DEFAULT_TIMEOUT,
 }: OrderOfferModalProps) {
   const { t } = useTranslation();
+  // Bottom sheet: its accept/decline buttons sit at the very bottom of the
+  // window, which under edge-to-edge is behind the system navigation bar.
+  const sheetPaddingBottom = useBottomInset(20);
   const [timeLeft, setTimeLeft] = useState(timeoutSeconds);
   const [isAccepting, setIsAccepting] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -205,7 +208,7 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
         <Animated.View
           style={[
             styles.container,
-            { transform: [{ translateY: slideAnim }] },
+            { transform: [{ translateY: slideAnim }], paddingBottom: sheetPaddingBottom },
           ]}
         >
           {/* Progress bar at top */}
@@ -342,7 +345,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    // paddingBottom is applied at the call site from useBottomInset(20).
     maxHeight: SCREEN_HEIGHT * 0.85,
   },
   progressBarContainer: {

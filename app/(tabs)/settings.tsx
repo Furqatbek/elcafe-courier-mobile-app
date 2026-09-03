@@ -9,6 +9,7 @@ import { useCourier } from '@/context/CourierContext';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import logger from '@/lib/logger';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
 
@@ -49,6 +50,7 @@ const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, 
 };
 
 export default function SettingsScreen() {
+  const tabBarHeight = useBottomTabBarHeight();
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { user, courierProfile, logout, logoutAllDevices, accessToken, authenticatedFetch } = useCourier();
@@ -215,7 +217,7 @@ export default function SettingsScreen() {
 
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="settings">
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}>
       <Text style={styles.headerTitle}>{t('settings.title')}</Text>
 
       <View style={styles.profileSection}>
@@ -344,7 +346,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingBottom: 100,
+    // paddingBottom is applied at the call site from useBottomTabBarHeight().
   },
   headerTitle: {
     fontSize: 28,

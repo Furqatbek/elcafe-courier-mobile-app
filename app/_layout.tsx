@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useRef } from "react";
 import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Notifications from 'expo-notifications';
 import { ORDER_CONFIG } from '@/constants/config';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
@@ -367,6 +368,16 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/*
+        React Navigation injects its own SafeAreaProvider inside each navigator,
+        so useSafeAreaInsets() works in screens either way. Anything rendered
+        OUTSIDE a navigator does not get one - the session-loading screen below,
+        the toast host, and the order-offer modal all render above/around the
+        navigator. Providing it here covers them, and gives every consumer one
+        shared set of insets instead of a per-navigator copy that briefly starts
+        from static initial metrics.
+      */}
+      <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
           <CourierProvider>
@@ -379,6 +390,7 @@ export default function RootLayout() {
           </CourierProvider>
         </ToastProvider>
       </GestureHandlerRootView>
+      </SafeAreaProvider>
     </QueryClientProvider>
   );
 }

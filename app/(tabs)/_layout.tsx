@@ -1,14 +1,20 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
 import { Package, DollarSign, Settings } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/colors';
 
+// Height of the icon + label row itself. The system navigation bar's inset is
+// ADDED to this, never absorbed into it.
+const TAB_ROW_HEIGHT = 60;
+const TAB_ROW_PADDING = 8;
+
 export default function TabLayout() {
   const { t } = useTranslation();
-  
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -18,9 +24,20 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
-          height: Platform.OS === 'ios' ? 88 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-          paddingTop: 8,
+          // The app is edge-to-edge, so the window extends behind the gesture
+          // pill / 3-button navigation bar. The previous fixed height and
+          // paddingBottom drew the tab row underneath it: the tabs were visible
+          // through the translucent bar but every tap went to the system bar,
+          // which is why navigation was impossible. Reserving insets.bottom
+          // below the row keeps the touch targets above the system bar.
+          //
+          // React Navigation applies the bottom inset itself when tabBarStyle
+          // sets neither height nor paddingBottom. Setting either one opts out
+          // of that entirely, so once we override we must handle the inset -
+          // this is a whole-value override, not a tweak on top of a default.
+          height: TAB_ROW_HEIGHT + insets.bottom,
+          paddingBottom: TAB_ROW_PADDING + insets.bottom,
+          paddingTop: TAB_ROW_PADDING,
         },
         tabBarLabelStyle: {
           fontWeight: '600',

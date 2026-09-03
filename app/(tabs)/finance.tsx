@@ -6,6 +6,7 @@ import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { formatCurrency } from '@/lib/formatting';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -14,6 +15,7 @@ const TAB_ROUTES = [
 ];
 
 export default function FinanceScreen() {
+  const tabBarHeight = useBottomTabBarHeight();
   const { t } = useTranslation();
   const { earnings, isLoadingEarnings, fetchEarnings } = useCourier();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -35,7 +37,7 @@ export default function FinanceScreen() {
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="finance">
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -160,7 +162,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    paddingBottom: 100,
+    // paddingBottom is applied at the call site from useBottomTabBarHeight().
   },
   header: {
     marginBottom: 20,
