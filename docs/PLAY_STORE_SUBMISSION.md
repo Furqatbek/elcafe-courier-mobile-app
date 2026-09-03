@@ -275,10 +275,14 @@ Generate it immediately before every release build and check the result:
 
 ```bash
 cd /home/user/elcafe-courier-mobile-app
-npx expo prebuild --platform android --clean
+npm run prebuild                    # bumps versionCode, then prebuilds
 grep -n 'applicationId' android/app/build.gradle                                   # app.zbr.courier
-grep -c 'ACCESS_BACKGROUND_LOCATION' android/app/src/main/AndroidManifest.xml      # >= 1
+grep -c 'ACCESS_BACKGROUND_LOCATION' android/app/src/main/AndroidManifest.xml      # 0
 ```
+
+`ACCESS_BACKGROUND_LOCATION` must be **0**. Background location was removed so that neither the
+Location permissions nor the Foreground service permissions declaration applies. Any other number
+means it came back, and both declarations become required again.
 
 The applicationId is permanent once published — uploading under the wrong package name burns that
 name on your Play account forever. Check it every time.
@@ -1472,9 +1476,9 @@ Print this. Tick every line before you press Publish.
 
 **Code and build**
 - [ ] `expo-dev-client` moved to `devDependencies` (or removed); no `devlauncher`/`devmenu`/`mlkit`/`codescanner` entries in the AAB — §1.3
-- [ ] `rm -rf android && npx expo prebuild --platform android --clean` run fresh
+- [ ] `rm -rf android && npm run prebuild` run fresh (`npm run prebuild` bumps versionCode; plain `npx expo prebuild` does **not**)
 - [ ] `grep applicationId android/app/build.gradle` → `app.zbr.courier`
-- [ ] `grep -c ACCESS_BACKGROUND_LOCATION android/app/src/main/AndroidManifest.xml` → ≥ 1
+- [ ] `grep -c ACCESS_BACKGROUND_LOCATION android/app/src/main/AndroidManifest.xml` → **0** (background location was removed; a non-zero count means it crept back in and the Location permissions declaration is required again)
 - [ ] `aapt2 dump permissions` on the built artifact shows **no** `RECORD_AUDIO`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `SYSTEM_ALERT_WINDOW`, `CAMERA`, `READ_MEDIA_IMAGES`, `AD_ID` — §1.8
 - [ ] Every `.so` LOAD segment aligns to `0x4000` or greater (§1.2)
 - [ ] Signer is **not** `CN=Android Debug`

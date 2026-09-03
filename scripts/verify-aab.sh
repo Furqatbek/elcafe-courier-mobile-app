@@ -188,6 +188,7 @@ DECLARED_F="$WORKDIR/declared.txt"; : > "$DECLARED_F"
 BLOCKED_F="$WORKDIR/blocked.txt";   : > "$BLOCKED_F"
 LIBRARY_F="$WORKDIR/library.txt";   : > "$LIBRARY_F"
 ATTRIB_F="$WORKDIR/attrib.txt";     : > "$ATTRIB_F"
+CFG_VC_F="$WORKDIR/config-vc.txt";  : > "$CFG_VC_F"
 CONFIG_RESOLVED=0
 
 # --- source 1: the resolved Expo config -------------------------------------
@@ -203,7 +204,8 @@ if [ -d "$REPO_ROOT/node_modules/expo" ] && command -v node >/dev/null 2>&1; the
       const uniq = (a) => [...new Set((a || []).map(q))].sort();
       fs.writeFileSync(process.argv[2], uniq(cfg?.android?.permissions).join("\n") + "\n");
       fs.writeFileSync(process.argv[3], uniq(cfg?.android?.blockedPermissions).join("\n") + "\n");
-    ' "$WORKDIR/expo-config.json" "$DECLARED_F" "$BLOCKED_F" 2>/dev/null; then
+      fs.writeFileSync(process.argv[4], String(cfg?.android?.versionCode ?? ""));
+    ' "$WORKDIR/expo-config.json" "$DECLARED_F" "$BLOCKED_F" "$CFG_VC_F" 2>/dev/null; then
       CONFIG_RESOLVED=1
     fi
   fi
@@ -217,6 +219,31 @@ else
   info "bundle is reported as unclassified below. Run this script from a checkout"
   info "with node_modules installed to get the full comparison."
   [ -s "$WORKDIR/expo-config.err" ] && sed -n '1,5p' "$WORKDIR/expo-config.err" | sed 's/^/        /'
+fi
+
+# --- stale-artifact check: does the AAB match the config it claims to be from?
+#
+# The bump only runs as part of `npm run prebuild`. Running `npx expo prebuild`
+# by hand skips it, and so does rebuilding with Gradle after a bump without
+# re-running prebuild. Both produce an AAB whose versionCode is behind
+# app.config.ts, which Play rejects at upload with "Version code N has already
+# been used" - after the 10-40 minute build you just paid for. Catch it here.
+CFG_VC="$(tr -d '[:space:]' < "$CFG_VC_F" 2>/dev/null || true)"
+if [ "$CONFIG_RESOLVED" -eq 1 ] && [ -n "$CFG_VC" ] && [ -n "${VC:-}" ]; then
+  if [ "$VC" = "$CFG_VC" ]; then
+    pass "versionCode $VC matches app.config.ts - this AAB was built from the current config"
+  elif [ "$VC" -lt "$CFG_VC" ] 2>/dev/null; then
+    fail "STALE BUNDLE: AAB has versionCode $VC but app.config.ts says $CFG_VC"
+    info "The bundle predates the last version bump, so it carries a code you have"
+    info "probably already uploaded. Rebuild from the current config:"
+    info "  npm run prebuild:nobump    # regenerate android/ WITHOUT another bump"
+    info "  cd android && ./gradlew :app:bundleRelease"
+    info "Use 'npm run prebuild' (which bumps) only when starting a NEW build."
+  else
+    warn "AAB versionCode $VC is AHEAD of app.config.ts ($CFG_VC)"
+    info "app.config.ts was reverted, or the bundle came from a different checkout."
+    info "Whatever ships must be the code recorded in git - reconcile before upload."
+  fi
 fi
 
 # --- source 2: library manifests in node_modules ----------------------------

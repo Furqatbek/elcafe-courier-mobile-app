@@ -151,7 +151,7 @@ Local builds, manual store uploads:
 
 ```sh
 cp .env.example .env        # fill in real values first (once)
-npx expo prebuild --clean   # regenerates android/ and ios/ from app.config.ts
+npm run prebuild            # bumps versionCode/buildNumber, regenerates android/
 
 # Android — signed AAB for Play Console
 cd android && ./gradlew bundleRelease

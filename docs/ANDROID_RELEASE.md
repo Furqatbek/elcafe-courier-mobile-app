@@ -780,7 +780,7 @@ You can override the location with `GOOGLE_SERVICES_JSON=/abs/path/google-servic
 
 ```bash
 cd /path/to/elcafe-courier-mobile-app
-npx expo prebuild --platform android --clean
+npm run prebuild        # bumps versionCode/buildNumber, THEN prebuilds
 ```
 
 What `--clean` does: deletes `android/` entirely and regenerates it from `app.config.ts`.
@@ -1328,7 +1328,7 @@ npx expo config --type prebuild --json \
   | node -e "const c=JSON.parse(require('fs').readFileSync(0,'utf8')); console.log(c.version, c.android.versionCode, c.ios.buildNumber)"
 # -> 1.1.0 3 3
 
-npx expo prebuild --platform android --clean
+npm run prebuild:nobump   # the bump above already ran; don't bump twice
 cd android && ./gradlew :app:bundleRelease
 grep -E "versionCode|versionName" app/build.gradle   # confirm it reached the native project
 ```

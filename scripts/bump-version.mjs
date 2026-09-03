@@ -9,6 +9,20 @@
  * Google Play rejects an AAB whose versionCode has already been used, and the
  * only fix is to bump and rebuild.
  *
+ * HOW THIS RUNS. It is wired into the npm scripts, NOT into Expo:
+ *
+ *     npm run prebuild            bump + prebuild (android)   <- the release path
+ *     npm run prebuild:ios        bump + prebuild (ios)
+ *     npm run prebuild:nobump     prebuild only, no bump
+ *
+ * `npx expo prebuild` calls the Expo CLI directly and therefore does NOT bump.
+ * There is no Expo hook that can force it to: a config plugin runs on every
+ * config evaluation (`expo start`, `expo config`, editor tooling), so putting
+ * the increment there would burn versionCodes just by opening the project.
+ * The npm script is the seam, so use it. `scripts/verify-aab.sh` compares the
+ * built AAB's versionCode against app.config.ts and fails on a mismatch, which
+ * catches a bypass before you spend an upload on it.
+ *
  * Usage:
  *   node scripts/bump-version.mjs                # build bump: versionCode +1, buildNumber +1
  *   node scripts/bump-version.mjs 1.1.0          # release bump: set version, then +1 both codes
@@ -189,8 +203,10 @@ function main(argv) {
   console.log(
     '\nNext: confirm the resolved config, then rebuild.\n' +
       '  npx expo config --type prebuild --json | node -e "const c=JSON.parse(require(\'fs\').readFileSync(0,\'utf8\'));console.log(c.version, c.android.versionCode, c.ios.buildNumber)"\n' +
-      '  npx expo prebuild --platform android --clean\n' +
-      '  cd android && ./gradlew :app:bundleRelease'
+      '  npm run prebuild:nobump      # the bump already happened - do NOT bump twice\n' +
+      '  cd android && ./gradlew :app:bundleRelease\n' +
+      '\nNote: `npm run prebuild` bumps AND prebuilds in one step, so you only need\n' +
+      'this script directly when setting a release version (`npm run bump 1.1.0`).'
   );
 }
 
