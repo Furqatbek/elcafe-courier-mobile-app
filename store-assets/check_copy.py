@@ -38,6 +38,9 @@ COPY = os.path.join(HERE, "listing-copy.json")
 BACKGROUND_LOCATION = "android.permission.ACCESS_BACKGROUND_LOCATION"
 
 FIELD_LABEL = {
+    "subtitle": "Subtitle (App Store)",
+    "promotional_text": "Promotional text (App Store)",
+    "keywords": "Keywords (App Store)",
     "name": "App name",
     "short_description": "Short description",
     "full_description": "Full description",
@@ -113,7 +116,11 @@ def main() -> int:
     print("-" * 70)
     for loc in locales:
         for field, limit in limits.items():
-            value = data[loc][field]
+            if not isinstance(limit, int):
+                continue  # documented, not enforced
+            value = data[loc].get(field)
+            if value is None:
+                continue
             n = len(value)
             ok = n <= limit
             failures += 0 if ok else 1

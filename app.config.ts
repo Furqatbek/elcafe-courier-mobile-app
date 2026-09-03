@@ -84,7 +84,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       NSPrivacyTrackingDomains: [],
       NSPrivacyCollectedDataTypes: [
         {
-          // Background + foreground location while on shift
+          // Foreground ("while in use") location only — no background tracking
           NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePreciseLocation",
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
@@ -153,15 +153,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // App uses HTTPS only (exempt encryption) — declaring it here skips the
       // export-compliance questionnaire on every App Store Connect upload.
       ITSAppUsesNonExemptEncryption: false,
+      // While-in-use only. The Always variants are deliberately absent: asking
+      // for Always is what puts an app in front of Apple's background-location
+      // scrutiny, and this build does not track in the background at all.
       NSLocationWhenInUseUsageDescription:
-        "ZBR Courier uses your location while the app is open to show your position on the delivery map, calculate routes to pickup and drop-off points, and share your live position with dispatch and the customer during an active delivery.",
-      NSLocationAlwaysAndWhenInUseUsageDescription:
-        "While you are on shift with an active delivery, ZBR Courier tracks your location in the background so dispatch and the customer can follow the delivery in real time and so you receive orders near you. Tracking stops when you go off shift.",
-      NSLocationAlwaysUsageDescription:
-        "While you are on shift with an active delivery, ZBR Courier tracks your location in the background so dispatch and the customer can follow the delivery in real time. Tracking stops when you go off shift.",
+        "ZBR Courier uses your location while the app is open to show your position on the delivery map, calculate routes to pickup and drop-off points, and share your live position with dispatch and the customer while you are viewing an active delivery.",
       NSUserNotificationsUsageDescription:
         "ZBR Courier sends you notifications about new order assignments, order status changes, and messages from dispatch so you never miss a delivery.",
-      UIBackgroundModes: ["location"],
       LSApplicationQueriesSchemes: ["comgooglemaps", "waze", "maps"],
     },
   },
@@ -178,12 +176,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         apiKey: googleMapsApiKey,
       },
     },
+    // Foreground ("while in use") location only. ACCESS_BACKGROUND_LOCATION
+    // and the FOREGROUND_SERVICE_* permissions were deliberately dropped: each
+    // one triggers a Play Console policy declaration requiring a demo video and
+    // a manual human review, and the product decision was to ship without them.
+    // Consequence: the courier's position stops updating whenever the app is
+    // not on screen — including while they are navigating in Google Maps.
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",
-      "FOREGROUND_SERVICE",
-      "FOREGROUND_SERVICE_LOCATION",
-      "ACCESS_BACKGROUND_LOCATION",
       "android.permission.VIBRATE",
     ],
     // Emits tools:node="remove" so the Gradle manifest merger strips these even
@@ -191,6 +192,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // here is unreachable in this app; shipping any of it invites a Play policy
     // review we cannot answer.
     blockedPermissions: [
+      // Belt and braces for the declaration-triggering permissions: expo-location
+      // and its config plugin can still inject these from their own manifests,
+      // and a single one reaching the merged manifest re-opens the Play
+      // declaration that this build exists to avoid.
+      "android.permission.ACCESS_BACKGROUND_LOCATION",
+      "android.permission.FOREGROUND_SERVICE",
+      "android.permission.FOREGROUND_SERVICE_LOCATION",
       // expo-audio declares RECORD_AUDIO in its library manifest
       // (node_modules/expo-audio/android/src/main/AndroidManifest.xml). This app
       // only PLAYS the bundled new-order alert - it never records. The plugin is
@@ -242,9 +250,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "expo-location",
       {
-        isAndroidForegroundServiceEnabled: true,
-        isAndroidBackgroundLocationEnabled: true,
-        isIosBackgroundLocationEnabled: true,
+        // All three OFF — see the android.permissions note above.
+        isAndroidForegroundServiceEnabled: false,
+        isAndroidBackgroundLocationEnabled: false,
+        isIosBackgroundLocationEnabled: false,
         locationWhenInUsePermission:
           "ZBR Courier uses your location while the app is open to show your position on the delivery map, calculate routes, and share your live position with dispatch during an active delivery.",
         locationAlwaysAndWhenInUsePermission:

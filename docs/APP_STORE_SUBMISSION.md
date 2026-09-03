@@ -19,7 +19,7 @@ Ordered by how likely it is to bite:
 | # | Risk | Why it applies here |
 |---|---|---|
 | 1 | **Reviewer cannot get past the login** | Guideline 2.1. The entire app is behind auth, and couriers additionally need admin approval. Without working demo credentials this is an automatic rejection. See §2. |
-| 2 | **Background location not justified** | Guideline 2.5.4 / 5.1.1. `UIBackgroundModes: location` must be demonstrably core to the app, and the reviewer must be able to *see* it working. See §3. |
+| 2 | ~~Background location~~ **REMOVED** | The app no longer declares `UIBackgroundModes: location` or the Always usage strings, which takes it out of Apple's background-location scrutiny entirely. See §3. |
 | 3 | **App Privacy answers disagree with the binary** | Apple cross-checks the nutrition labels against the privacy manifest and observed traffic. See §4. |
 | 4 | **Demo account has no seeded orders** | An empty app looks broken and cannot demonstrate the location feature at all. |
 | 5 | **Missing account-deletion path** | Guideline 5.1.1(v). Required in-app for any app with account creation. We have it — §6. |
@@ -74,15 +74,15 @@ SEEING THE CORE FEATURE (background location)
 3. Tap the online/offline switch at the top of the Orders screen.
 4. A disclosure screen explains that the app collects location while you are
    on shift, including in the background, and why. Tap Agree.
-5. iOS then asks for location permission. Choose "Allow While Using App" —
-   the app requests "Always" only later, when a delivery is actually active.
+5. iOS then asks for location permission. Choose "Allow While Using App".
+   The app never requests "Always" — it does not track location in the
+   background at all.
 6. Available orders appear. Open one and tap Accept.
-7. The map shows the route to the restaurant, and the courier's position is
-   shared with dispatch and the customer for the duration of the delivery.
-   This is why the app needs background location: couriers ride with the
-   phone in a pocket or handlebar mount and frequently switch to an external
-   navigation app mid-delivery, and dispatch must still be able to see them.
-8. Location collection stops entirely when the courier goes offline.
+7. The map shows the route to the restaurant, and while the app is open the
+   courier's position is shared with dispatch and the customer so they can
+   follow the delivery.
+8. Location is collected only while the courier is online AND the app is on
+   screen. It stops when they go offline or leave the app.
 
 The app collects no data for advertising or tracking, and contains no
 third-party analytics or ad SDK.
@@ -96,6 +96,24 @@ makes the app look broken and hides the location feature entirely.
 ---
 
 ## 3. Background location (the hard part)
+
+> ## ⛔ NO LONGER APPLICABLE — background location was removed
+>
+> A product decision was taken to ship without background location rather than
+> complete this declaration and its mandatory demo video. `ACCESS_BACKGROUND_LOCATION`,
+> `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` are gone from the
+> manifest (and blocked, so a dependency cannot reintroduce them), and
+> `lib/backgroundLocation.ts` was deleted. Verified against a real prebuild:
+> the app ships five permissions, none of which trigger a Play declaration.
+>
+> **This section is kept for the day the feature comes back.** Restoring it means
+> re-enabling the three `expo-location` plugin flags, restoring the task module,
+> and completing this declaration — including the video.
+>
+> The live consequence: a courier's position stops updating whenever the app is
+> not on screen, which includes the whole time they are navigating in Google Maps.
+
+
 
 `UIBackgroundModes: ["location", "fetch"]` in the generated `Info.plist`.
 `location` is declared in `app.config.ts`; `fetch` is contributed by

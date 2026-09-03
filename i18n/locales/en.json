@@ -776,8 +776,8 @@
   },
   "location_disclosure": {
     "title": "Location Sharing",
-    "description": "To assign you deliveries and share your live position with dispatch, restaurants and customers, this app collects location data while you are online — including when the app is in the background or closed.",
-    "offline_note": "Your location is not collected while you are offline.",
+    "description": "To show you on the delivery map and share your live position with dispatch, restaurants and customers, this app collects location data while you are online and the app is open. It does not track you in the background.",
+    "offline_note": "Your location is not collected while you are offline or the app is closed.",
     "agree": "Agree",
     "not_now": "Not now"
   }

@@ -699,6 +699,24 @@ imports no image picker. **Photos and videos → No** is correct and easy to def
 
 ## 5. Background location declaration and demo video
 
+> ## ⛔ NO LONGER APPLICABLE — background location was removed
+>
+> A product decision was taken to ship without background location rather than
+> complete this declaration and its mandatory demo video. `ACCESS_BACKGROUND_LOCATION`,
+> `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` are gone from the
+> manifest (and blocked, so a dependency cannot reintroduce them), and
+> `lib/backgroundLocation.ts` was deleted. Verified against a real prebuild:
+> the app ships five permissions, none of which trigger a Play declaration.
+>
+> **This section is kept for the day the feature comes back.** Restoring it means
+> re-enabling the three `expo-location` plugin flags, restoring the task module,
+> and completing this declaration — including the video.
+>
+> The live consequence: a courier's position stops updating whenever the app is
+> not on screen, which includes the whole time they are navigating in Google Maps.
+
+
+
 ### 5.1 What triggers this — and what the code actually does
 
 The `expo-location` plugin block (`app.config.ts:152-163`) turns background location on:
@@ -1094,6 +1112,24 @@ The merged manifest is authoritative — regenerate it (§1.6) and dump it (§1.
 | ~~`CAMERA`~~ | — | **No** | `expo-image-picker` has been removed; no library in the tree declares `CAMERA` (§1.7). |
 
 ### 7.2 Foreground service permissions declaration (separate form, easy to miss)
+
+> ## ⛔ NO LONGER APPLICABLE — background location was removed
+>
+> A product decision was taken to ship without background location rather than
+> complete this declaration and its mandatory demo video. `ACCESS_BACKGROUND_LOCATION`,
+> `FOREGROUND_SERVICE` and `FOREGROUND_SERVICE_LOCATION` are gone from the
+> manifest (and blocked, so a dependency cannot reintroduce them), and
+> `lib/backgroundLocation.ts` was deleted. Verified against a real prebuild:
+> the app ships five permissions, none of which trigger a Play declaration.
+>
+> **This section is kept for the day the feature comes back.** Restoring it means
+> re-enabling the three `expo-location` plugin flags, restoring the task module,
+> and completing this declaration — including the video.
+>
+> The live consequence: a courier's position stops updating whenever the app is
+> not on screen, which includes the whole time they are navigating in Google Maps.
+
+
 
 `FOREGROUND_SERVICE_LOCATION` **will** be in the merged manifest, so Play Console →
 **App content → Foreground service permissions** requires a per-type declaration.

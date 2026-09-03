@@ -6,7 +6,6 @@ import { AppState, AppStateStatus, Platform } from 'react-native';
 import * as Location from 'expo-location';
 // Importing this module registers the background location task at startup
 // (TaskManager.defineTask must run at module scope, before any OS delivery)
-import { startBackgroundLocationUpdates, stopBackgroundLocationUpdates } from '@/lib/backgroundLocation';
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import tokenManager from '@/services/tokenManager';
@@ -765,12 +764,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       locationSubscriptionRef.current = null;
     }
     watcherHasActiveOrdersRef.current = null;
-    // Also stop OS-level background updates (no-op on web / when not running)
-    try {
-      await stopBackgroundLocationUpdates();
-    } catch (e) {
-      logger.warn('[CourierContext] Failed to stop background location updates:', e);
-    }
     setIsLocationTracking(false);
   }, []);
 
@@ -1714,26 +1707,6 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       }
     );
 
-    // Background tracking (native only): keeps the position flowing while the
-    // app is backgrounded — e.g. after handing the courier off to an external
-    // navigation app mid-delivery. Background permission can only be requested
-    // AFTER foreground permission is granted. Denied background permission
-    // degrades gracefully to foreground-only tracking (no error thrown).
-    if (Platform.OS !== 'web') {
-      try {
-        let { status: bgStatus, canAskAgain } = await Location.getBackgroundPermissionsAsync();
-        if (bgStatus !== 'granted' && canAskAgain) {
-          ({ status: bgStatus } = await Location.requestBackgroundPermissionsAsync());
-        }
-        if (bgStatus === 'granted') {
-          await startBackgroundLocationUpdates();
-        } else {
-          logger.warn('[CourierContext] Background location permission not granted — foreground-only tracking');
-        }
-      } catch (bgError) {
-        logger.warn('[CourierContext] Failed to start background location updates:', bgError);
-      }
-    }
 
     setIsLocationTracking(true);
   }, [updateLocationOnServer, orders]);
