@@ -4,8 +4,10 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import * as Location from 'expo-location';
-// Importing this module registers the background location task at startup
-// (TaskManager.defineTask must run at module scope, before any OS delivery)
+// Foreground location only. There is deliberately no background task and no
+// foreground service: either one pulls in FOREGROUND_SERVICE_LOCATION /
+// ACCESS_BACKGROUND_LOCATION, which re-open the Play declarations this build
+// exists to avoid. Position updates stop when the app leaves the foreground.
 import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import tokenManager from '@/services/tokenManager';
