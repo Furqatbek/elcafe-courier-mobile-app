@@ -221,28 +221,40 @@ else
   [ -s "$WORKDIR/expo-config.err" ] && sed -n '1,5p' "$WORKDIR/expo-config.err" | sed 's/^/        /'
 fi
 
-# --- stale-artifact check: does the AAB match the config it claims to be from?
+# --- staleness check: how old is this bundle? ------------------------------
 #
-# The bump only runs as part of `npm run prebuild`. Running `npx expo prebuild`
-# by hand skips it, and so does rebuilding with Gradle after a bump without
-# re-running prebuild. Both produce an AAB whose versionCode is behind
-# app.config.ts, which Play rejects at upload with "Version code N has already
-# been used" - after the 10-40 minute build you just paid for. Catch it here.
+# versionCode is now DERIVED, not stored: it is the number of minutes since
+# 2024-01-01 at the moment the config was evaluated (scripts/build-number.js).
+# That makes the comparison below unusually informative — the difference between
+# the code baked into the AAB and the one computed right now IS the bundle's age
+# in minutes.
+#
+# It also means the old exact-match check would fail every time, since verifying
+# always happens at least a minute after building.
+#
+# What still matters is uploading an artifact you rebuilt over: Gradle happily
+# produces app-release.aab from a stale android/ directory, and a bundle from
+# yesterday carries yesterday's code and yesterday's code.
 CFG_VC="$(tr -d '[:space:]' < "$CFG_VC_F" 2>/dev/null || true)"
+STALE_AFTER_MINUTES=180
 if [ "$CONFIG_RESOLVED" -eq 1 ] && [ -n "$CFG_VC" ] && [ -n "${VC:-}" ]; then
-  if [ "$VC" = "$CFG_VC" ]; then
-    pass "versionCode $VC matches app.config.ts - this AAB was built from the current config"
-  elif [ "$VC" -lt "$CFG_VC" ] 2>/dev/null; then
-    fail "STALE BUNDLE: AAB has versionCode $VC but app.config.ts says $CFG_VC"
-    info "The bundle predates the last version bump, so it carries a code you have"
-    info "probably already uploaded. Rebuild from the current config:"
-    info "  npm run prebuild:nobump    # regenerate android/ WITHOUT another bump"
-    info "  cd android && ./gradlew :app:bundleRelease"
-    info "Use 'npm run prebuild' (which bumps) only when starting a NEW build."
+  if [ "$VC" -gt "$CFG_VC" ] 2>/dev/null; then
+    warn "AAB versionCode $VC is AHEAD of a freshly derived one ($CFG_VC)"
+    info "The bundle was built on a machine whose clock is ahead of this one, or"
+    info "with ZBR_BUILD_NUMBER set. Reconcile before uploading: a code from the"
+    info "future permanently burns every number below it."
   else
-    warn "AAB versionCode $VC is AHEAD of app.config.ts ($CFG_VC)"
-    info "app.config.ts was reverted, or the bundle came from a different checkout."
-    info "Whatever ships must be the code recorded in git - reconcile before upload."
+    AGE=$((CFG_VC - VC))
+    if [ "$AGE" -le "$STALE_AFTER_MINUTES" ]; then
+      pass "versionCode $VC — bundle built ${AGE} minute(s) ago"
+    else
+      fail "STALE BUNDLE: versionCode $VC is ${AGE} minutes old"
+      info "Gradle will happily re-package an android/ directory generated hours"
+      info "ago. Regenerate and rebuild so the artifact matches the source you"
+      info "think you are shipping:"
+      info "  npm run prebuild"
+      info "  cd android && ./gradlew :app:bundleRelease"
+    fi
   fi
 fi
 

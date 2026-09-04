@@ -293,27 +293,28 @@ dependencies are missing.
 
 ### 9.1 Before every build
 
-> ### Build numbers auto-increment
+> **Build numbers are derived, not stored.** `android.versionCode` and
+> `ios.buildNumber` are computed in `app.config.ts` as the number of minutes
+> since 2024-01-01 (`scripts/build-number.js`). Nothing increments, nothing is
+> committed, and every build therefore gets a number that is unique and larger
+> than the last one — whichever command produced it.
 >
-> `npm run prebuild` runs `scripts/bump-version.mjs` before prebuilding, so
-> `android.versionCode` and `ios.buildNumber` both increase by one on every
-> invocation. Both stores reject a build number they have already seen — even
-> from a build you deleted — and forgetting to bump is the most common local
-> release mistake.
+> That replaces a bump script that only ran under `npm run prebuild`. Every doc
+> here said to run `npx expo prebuild`, which skipped it, so builds went out
+> carrying a code already uploaded. Both stores reject a build number they have
+> already seen, even from a build you deleted.
 >
-> - `npm run prebuild` — Android, with bump
-> - `npm run prebuild:ios` — iOS, with bump
-> - `npm run prebuild:nobump` — no bump, for iterating during development
-> - `npm run bump` — bump alone
+> - `npm run prebuild` — Android
+> - `npm run prebuild:ios` — iOS
+> - `npx expo prebuild` — equally safe now; there is no step to miss
+> - `npm run bump 1.1.0` — set the user-visible **version name**, which is a
+>   release decision and stays explicit. Commit it.
+>
+> `ZBR_BUILD_NUMBER=1407604 npm run prebuild` pins the number, for reproducing
+> one specific build.
 >
 > **Gaps are fine.** Stores require build numbers to *increase*, not to be
-> contiguous, so prebuilding twice before an upload costs nothing. The
-> user-visible `version` ("1.0.0") is deliberately NOT auto-incremented — that
-> is a release decision. Pass it explicitly when it changes:
-> `node scripts/bump-version.mjs 1.1.0`.
->
-> Bumping edits `app.config.ts`, which is version-controlled — commit the change
-> with the release so the number that shipped is recorded.
+> contiguous, so the numbers jumping by minutes costs nothing.
 
 
 1. `.env` must be present at the repo root — `EXPO_PUBLIC_*` values are inlined

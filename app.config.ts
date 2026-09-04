@@ -1,5 +1,7 @@
 import { existsSync } from "fs";
 import { ExpoConfig, ConfigContext } from "expo/config";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { resolveBuildNumber } = require("./scripts/build-number");
 
 /**
  * App config (converted from app.json so build-time secrets can be injected
@@ -37,6 +39,16 @@ import { ExpoConfig, ConfigContext } from "expo/config";
  * Gated on NODE_ENV=production so `expo prebuild` and dev bundling — which
  * legitimately run without secrets — are unaffected.
  */
+/**
+ * android.versionCode and ios.buildNumber, derived from the clock rather than
+ * stored — see scripts/build-number.js for why. Computed once here so both
+ * platforms in a single evaluation get the same number.
+ *
+ * To reproduce a specific build, set ZBR_BUILD_NUMBER to the number that build
+ * shipped with.
+ */
+const buildNumber: number = resolveBuildNumber({ override: process.env.ZBR_BUILD_NUMBER });
+
 const REQUIRED_RELEASE_ENV = ["EXPO_PUBLIC_RORK_API_BASE_URL"] as const;
 if (process.env.NODE_ENV === "production") {
   const missing = REQUIRED_RELEASE_ENV.filter((name) => !process.env[name]);
@@ -99,7 +111,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: false,
     bundleIdentifier: "app.zbr.courier",
-    buildNumber: "1",
+    buildNumber: String(buildNumber),
     // Backend sends iOS push directly via APNs — pin the production APNs
     // environment for store builds (Xcode flips debug builds automatically).
     entitlements: {
@@ -203,7 +215,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     ...(hasGoogleServicesFile ? { googleServicesFile } : {}),
     package: "app.zbr.courier",
-    versionCode: 1,
+    versionCode: buildNumber,
     config: {
       googleMaps: {
         apiKey: googleMapsApiKey,

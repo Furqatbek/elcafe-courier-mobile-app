@@ -1,80 +1,48 @@
-#!/usr/bin/env node
 /**
- * bump-version.mjs - keep app.config.ts's three version fields in lockstep.
+ * set-version — set the user-visible version name in app.config.ts.
  *
- * Builds here are local (`expo prebuild` + Gradle), so nothing auto-increments
- * anything: `version`, `android.versionCode` and `ios.buildNumber` are edited
- * before every upload, and they must move together. Forgetting
- * `android.versionCode` is the single most common local-release mistake:
- * Google Play rejects an AAB whose versionCode has already been used, and the
- * only fix is to bump and rebuild.
+ * This script used to bump three fields: `version`, `android.versionCode` and
+ * `ios.buildNumber`. The last two are no longer stored — they are derived from
+ * the clock at config-evaluation time (scripts/build-number.js), so there is
+ * nothing to increment and nothing to forget to commit.
  *
- * HOW THIS RUNS. It is wired into the npm scripts, NOT into Expo:
- *
- *     npm run prebuild            bump + prebuild (android)   <- the release path
- *     npm run prebuild:ios        bump + prebuild (ios)
- *     npm run prebuild:nobump     prebuild only, no bump
- *
- * `npx expo prebuild` calls the Expo CLI directly and therefore does NOT bump.
- * There is no Expo hook that can force it to: a config plugin runs on every
- * config evaluation (`expo start`, `expo config`, editor tooling), so putting
- * the increment there would burn versionCodes just by opening the project.
- * The npm script is the seam, so use it. `scripts/verify-aab.sh` compares the
- * built AAB's versionCode against app.config.ts and fails on a mismatch, which
- * catches a bypass before you spend an upload on it.
+ * What remains is the marketing version, which SHOULD be a deliberate decision:
+ * it is the string users read in the store, and it should change when the
+ * product changes, not once per upload.
  *
  * Usage:
- *   node scripts/bump-version.mjs                # build bump: versionCode +1, buildNumber +1
- *   node scripts/bump-version.mjs 1.1.0          # release bump: set version, then +1 both codes
- *   node scripts/bump-version.mjs --dry-run      # print the diff, write nothing
+ *   node scripts/bump-version.mjs 1.1.0          set the version
  *   node scripts/bump-version.mjs 1.1.0 --dry-run
- *   node scripts/bump-version.mjs --config /path/to/app.config.ts   # (testing)
+ *   node scripts/bump-version.mjs                print the current state
+ *   node scripts/bump-version.mjs --config path  (testing)
  *
- * `version` is the user-visible version name in Play Console. `versionCode` is
- * the integer Play orders releases by; it must strictly increase and is never
- * reusable. `ios.buildNumber` is bumped alongside it purely to keep the two
- * platforms from drifting apart.
- *
- * The script edits the literals in place with anchored regexes and refuses to
- * run if any field is missing or matches more than once, so it can never
- * silently half-apply a bump.
+ * Commit the change: `version` is tracked, unlike the build number.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const { resolveBuildNumber } = createRequire(import.meta.url)('./build-number.js');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG = resolve(__dirname, '..', 'app.config.ts');
 
-/** Fields we rewrite, each with a regex that must match exactly once. */
-/*
- * Quote style: app.config.ts currently uses DOUBLE quotes (`version: "1.0.0",`),
- * but it has been reformatted before. These patterns accept either `'` or `"`
- * so a Prettier run cannot silently break the release tooling. The quote is
- * kept inside the prefix/suffix capture groups, so whichever style the file
- * uses is preserved verbatim on write.
+/**
+ * The one field this script rewrites. Quote style is captured either way so a
+ * Prettier run cannot break the release tooling.
  */
 const FIELDS = {
   version: {
     // e.g. `  version: "1.0.0",` at the top level of the ExpoConfig object.
     pattern: /^(\s*version:\s*['"])(\d+\.\d+\.\d+)(['"]\s*,)$/gm,
-    label: 'version (Play version name)',
-  },
-  versionCode: {
-    // e.g. `    versionCode: 1,` inside android: { ... }
-    pattern: /^(\s*versionCode:\s*)(\d+)(\s*,)$/gm,
-    label: 'android.versionCode',
-  },
-  buildNumber: {
-    // e.g. `    buildNumber: "1",` inside ios: { ... }
-    pattern: /^(\s*buildNumber:\s*['"])(\d+)(['"]\s*,)$/gm,
-    label: 'ios.buildNumber',
+    label: 'version (store version name)',
   },
 };
 
 function fail(message) {
-  console.error(`bump-version: ${message}`);
+  console.error(`set-version: ${message}`);
   process.exit(1);
 }
 
@@ -146,17 +114,17 @@ function main(argv) {
     fail(`could not read ${configPath}: ${error.message}`);
   }
 
-  const current = {
-    version: readField(source, 'version').value,
-    versionCode: readField(source, 'versionCode').value,
-    buildNumber: readField(source, 'buildNumber').value,
-  };
+  const current = { version: readField(source, 'version').value };
+  const next = { version: requestedVersion ?? current.version };
 
-  const next = {
-    version: requestedVersion ?? current.version,
-    versionCode: String(Number(current.versionCode) + 1),
-    buildNumber: String(Number(current.buildNumber) + 1),
-  };
+  // Called with no version: report, change nothing. Useful for checking what a
+  // build is about to ship as.
+  if (!requestedVersion) {
+    console.log(`version            ${current.version}`);
+    console.log(`build number       ${resolveBuildNumber()}  (derived now; every build gets a fresh one)`);
+    console.log('\nPass a version to change it, e.g. `npm run bump 1.1.0`.');
+    return;
+  }
 
   if (requestedVersion) {
     const asTuple = (v) => v.split('.').map(Number);
@@ -185,28 +153,23 @@ function main(argv) {
     }
   }
 
-  const lines = [
-    `  version           ${current.version}  ->  ${next.version}`,
-    `  android.versionCode ${current.versionCode}  ->  ${next.versionCode}`,
-    `  ios.buildNumber     ${current.buildNumber}  ->  ${next.buildNumber}`,
-  ];
+  const line = `  version  ${current.version}  ->  ${next.version}`;
 
   if (dryRun) {
-    console.log(`bump-version: DRY RUN, nothing written to ${configPath}`);
-    console.log(lines.join('\n'));
+    console.log(`set-version: DRY RUN, nothing written to ${configPath}`);
+    console.log(line);
     return;
   }
 
   writeFileSync(configPath, updated, 'utf8');
-  console.log(`bump-version: updated ${configPath}`);
-  console.log(lines.join('\n'));
+  console.log(`set-version: updated ${configPath}`);
+  console.log(line);
   console.log(
-    '\nNext: confirm the resolved config, then rebuild.\n' +
-      '  npx expo config --type prebuild --json | node -e "const c=JSON.parse(require(\'fs\').readFileSync(0,\'utf8\'));console.log(c.version, c.android.versionCode, c.ios.buildNumber)"\n' +
-      '  npm run prebuild:nobump      # the bump already happened - do NOT bump twice\n' +
-      '  cd android && ./gradlew :app:bundleRelease\n' +
-      '\nNote: `npm run prebuild` bumps AND prebuilds in one step, so you only need\n' +
-      'this script directly when setting a release version (`npm run bump 1.1.0`).'
+    '\nCommit app.config.ts — the version name is tracked.\n' +
+      'The build number is not: it is derived at build time and needs nothing from you.\n' +
+      '\nThen build:\n' +
+      '  npm run prebuild                  # android\n' +
+      '  cd android && ./gradlew :app:bundleRelease'
   );
 }
 

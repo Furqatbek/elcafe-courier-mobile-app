@@ -151,7 +151,7 @@ Local builds, manual store uploads:
 
 ```sh
 cp .env.example .env        # fill in real values first (once)
-npm run prebuild            # bumps versionCode/buildNumber, regenerates android/
+npm run prebuild            # regenerates android/; versionCode is derived
 
 # Android — signed AAB for Play Console
 cd android && ./gradlew bundleRelease

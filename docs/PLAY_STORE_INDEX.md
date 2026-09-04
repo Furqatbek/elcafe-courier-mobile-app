@@ -197,7 +197,7 @@ export EXPO_PUBLIC_RORK_API_BASE_URL="https://api.your-domain.com"
 export EXPO_PUBLIC_ROUTING_URL="https://osrm.your-domain.com"
 export EXPO_PUBLIC_PRIVACY_URL="https://your-domain.com/privacy"
 npm ci
-npm run prebuild                                 # bumps versionCode, then prebuilds
+npm run prebuild                                 # versionCode derived at build time
 cd android && ./gradlew :app:bundleRelease && cd ..
 ./scripts/verify-aab.sh android/app/build/outputs/bundle/release/app-release.aab
 ```

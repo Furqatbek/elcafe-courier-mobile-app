@@ -275,7 +275,7 @@ Generate it immediately before every release build and check the result:
 
 ```bash
 cd /home/user/elcafe-courier-mobile-app
-npm run prebuild                    # bumps versionCode, then prebuilds
+npm run prebuild                    # versionCode derived at build time
 grep -n 'applicationId' android/app/build.gradle                                   # app.zbr.courier
 grep -c 'ACCESS_BACKGROUND_LOCATION' android/app/src/main/AndroidManifest.xml      # 0
 ```
@@ -1476,7 +1476,7 @@ Print this. Tick every line before you press Publish.
 
 **Code and build**
 - [ ] `expo-dev-client` moved to `devDependencies` (or removed); no `devlauncher`/`devmenu`/`mlkit`/`codescanner` entries in the AAB — §1.3
-- [ ] `rm -rf android && npm run prebuild` run fresh (`npm run prebuild` bumps versionCode; plain `npx expo prebuild` does **not**)
+- [ ] `rm -rf android && npm run prebuild` run fresh (versionCode is derived from the clock, so `npx expo prebuild` is equally safe)
 - [ ] `grep applicationId android/app/build.gradle` → `app.zbr.courier`
 - [ ] `grep -c ACCESS_BACKGROUND_LOCATION android/app/src/main/AndroidManifest.xml` → **0** (background location was removed; a non-zero count means it crept back in and the Location permissions declaration is required again)
 - [ ] `aapt2 dump permissions` on the built artifact shows **no** `RECORD_AUDIO`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `SYSTEM_ALERT_WINDOW`, `CAMERA`, `READ_MEDIA_IMAGES`, `AD_ID` — §1.8
