@@ -6,19 +6,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { useCourier } from '@/context/CourierContext';
-import { WithSwipeGesture } from '@/components/WithSwipeGesture';
+import { WithSwipeGesture, TAB_ROUTES } from '@/components/WithSwipeGesture';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import logger from '@/lib/logger';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
-
-const TAB_ROUTES = [
-  { name: 'orders', path: '/(tabs)/orders' },
-  { name: 'finance', path: '/(tabs)/finance' },
-  { name: 'settings', path: '/(tabs)/settings' },
-];
 
 // MenuItem component moved outside to prevent recreation on each render
 const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, loading }: any) => {

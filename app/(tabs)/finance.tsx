@@ -4,16 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { DollarSign, Banknote, CreditCard, Wallet } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
-import { WithSwipeGesture } from '@/components/WithSwipeGesture';
+import { WithSwipeGesture, TAB_ROUTES } from '@/components/WithSwipeGesture';
 import { formatCurrency } from '@/lib/formatting';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const TAB_ROUTES = [
-  { name: 'orders', path: '/(tabs)/orders' },
-  { name: 'finance', path: '/(tabs)/finance' },
-  { name: 'settings', path: '/(tabs)/settings' },
-];
 
 export default function FinanceScreen() {
   const tabBarHeight = useBottomTabBarHeight();

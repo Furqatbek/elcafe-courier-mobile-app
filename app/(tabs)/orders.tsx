@@ -10,7 +10,7 @@ import Colors from '@/constants/colors';
 import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
 import { OrderCard } from '@/components/OrderCard';
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
-import { WithSwipeGesture } from '@/components/WithSwipeGesture';
+import { WithSwipeGesture, TAB_ROUTES } from '@/components/WithSwipeGesture';
 import { OrderOfferModal } from '@/components/OrderOfferModal';
 import { LocationDisclosureModal, LOCATION_DISCLOSURE_ACCEPTED_KEY } from '@/components/LocationDisclosureModal';
 import { soundService } from '@/services/soundService';
@@ -24,12 +24,6 @@ const getGreetingKey = (): string => {
   if (hour >= 17 && hour < 21) return 'orders.good_evening';
   return 'orders.good_night'; // 21:00 - 4:59
 };
-
-const TAB_ROUTES = [
-  { name: 'orders', path: '/(tabs)/orders' },
-  { name: 'finance', path: '/(tabs)/finance' },
-  { name: 'settings', path: '/(tabs)/settings' },
-];
 
 export default function OrdersScreen() {
   const { t } = useTranslation();
