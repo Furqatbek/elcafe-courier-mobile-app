@@ -154,8 +154,11 @@ export interface CourierProfile {
 
 export interface CourierRegisterRequest {
   vehicleType: VehicleType;
-  vehicleNumber: string;
-  licenseNumber: string;
+  // Optional: a courier on foot, on a bicycle or on an e-bike has neither a
+  // number plate nor a driving licence. See VEHICLE_TYPES_REQUIRING_* in
+  // constants/config.ts for which types send them.
+  vehicleNumber?: string;
+  licenseNumber?: string;
   preferredRadiusKm?: number;
 }
 

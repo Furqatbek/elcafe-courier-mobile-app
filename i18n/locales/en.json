@@ -331,7 +331,6 @@
     "car": "Car",
     "motorcycle": "Motorcycle",
     "bicycle": "Bicycle",
-    "scooter": "Scooter",
     "vehicle_details": "Vehicle Details",
     "brand": "Brand",
     "brand_placeholder": "e.g. Toyota",
@@ -345,7 +344,9 @@
     "license_helper": "Your driver's license information is required for verification purposes and will be kept confidential.",
     "save_changes": "Save Changes",
     "vehicle_updated": "Vehicle information updated successfully!",
-    "update_failed": "Failed to update vehicle. Please try again."
+    "update_failed": "Failed to update vehicle. Please try again.",
+    "walking": "On foot",
+    "e_bike": "E-bike"
   },
   "security": {
     "title": "Security",

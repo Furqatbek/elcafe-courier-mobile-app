@@ -10,6 +10,7 @@ import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import logger from '@/lib/logger';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const NOTIFICATIONS_ENABLED_KEY = 'notificationsEnabled';
 
@@ -51,6 +52,10 @@ const MenuItem = ({ icon: Icon, title, subtitle, onPress, danger, rightElement, 
 
 export default function SettingsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
+  // Edge-to-edge: the window starts behind the status bar, so a fixed
+  // paddingTop puts this content underneath it. See hooks/useBottomInset
+  // for the full explanation - the same applies at the top edge.
+  const insets = useSafeAreaInsets();
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const { user, courierProfile, logout, logoutAllDevices, accessToken, authenticatedFetch } = useCourier();
@@ -217,7 +222,7 @@ export default function SettingsScreen() {
 
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="settings">
-      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: tabBarHeight + 24 }]}>
       <Text style={styles.headerTitle}>{t('settings.title')}</Text>
 
       <View style={styles.profileSection}>
@@ -346,6 +351,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    // paddingTop/paddingBottom are applied at the call site.
     // paddingBottom is applied at the call site from useBottomTabBarHeight().
   },
   headerTitle: {

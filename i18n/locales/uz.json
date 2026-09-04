@@ -331,7 +331,6 @@
     "car": "Avtomobil",
     "motorcycle": "Mototsikl",
     "bicycle": "Velosiped",
-    "scooter": "Skuter",
     "vehicle_details": "Transport ma'lumotlari",
     "brand": "Marka",
     "brand_placeholder": "mas. Toyota",
@@ -345,7 +344,9 @@
     "license_helper": "Haydovchilik guvohnomasi ma'lumotlari tasdiqlash uchun kerak va maxfiy saqlanadi.",
     "save_changes": "O'zgarishlarni saqlash",
     "vehicle_updated": "Transport ma'lumotlari muvaffaqiyatli yangilandi!",
-    "update_failed": "Ma'lumotlarni yangilab bo'lmadi. Qayta urinib ko'ring."
+    "update_failed": "Ma'lumotlarni yangilab bo'lmadi. Qayta urinib ko'ring.",
+    "walking": "Piyoda",
+    "e_bike": "Elektrovelosiped"
   },
   "security": {
     "title": "Xavfsizlik",

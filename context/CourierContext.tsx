@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, WEBSOCKET_CONFIG } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, VehicleType, WEBSOCKET_CONFIG } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
@@ -12,6 +12,7 @@ import websocketService, { NewOrderNotification, OrderTakenNotification, Availab
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
+import { errorFromResponse } from '@/lib/errors';
 import { distanceMeters } from '@/lib/formatting';
 
 export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
@@ -59,7 +60,7 @@ export interface CourierProfile {
   lastName?: string;
   phone: string;
   email?: string;
-  vehicleType: 'BICYCLE' | 'MOTORCYCLE' | 'CAR';
+  vehicleType: VehicleType;
   vehicleNumber?: string;
   licenseNumber?: string;
   status: CourierStatus;
@@ -320,9 +321,14 @@ const DEFAULT_STATS: DriverStats = {
 
 export const [CourierProvider, useCourier] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
+  // Mirrors `user` so refreshUser() can merge onto the current value
+  // without re-creating itself on every user change.
+  const userRef = useRef<User | null>(null);
   const [courierProfile, setCourierProfile] = useState<CourierProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  useEffect(() => { userRef.current = user; }, [user]);
+
   const [isOnline, setIsOnline] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   // Non-null when the last active-orders sync failed and the list may be stale
@@ -664,6 +670,45 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
       logger.error('Failed to fetch courier profile:', error);
     }
     return null;
+  }, [authenticatedFetch]);
+
+  // Refresh the USER record (personal fields).
+  //
+  // firstName/lastName/email/phone live on the USER resource, NOT on the
+  // courier profile: PUT /couriers/me persists vehicle fields only and silently
+  // ignores the personal ones (backend-verified, docs/BACKEND_VERIFICATION.md).
+  // edit-profile was already writing them to PUT /users/me - but nothing ever
+  // READ them back. Every read went to GET /couriers/me, whose DTO carries
+  // whatever the courier record holds, and `user.phone` is seeded from that
+  // same courier DTO at password login. So a phone number saved by the courier
+  // was written to a resource the app never looked at again, and the profile
+  // screen showed "-" no matter how many times they entered it.
+  const refreshUser = useCallback(async () => {
+    try {
+      const response = await authenticatedFetch(API_ENDPOINTS.AUTH.ME);
+      if (!response.ok) {
+        logger.warn('[CourierContext] GET auth/me failed:', response.status);
+        return null;
+      }
+      const data = await response.json();
+      // Accept both the { success, data } envelope and a bare user object.
+      const fresh = (data && typeof data === 'object' && 'data' in data ? data.data : data) as Partial<User> | null;
+      if (!fresh || typeof fresh !== 'object') return null;
+
+      // Merge, ignoring keys the endpoint omitted, so a partial response can
+      // never blank out a field we already have.
+      const defined = Object.fromEntries(
+        Object.entries(fresh).filter(([, v]) => v !== undefined && v !== null)
+      );
+      const merged = { ...(userRef.current ?? {}), ...defined } as User;
+      userRef.current = merged;
+      setUser(merged);
+      await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(merged));
+      return merged;
+    } catch (error) {
+      logger.error('Failed to refresh user:', error);
+      return null;
+    }
   }, [authenticatedFetch]);
 
   // Mark single notification as read
@@ -1565,8 +1610,24 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
         body: JSON.stringify({ status }),
       });
 
-      const data = await response.json();
-      if (!data.success) {
+      // authenticatedFetch does not throw on a non-2xx (only on 401), so a 403
+      // (courier not approved yet), a 404/405 (wrong path or verb) and a 5xx
+      // all used to arrive here and get parsed as if they were success bodies.
+      // A non-JSON body then threw "JSON Parse error", which is what the
+      // courier saw instead of the reason they could not go online.
+      if (!response.ok) {
+        throw await errorFromResponse(response, 'Failed to update courier status');
+      }
+
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch {
+        // 2xx with an empty or non-JSON body: treat as success, since the
+        // status code already said the change was accepted.
+        data = { success: true };
+      }
+      if (data && data.success === false) {
         throw new Error(data.message || 'Failed to update courier status');
       }
       // Intent may have moved while this request was in flight (e.g. the
@@ -1999,6 +2060,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // Courier profile
     courierProfile,
     fetchCourierProfile,
+    refreshUser,
     updateCourierStatus,
 
     // Online status and location

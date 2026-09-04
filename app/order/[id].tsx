@@ -12,6 +12,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import OrderMap from '@/components/OrderMap';
 import logger from '@/lib/logger';
 import { useBottomInset } from '@/hooks/useBottomInset';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 export default function OrderDetailScreen() {
@@ -22,6 +23,7 @@ export default function OrderDetailScreen() {
   // Footer holds the slide-to-advance control; without the inset its lower
   // edge falls under the system navigation bar and the slide cannot finish.
   const footerPaddingBottom = useBottomInset(20);
+  const insets = useSafeAreaInsets();
   const orderId = Number(id);
   const [order, setOrder] = useState<Order | null | undefined>(
     orders.find(o => o.orderId === orderId) || orderHistory.find(o => o.orderId === orderId)
@@ -276,7 +278,7 @@ export default function OrderDetailScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* Custom Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft color={Colors.text} size={24} />
         </TouchableOpacity>
@@ -511,7 +513,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    // paddingTop is applied at the call site from insets.top + 20.
     paddingBottom: 20,
     backgroundColor: Colors.surface,
     zIndex: 10,

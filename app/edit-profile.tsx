@@ -26,7 +26,7 @@ import { validateEmail, validatePhone, validateRequired } from '@/lib/validation
 export default function EditProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user, fetchCourierProfile } = useCourier();
+  const { user, fetchCourierProfile, refreshUser } = useCourier();
 
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
@@ -72,7 +72,10 @@ export default function EditProfileScreen() {
       // Personal fields go to the USER resource — PUT /couriers/me silently
       // ignores them (backend-verified), which made this save a no-op before
       await userApi.updatePersonalInfo({ firstName, lastName, email, phone });
-      await fetchCourierProfile();
+      // fetchCourierProfile alone was not enough: GET /couriers/me does not
+      // carry the personal fields, so the screen kept showing the old values
+      // (or "-") after a successful save. Re-read the USER record as well.
+      await Promise.all([fetchCourierProfile(), refreshUser()]);
 
       Alert.alert(
         t('common.success'),

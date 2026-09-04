@@ -17,6 +17,7 @@ import { useCourier } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
 import logger from '@/lib/logger';
+import { errorFromResponse } from '@/lib/errors';
 
 // API_ENDPOINTS-style path builder; move into constants/config.ts
 // (API_ENDPOINTS.COURIER.REVIEWS) once that file is free to edit.
@@ -73,11 +74,26 @@ export default function ReviewsScreen() {
       setError(null);
       const response = await authenticatedFetch(REVIEWS_ENDPOINT(pageNum, PAGE_SIZE));
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      // A courier with no reviews yet is not an error. Some backends answer a
+      // 404 for an empty collection, and this screen used to render that as a
+      // failure - so a brand-new courier saw an error page instead of the
+      // "no reviews yet" empty state.
+      if (response.status === 404) {
+        if (refresh) setReviews([]);
+        setTotalPages(1);
+        return;
       }
 
-      const json = await response.json();
+      if (!response.ok) {
+        throw await errorFromResponse(response, 'Failed to load reviews');
+      }
+
+      let json: any;
+      try {
+        json = await response.json();
+      } catch {
+        throw new Error('The server returned a response that was not valid JSON.');
+      }
 
       let items: Review[] = [];
       let pages = 1;
@@ -101,9 +117,12 @@ export default function ReviewsScreen() {
         setReviews((prev) => [...prev, ...items]);
       }
       setTotalPages(pages);
-    } catch (err) {
+    } catch (err: any) {
       logger.error('[Reviews] Failed to fetch reviews:', err);
-      setError(t('reviews.loading_error'));
+      // Keep the server's reason on screen. The generic line alone gave the
+      // courier (and anyone they reported it to) nothing to act on.
+      const detail = err?.message ? `\n\n${err.message}` : '';
+      setError(`${t('reviews.loading_error')}${detail}`);
     }
   }, [authenticatedFetch, t]);
 

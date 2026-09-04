@@ -274,9 +274,15 @@ export default function OrdersScreen() {
         );
       } else {
         logger.error('[Orders] Failed to toggle online status:', error);
+        // Show the server's reason, not just the generic line. "Could not
+        // update your status" is the same text whether the courier is not yet
+        // approved, the endpoint moved, or the network is down - and it left
+        // nothing to act on or report.
         Alert.alert(
           t('common.error', 'Error'),
-          t('orders.toggle_online_failed', 'Could not update your status. Please check your connection and try again.')
+          message
+            ? `${t('orders.toggle_online_failed', 'Could not update your status. Please check your connection and try again.')}\n\n${message}`
+            : t('orders.toggle_online_failed', 'Could not update your status. Please check your connection and try again.')
         );
       }
     }

@@ -17,6 +17,7 @@ import {
   Hash,
   Truck,
   Bike,
+  User,
   CheckCircle,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -25,8 +26,12 @@ import { Input } from '@/components/Input';
 import { useCourier } from '@/context/CourierContext';
 import { courierApi } from '@/services/api';
 import { validateRequired, validateLicensePlate } from '@/lib/validation';
+import { VehicleType, VEHICLE_TYPES, requiresLicense, requiresPlate } from '@/constants/config';
 
-type VehicleType = 'car' | 'motorcycle' | 'bicycle' | 'scooter';
+// This screen used to define its own lowercase list that included 'scooter'.
+// The backend has no SCOOTER vehicle type - the accepted set is WALKING,
+// BICYCLE, E_BIKE, MOTORCYCLE, CAR - so picking Scooter and saving sent a value
+// the API rejects. Use the canonical type instead of a parallel one.
 
 interface VehicleOption {
   type: VehicleType;
@@ -40,7 +45,7 @@ export default function EditVehicleScreen() {
   const { user, fetchCourierProfile } = useCourier();
 
   const [vehicleType, setVehicleType] = useState<VehicleType>(
-    (user?.vehicleType as VehicleType) || 'car'
+    (user?.vehicleType as VehicleType) || VEHICLE_TYPES.CAR
   );
   const [vehicleBrand, setVehicleBrand] = useState(user?.vehicleBrand || '');
   const [vehicleModel, setVehicleModel] = useState(user?.vehicleModel || '');
@@ -50,16 +55,21 @@ export default function EditVehicleScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const vehicleOptions: VehicleOption[] = [
-    { type: 'car', label: t('edit_vehicle.car'), icon: Car },
-    { type: 'motorcycle', label: t('edit_vehicle.motorcycle'), icon: Bike },
-    { type: 'bicycle', label: t('edit_vehicle.bicycle'), icon: Bike },
-    { type: 'scooter', label: t('edit_vehicle.scooter'), icon: Truck },
+    { type: VEHICLE_TYPES.WALKING, label: t('edit_vehicle.walking'), icon: User },
+    { type: VEHICLE_TYPES.BICYCLE, label: t('edit_vehicle.bicycle'), icon: Bike },
+    { type: VEHICLE_TYPES.E_BIKE, label: t('edit_vehicle.e_bike'), icon: Truck },
+    { type: VEHICLE_TYPES.MOTORCYCLE, label: t('edit_vehicle.motorcycle'), icon: Bike },
+    { type: VEHICLE_TYPES.CAR, label: t('edit_vehicle.car'), icon: Car },
   ];
+
+  // Which documents this vehicle actually has - see constants/config.ts.
+  const needsPlate = requiresPlate(vehicleType);
+  const needsLicense = requiresLicense(vehicleType);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (vehicleType !== 'bicycle') {
+    if (needsPlate) {
       const brandResult = validateRequired(vehicleBrand, t('edit_vehicle.brand'));
       if (!brandResult.isValid) {
         newErrors.vehicleBrand = brandResult.error || '';
@@ -76,9 +86,11 @@ export default function EditVehicleScreen() {
       }
     }
 
-    const licenseResult = validateRequired(licenseNumber, t('edit_vehicle.license_number'));
-    if (!licenseResult.isValid) {
-      newErrors.licenseNumber = licenseResult.error || '';
+    if (needsLicense) {
+      const licenseResult = validateRequired(licenseNumber, t('edit_vehicle.license_number'));
+      if (!licenseResult.isValid) {
+        newErrors.licenseNumber = licenseResult.error || '';
+      }
     }
 
     setErrors(newErrors);
@@ -93,11 +105,9 @@ export default function EditVehicleScreen() {
     setIsLoading(true);
     try {
       await courierApi.updateProfile({
-        vehicleType: vehicleType.toUpperCase() as any,
-        vehicleNumber: vehiclePlate,
-        vehicleBrand,
-        vehicleModel,
-        licenseNumber,
+        vehicleType,
+        ...(needsPlate ? { vehicleNumber: vehiclePlate, vehicleBrand, vehicleModel } : {}),
+        ...(needsLicense ? { licenseNumber } : {}),
       });
       await fetchCourierProfile();
 
@@ -172,7 +182,7 @@ export default function EditVehicleScreen() {
         </View>
 
         {/* Vehicle Details */}
-        {vehicleType !== 'bicycle' && (
+        {needsPlate && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('edit_vehicle.vehicle_details')}</Text>
 
@@ -222,7 +232,8 @@ export default function EditVehicleScreen() {
           </View>
         )}
 
-        {/* License Information */}
+        {/* License Information - only for vehicles that require a licence */}
+        {needsLicense && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('edit_vehicle.license_info')}</Text>
 
@@ -243,6 +254,7 @@ export default function EditVehicleScreen() {
             {t('edit_vehicle.license_helper')}
           </Text>
         </View>
+        )}
 
         <View style={styles.buttonContainer}>
           <Button

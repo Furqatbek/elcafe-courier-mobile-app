@@ -5,10 +5,10 @@ import {
   Text,
   Animated,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
 import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -174,7 +174,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
   return (
     <ToastContext.Provider value={{ showToast, hideToast, success, error, warning, info }}>
       {children}
-      <SafeAreaView style={styles.toastWrapper} pointerEvents="box-none">
+      <SafeAreaView style={styles.toastWrapper} edges={['top']} pointerEvents="box-none">
         <View style={styles.toastList}>
           {toasts.map(toast => (
             <ToastItem key={toast.id} toast={toast} onHide={hideToast} />

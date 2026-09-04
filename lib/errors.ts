@@ -55,6 +55,45 @@ export class ServerError extends AppError {
   }
 }
 
+/**
+ * Turn a failed Response into an error that says what actually went wrong.
+ *
+ * The pattern this replaces was `await response.json()` followed by
+ * `throw new Error(data.message || 'Something failed')`. It fails twice over:
+ * a non-JSON body (an HTML 404/405 page from the gateway, an empty 204) makes
+ * `.json()` throw an opaque "JSON Parse error: Unexpected character" that says
+ * nothing about the request, and a JSON error body with no `message` field
+ * collapses to a generic string that hides the status code.
+ *
+ * Keeping the status in the message is what makes these reports diagnosable:
+ * 401/403 is a permissions or approval problem, 404/405 means the endpoint or
+ * verb is wrong, 5xx is the backend. Without it every failure looks the same.
+ */
+export async function errorFromResponse(
+  response: Response,
+  fallback: string
+): Promise<AppError> {
+  let serverMessage = '';
+  try {
+    const text = await response.text();
+    if (text) {
+      try {
+        const body = JSON.parse(text);
+        serverMessage = body?.message || body?.error || '';
+      } catch {
+        // Not JSON - a gateway error page or a plain-text body. Keep a short
+        // prefix; the full page is noise and may be large.
+        serverMessage = text.trim().slice(0, 200);
+      }
+    }
+  } catch {
+    // Body already consumed or unreadable - fall through to the status alone.
+  }
+
+  const detail = serverMessage ? `${serverMessage} (HTTP ${response.status})` : `HTTP ${response.status}`;
+  return new AppError(`${fallback}: ${detail}`, `HTTP_${response.status}`, response.status);
+}
+
 // Error code constants
 export const ErrorCodes = {
   NETWORK_ERROR: 'NETWORK_ERROR',

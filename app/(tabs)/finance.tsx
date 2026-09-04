@@ -7,6 +7,7 @@ import { useCourier } from '@/context/CourierContext';
 import { WithSwipeGesture } from '@/components/WithSwipeGesture';
 import { formatCurrency } from '@/lib/formatting';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TAB_ROUTES = [
   { name: 'orders', path: '/(tabs)/orders' },
@@ -16,6 +17,10 @@ const TAB_ROUTES = [
 
 export default function FinanceScreen() {
   const tabBarHeight = useBottomTabBarHeight();
+  // Edge-to-edge: the window starts behind the status bar, so a fixed
+  // paddingTop puts this content underneath it. See hooks/useBottomInset
+  // for the full explanation - the same applies at the top edge.
+  const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const { earnings, isLoadingEarnings, fetchEarnings } = useCourier();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -37,7 +42,7 @@ export default function FinanceScreen() {
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="finance">
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
+        contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: tabBarHeight + 24 }]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -162,6 +167,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    // paddingTop/paddingBottom are applied at the call site.
     // paddingBottom is applied at the call site from useBottomTabBarHeight().
   },
   header: {

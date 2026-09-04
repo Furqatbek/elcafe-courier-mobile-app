@@ -6,12 +6,19 @@ import { Car, FileText, CreditCard, Edit2 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
 import logger from '@/lib/logger';
+import { VehicleType, requiresLicense, requiresPlate } from '@/constants/config';
 
 export default function VehicleInfoScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { courierProfile, fetchCourierProfile } = useCourier();
   const [isLoading, setIsLoading] = React.useState(false);
+
+  // A bicycle has no plate and no driving licence, so showing those rows as "-"
+  // reads like the courier left something blank. Hide what does not apply.
+  const vehicleType = courierProfile?.vehicleType as VehicleType | undefined;
+  const showPlate = vehicleType ? requiresPlate(vehicleType) : true;
+  const showLicense = vehicleType ? requiresLicense(vehicleType) : true;
 
   // Refresh profile data when screen loads
   useEffect(() => {
@@ -75,18 +82,24 @@ export default function VehicleInfoScreen() {
           />
           <View style={styles.separator} />
 
-          <InfoItem
-            icon={CreditCard}
-            label={t('vehicle_info.vehicle_plate')}
-            value={courierProfile?.vehicleNumber || '-'}
-          />
-          <View style={styles.separator} />
+          {showPlate && (
+            <>
+              <InfoItem
+                icon={CreditCard}
+                label={t('vehicle_info.vehicle_plate')}
+                value={courierProfile?.vehicleNumber || '-'}
+              />
+              <View style={styles.separator} />
+            </>
+          )}
 
-          <InfoItem
-            icon={FileText}
-            label={t('vehicle_info.license_number')}
-            value={courierProfile?.licenseNumber || '-'}
-          />
+          {showLicense && (
+            <InfoItem
+              icon={FileText}
+              label={t('vehicle_info.license_number')}
+              value={courierProfile?.licenseNumber || '-'}
+            />
+          )}
         </View>
       </ScrollView>
     </>

@@ -12,7 +12,7 @@ import { useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Bike, Car, CheckCircle, AlertCircle, Footprints, Zap } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { VehicleType, DEFAULTS } from '@/constants/config';
+import { VehicleType, DEFAULTS, requiresLicense, requiresPlate } from '@/constants/config';
 import { useToast } from '@/components/Toast';
 import { api } from '@/services/api';
 import { useCourier } from '@/context/CourierContext';
@@ -40,19 +40,29 @@ export default function BecomeCourierScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // A courier on foot, on a bicycle or on an e-bike has no number plate and no
+  // driving licence, so requiring either made those vehicle types impossible to
+  // register with. See VEHICLE_TYPES_REQUIRING_* in constants/config.ts.
+  const needsPlate = requiresPlate(vehicleType);
+  const needsLicense = requiresLicense(vehicleType);
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (!vehicleNumber.trim()) {
-      newErrors.vehicleNumber = t('become_courier.vehicle_number_required');
-    } else if (vehicleNumber.trim().length < 4) {
-      newErrors.vehicleNumber = t('become_courier.vehicle_number_invalid');
+    if (needsPlate) {
+      if (!vehicleNumber.trim()) {
+        newErrors.vehicleNumber = t('become_courier.vehicle_number_required');
+      } else if (vehicleNumber.trim().length < 4) {
+        newErrors.vehicleNumber = t('become_courier.vehicle_number_invalid');
+      }
     }
 
-    if (!licenseNumber.trim()) {
-      newErrors.licenseNumber = t('become_courier.license_required');
-    } else if (licenseNumber.trim().length < 6) {
-      newErrors.licenseNumber = t('become_courier.license_invalid');
+    if (needsLicense) {
+      if (!licenseNumber.trim()) {
+        newErrors.licenseNumber = t('become_courier.license_required');
+      } else if (licenseNumber.trim().length < 6) {
+        newErrors.licenseNumber = t('become_courier.license_invalid');
+      }
     }
 
     const radius = parseInt(preferredRadius);
@@ -69,10 +79,12 @@ export default function BecomeCourierScreen() {
 
     setIsLoading(true);
     try {
+      // Send the documents only for vehicle types that have them. An empty
+      // string would otherwise be stored as the courier's licence number.
       await api.courier.register({
         vehicleType,
-        vehicleNumber: vehicleNumber.trim().toUpperCase(),
-        licenseNumber: licenseNumber.trim().toUpperCase(),
+        ...(needsPlate ? { vehicleNumber: vehicleNumber.trim().toUpperCase() } : {}),
+        ...(needsLicense ? { licenseNumber: licenseNumber.trim().toUpperCase() } : {}),
         preferredRadiusKm: parseInt(preferredRadius),
       });
 
@@ -128,7 +140,8 @@ export default function BecomeCourierScreen() {
           </View>
         </View>
 
-        {/* Vehicle Number */}
+        {/* Vehicle Number - only for vehicles that carry a plate */}
+        {needsPlate && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('become_courier.vehicle_number')}</Text>
           <TextInput
@@ -149,8 +162,10 @@ export default function BecomeCourierScreen() {
             </View>
           )}
         </View>
+        )}
 
-        {/* License Number */}
+        {/* License Number - only for vehicles that require one */}
+        {needsLicense && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('become_courier.license_number')}</Text>
           <TextInput
@@ -171,6 +186,7 @@ export default function BecomeCourierScreen() {
             </View>
           )}
         </View>
+        )}
 
         {/* Preferred Radius */}
         <View style={styles.section}>

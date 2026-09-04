@@ -10,7 +10,7 @@ import logger from '@/lib/logger';
 export default function PersonalInfoScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { user, courierProfile, fetchCourierProfile } = useCourier();
+  const { user, courierProfile, fetchCourierProfile, refreshUser } = useCourier();
   const [isLoading, setIsLoading] = React.useState(false);
 
   // Refresh profile data when screen loads
@@ -18,7 +18,9 @@ export default function PersonalInfoScreen() {
     const loadProfile = async () => {
       setIsLoading(true);
       try {
-        await fetchCourierProfile();
+        // Both: the courier profile carries vehicle/status, the USER record
+        // carries the personal fields shown on this screen.
+        await Promise.all([fetchCourierProfile(), refreshUser()]);
       } catch (error) {
         logger.error('Failed to fetch courier profile:', error);
       } finally {
@@ -26,12 +28,12 @@ export default function PersonalInfoScreen() {
       }
     };
     loadProfile();
-  }, [fetchCourierProfile]);
+  }, [fetchCourierProfile, refreshUser]);
 
   // Parse userName into first/last name if available
   const nameParts = (courierProfile?.userName || '').split(' ');
-  const firstName = courierProfile?.firstName || nameParts[0] || user?.firstName || '-';
-  const lastName = courierProfile?.lastName || nameParts.slice(1).join(' ') || user?.lastName || '-';
+  const firstName = user?.firstName || courierProfile?.firstName || nameParts[0] || '-';
+  const lastName = user?.lastName || courierProfile?.lastName || nameParts.slice(1).join(' ') || '-';
 
   const InfoItem = ({ icon: Icon, label, value }: { icon: any, label: string, value: string | number }) => (
     <View style={styles.item}>
@@ -98,14 +100,14 @@ export default function PersonalInfoScreen() {
           <InfoItem
             icon={Phone}
             label={t('personal_info.phone')}
-            value={courierProfile?.phone || user?.phone || '-'}
+            value={user?.phone || courierProfile?.phone || '-'}
           />
           <View style={styles.separator} />
 
           <InfoItem
             icon={Mail}
             label={t('personal_info.email')}
-            value={courierProfile?.email || user?.email || '-'}
+            value={user?.email || courierProfile?.email || '-'}
           />
           <View style={styles.separator} />
 

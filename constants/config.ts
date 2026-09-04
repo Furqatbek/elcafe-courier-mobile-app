@@ -189,6 +189,36 @@ export const VEHICLE_TYPES = {
 
 export type VehicleType = typeof VEHICLE_TYPES[keyof typeof VEHICLE_TYPES];
 
+// Which vehicles legally carry a driving licence and a registration plate.
+//
+// Registration demanded both from EVERY courier, so an applicant on foot or on
+// a bicycle had to invent a licence number and a number plate to get past the
+// form - there is nothing valid they could have typed. This is the one place
+// that decides it; the registration and vehicle-edit forms both read it, so
+// they cannot drift apart (edit-vehicle already exempted bicycles from the
+// plate but still demanded the licence).
+//
+// In Uzbekistan a bicycle and a courier on foot have neither document. An
+// e-bike/scooter under the low-power threshold is likewise ridden without a
+// driving licence and carries no plate; anything larger is registered as a
+// MOTORCYCLE. If the operations team decides otherwise for a class, move it
+// between these lists rather than editing a form.
+export const VEHICLE_TYPES_REQUIRING_LICENSE: readonly VehicleType[] = [
+  VEHICLE_TYPES.MOTORCYCLE,
+  VEHICLE_TYPES.CAR,
+];
+
+export const VEHICLE_TYPES_REQUIRING_PLATE: readonly VehicleType[] = [
+  VEHICLE_TYPES.MOTORCYCLE,
+  VEHICLE_TYPES.CAR,
+];
+
+export const requiresLicense = (vehicleType: VehicleType): boolean =>
+  VEHICLE_TYPES_REQUIRING_LICENSE.includes(vehicleType);
+
+export const requiresPlate = (vehicleType: VehicleType): boolean =>
+  VEHICLE_TYPES_REQUIRING_PLATE.includes(vehicleType);
+
 // Issue Types for reporting order issues
 export const ISSUE_TYPES = {
   CUSTOMER_UNAVAILABLE: 'CUSTOMER_UNAVAILABLE',
