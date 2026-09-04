@@ -18,6 +18,39 @@ import { ExpoConfig, ConfigContext } from "expo/config";
  * See docs/PRODUCTION.md for the full launch checklist.
  */
 
+/**
+ * A release bundle without its environment MUST fail here, at build time.
+ *
+ * constants/config.ts used to throw at module scope when
+ * EXPO_PUBLIC_RORK_API_BASE_URL was missing. app/_layout.tsx imports it before
+ * anything renders, so that throw became an unhandled JS error during startup,
+ * which React Native reports through RCTExceptionsManager.reportFatalException
+ * -> ObjC exception -> abort(). The app died ~150ms after launch with a blank
+ * screen and App Review rejected it under guideline 2.1(a) as "crashed on
+ * launch". The build itself succeeded and gave no warning.
+ *
+ * This config is evaluated by `expo export:embed`, which is what Xcode's
+ * "Bundle React Native code and images" phase and Gradle's bundle task both
+ * run. Failing here fails the ARCHIVE, so a build that cannot work can no
+ * longer be produced, signed, and uploaded.
+ *
+ * Gated on NODE_ENV=production so `expo prebuild` and dev bundling — which
+ * legitimately run without secrets — are unaffected.
+ */
+const REQUIRED_RELEASE_ENV = ["EXPO_PUBLIC_RORK_API_BASE_URL"] as const;
+if (process.env.NODE_ENV === "production") {
+  const missing = REQUIRED_RELEASE_ENV.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(
+      `[app.config] Cannot build a release bundle: ${missing.join(", ")} is not set.\n` +
+      "The app cannot reach the backend without it, and a bundle built this way " +
+      "shows a configuration error instead of the app.\n" +
+      "Set it in .env (or the shell running the build) and rebuild. " +
+      "See docs/PRODUCTION.md section 1."
+    );
+  }
+}
+
 // Firebase config for Android push (FCM). Required for ANY Android push
 // delivery — a build without it ships with push notifications dead AND
 // getDevicePushTokenAsync throws at runtime. Wired conditionally so dev
@@ -248,6 +281,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-web-browser",
     "expo-localization",
     [
+      // The app stores tokens in the keychain but never uses biometrics. Left
+      // to itself the plugin writes NSFaceIDUsageDescription with Expo's
+      // placeholder text, so the reviewed build declared a Face ID purpose for
+      // a capability it does not have.
+      "expo-secure-store",
+      { faceIDPermission: false },
+    ],
+    [
       "expo-location",
       {
         // All three OFF — see the android.permissions note above.
@@ -256,8 +297,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         isIosBackgroundLocationEnabled: false,
         locationWhenInUsePermission:
           "ZBR Courier uses your location while the app is open to show your position on the delivery map, calculate routes, and share your live position with dispatch during an active delivery.",
-        locationAlwaysAndWhenInUsePermission:
-          "While you are on shift with an active delivery, ZBR Courier tracks your location in the background so dispatch and the customer can follow the delivery in real time. Tracking stops when you go off shift.",
+        // false DELETES the key from Info.plist (@expo/config-plugins
+        // ios/Permissions.js treats false as a removal). Without this the
+        // plugin writes NSLocationAlwaysAndWhenInUseUsageDescription and
+        // NSLocationAlwaysUsageDescription even with background location off —
+        // the first carried our old text promising background tracking, and the
+        // second Expo's placeholder "Allow $(PRODUCT_NAME) to access your
+        // location". Both were still in the reviewed build: an Info.plist
+        // advertising background location for an app that has none, which
+        // contradicts the privacy manifest and invites exactly the scrutiny
+        // removing background location was meant to avoid.
+        locationAlwaysAndWhenInUsePermission: false,
+        locationAlwaysPermission: false,
       },
     ],
     [

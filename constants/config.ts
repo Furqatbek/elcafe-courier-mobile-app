@@ -57,26 +57,69 @@ const CONSUMED_EXPO_PUBLIC_ENV: Record<string, string | undefined> = {
   EXPO_PUBLIC_CRASH_ENDPOINT: process.env.EXPO_PUBLIC_CRASH_ENDPOINT,
 };
 
-// Fail LOUDLY at startup instead of shipping a build where every network
-// call silently targets a "REPLACE_ME_*" origin (see docs/PRODUCTION.md §1).
-if (!__DEV__) {
+/**
+ * A misconfigured production build, described rather than thrown.
+ *
+ * These checks used to `throw` at module scope. app/_layout.tsx imports this
+ * file on its ninth line, so the throw happened during module evaluation —
+ * before React rendered anything, before the ErrorBoundary existed, before the
+ * global handler installed by initCrashReporting() could do anything with it.
+ * React Native turns an unhandled JS error at that point into
+ * RCTExceptionsManager.reportFatalException, which raises an ObjC exception and
+ * calls abort(). The result is SIGABRT roughly 150ms after launch with nothing
+ * on screen: an app that "crashed on launch" as far as anyone can tell, which
+ * is exactly how App Review reported it (guideline 2.1(a), submission
+ * dfca40b5-ac4b-4aed-bcbc-c2bb383f53a4).
+ *
+ * The instinct — fail loudly rather than ship a build pointing at a
+ * placeholder — was right. The placement was wrong. A build that cannot work
+ * should fail when it is BUILT, which app.config.ts now enforces, and the
+ * runtime should degrade into something a human can read. Crashing on launch is
+ * the one outcome that tells nobody anything.
+ */
+export interface ConfigError {
+  /** Env var names at fault, for the on-screen diagnostic. */
+  vars: string[];
+  message: string;
+}
+
+const detectConfigError = (): ConfigError | null => {
+  if (__DEV__) return null;
+
   const placeholderVars = findPlaceholderVars(CONSUMED_EXPO_PUBLIC_ENV);
   if (placeholderVars.length > 0) {
-    throw new Error(
-      `Production build has unreplaced REPLACE_ME placeholder(s) in: ${placeholderVars.join(', ')}. ` +
-      'Replace them with real values in .env before building (docs/PRODUCTION.md, section 1).'
-    );
+    return {
+      vars: placeholderVars,
+      message:
+        'This build was compiled with placeholder values still in place, so it cannot reach the server. ' +
+        'Rebuild with real values in .env (docs/PRODUCTION.md, section 1).',
+    };
   }
-}
+
+  if (!process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    return {
+      vars: ['EXPO_PUBLIC_RORK_API_BASE_URL'],
+      message:
+        'This build was compiled without an API address, so it cannot reach the server. ' +
+        'Set EXPO_PUBLIC_RORK_API_BASE_URL in .env and rebuild (docs/PRODUCTION.md, section 1).',
+    };
+  }
+
+  return null;
+};
+
+export const CONFIG_ERROR: ConfigError | null = detectConfigError();
 
 const resolveBaseUrl = (): string => {
   const envBaseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   if (__DEV__) {
     return envBaseUrl || 'http://localhost:8080';
   }
-  if (!envBaseUrl) {
-    throw new Error('EXPO_PUBLIC_RORK_API_BASE_URL must be set for production builds');
-  }
+  // Empty rather than a guess: CONFIG_ERROR is set in this case and the app
+  // renders a diagnostic instead of making requests, so nothing should ever
+  // read this. An empty string makes any request that slips through fail
+  // immediately and visibly rather than resolving somewhere unintended.
+  if (!envBaseUrl) return '';
   return enforceSecureTransport(envBaseUrl);
 };
 

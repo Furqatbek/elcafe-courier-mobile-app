@@ -12,6 +12,36 @@ permanent once shipped).
 
 ---
 
+## 0a. REJECTED once already — read this before building
+
+**Submission `dfca40b5-ac4b-4aed-bcbc-c2bb383f53a4`, version 1.0 (1), guideline
+2.1(a): "crashed on launch"** on an iPad Air 11-inch (M3), iPadOS 26.6.1.
+
+It was not an iPad problem and not a native one. `constants/config.ts` threw at
+module scope when `EXPO_PUBLIC_RORK_API_BASE_URL` was missing, and
+`app/_layout.tsx` imports that file before anything renders. React Native turns
+an unhandled JS error at that point into
+`RCTExceptionsManager.reportFatalException`, which raises an ObjC exception and
+calls `abort()` — SIGABRT about 150ms after launch, blank screen, on any device.
+The build succeeded and warned about nothing.
+
+Fixed in three places, all of which must stay:
+
+1. `constants/config.ts` no longer throws. It exports `CONFIG_ERROR`, and
+   `app/_layout.tsx` renders it as a readable screen. The app always launches.
+2. `app.config.ts` throws when `NODE_ENV=production` and a required
+   `EXPO_PUBLIC_*` var is missing. Xcode's "Bundle React Native code and images"
+   phase evaluates this config, so **the archive fails** instead of producing a
+   crashing binary.
+3. `lib/__tests__/config-launch.test.ts` asserts the config module never throws
+   however empty the environment is.
+
+**So: set the environment in the shell that runs the Xcode build.** Xcode does
+not inherit your terminal's variables when launched from Finder — either put
+them in `.env` at the repo root (Expo loads it) or launch Xcode from a terminal
+that has them exported. If you get the config error screen instead of the app,
+this is why.
+
 ## 0. What will get this app rejected
 
 Ordered by how likely it is to bite:

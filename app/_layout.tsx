@@ -2,11 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments, useRootNavigationState, type Href } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useCallback, useEffect, useRef } from "react";
-import { View, ActivityIndicator, StyleSheet, Platform } from "react-native";
+import { View, Text, ActivityIndicator, StyleSheet, Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Notifications from 'expo-notifications';
-import { ORDER_CONFIG } from '@/constants/config';
+import { ORDER_CONFIG, CONFIG_ERROR } from '@/constants/config';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 
 import { ToastProvider, useToast } from "@/components/Toast";
@@ -380,6 +380,20 @@ export default function RootLayout() {
     // after login/session restore by registerDeviceToken().
   }, []);
 
+  // A build compiled without its environment cannot do anything useful, but it
+  // must still LAUNCH. This used to be a throw during module evaluation, which
+  // App Review saw as a crash on launch. Render the reason instead: whoever
+  // opens it — reviewer, tester, courier — can read what is wrong and say so.
+  if (CONFIG_ERROR) {
+    return (
+      <View style={styles.configErrorContainer}>
+        <Text style={styles.configErrorTitle}>Configuration problem</Text>
+        <Text style={styles.configErrorBody}>{CONFIG_ERROR.message}</Text>
+        <Text style={styles.configErrorVars}>{CONFIG_ERROR.vars.join('\n')}</Text>
+      </View>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       {/*
@@ -410,6 +424,28 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
+  configErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: Colors.background,
+  },
+  configErrorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  configErrorBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: Colors.textSecondary,
+    marginBottom: 20,
+  },
+  configErrorVars: {
+    fontSize: 13,
+    color: Colors.danger,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
