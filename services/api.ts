@@ -162,17 +162,20 @@ export interface CourierRegisterRequest {
   preferredRadiusKm?: number;
 }
 
+/**
+ * Body of PUT /couriers/me.
+ *
+ * These five fields are the whole accepted set. firstName/lastName/email/phone
+ * used to be declared here and were silently dropped by the backend — personal
+ * fields belong to PUT /users/me. vehicleBrand/vehicleModel were likewise never
+ * accepted, so the vehicle form required two values that went nowhere.
+ */
 export interface CourierUpdateRequest {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
   vehicleType?: VehicleType;
   vehicleNumber?: string;
-  vehicleBrand?: string;
-  vehicleModel?: string;
   licenseNumber?: string;
   preferredRadiusKm?: number;
+  maxConcurrentOrders?: number;
 }
 
 export interface LocationUpdate {
@@ -487,18 +490,22 @@ export const authApi = {
       false
     ),
 
-  getMe: () => apiClient.get<User>(API_ENDPOINTS.AUTH.ME),
+  // Identity lives on /users/me; there is no /auth/me in the API reference.
+  getMe: () => apiClient.get<User>(API_ENDPOINTS.USER.ME),
 };
 
 // User account (personal fields live here — backend-verified:
 // PUT /couriers/me persists vehicle fields ONLY and silently ignores
 // firstName/lastName/email/phone)
 export const userApi = {
+  // PUT /users/me accepts ONLY these four fields. `email` is returned by
+  // GET /users/me but cannot be changed here, so sending it was a no-op.
+  // Changing `phone` resets phoneVerified to false.
   updatePersonalInfo: (data: {
     firstName?: string;
     lastName?: string;
-    email?: string;
     phone?: string;
+    profileImageUrl?: string;
   }) => apiClient.put<User>(API_ENDPOINTS.USER.ME, data),
 };
 

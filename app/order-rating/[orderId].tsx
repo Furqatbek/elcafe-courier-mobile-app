@@ -19,6 +19,7 @@ import {
 import Colors from '@/constants/colors';
 import { Button } from '@/components/Button';
 import { useCourier } from '@/context/CourierContext';
+import { API_ENDPOINTS } from '@/constants/config';
 
 export default function OrderRatingScreen() {
   const { t } = useTranslation();
@@ -72,7 +73,7 @@ export default function OrderRatingScreen() {
       const tagsPrefix = selectedTags.length > 0 ? `[${selectedTags.join(', ')}] ` : '';
       const fullComment = `${tagsPrefix}${comment.trim()}`.trim();
       const response = await authenticatedFetch(
-        `/api/v1/couriers/me/orders/${orderId}/rating`,
+        API_ENDPOINTS.ORDERS.RATING(orderId),
         {
           method: 'POST',
           body: JSON.stringify({

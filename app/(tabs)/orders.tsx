@@ -38,6 +38,7 @@ export default function OrdersScreen() {
     activeOrders,
     availableOrders,
     isLoadingAvailableOrders,
+    availableOrdersBlockedReason,
     fetchAvailableOrders,
     refreshData,
     isOnline,
@@ -467,6 +468,20 @@ export default function OrdersScreen() {
             <View style={styles.emptyState}>
               {isLoadingAvailableOrders ? (
                 <ActivityIndicator size="large" color={Colors.primary} />
+              ) : availableOrdersBlockedReason === 'NOT_VERIFIED' ? (
+                // The backend refuses this list until an admin approves the
+                // courier. Saying "no orders" there is a lie that looks like a
+                // quiet day, and the courier waits instead of chasing approval.
+                <>
+                  <Text style={styles.emptyStateText}>
+                    {t('orders.awaiting_approval')}
+                  </Text>
+                  <TouchableOpacity onPress={() => router.push('/verification-pending')}>
+                    <Text style={styles.emptyStateLink}>
+                      {t('orders.awaiting_approval_action')}
+                    </Text>
+                  </TouchableOpacity>
+                </>
               ) : !isOnline ? (
                 <>
                   <Text style={styles.emptyStateText}>
@@ -475,7 +490,7 @@ export default function OrdersScreen() {
                 </>
               ) : (
                 <Text style={styles.emptyStateText}>
-                  {t('orders.no_available_orders', 'No orders available nearby. Pull down to refresh.')}
+                  {t('orders.no_available_orders', 'No open orders right now. Pull down to refresh.')}
                 </Text>
               )}
             </View>
@@ -619,6 +634,12 @@ const styles = StyleSheet.create({
   emptyState: {
     padding: 40,
     alignItems: 'center',
+  },
+  emptyStateLink: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
   },
   emptyStateText: {
     color: Colors.textLight,

@@ -37,13 +37,19 @@ export default function LoginOtpScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
-  const { requestOtp, verifyOtp, fetchCourierProfile } = useCourier();
+  const { requestOtp, resendOtp, verifyOtp, completeRegistration, fetchCourierProfile } = useCourier();
 
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [resendTimer, setResendTimer] = useState(0);
+  // request-otp tells us whether this phone has an account. A NEW number must
+  // finish through complete-registration (which needs a name) — verify-otp is
+  // only for accounts that already exist, so calling it for a new number meant
+  // a first-time courier could never get past this screen.
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [fullName, setFullName] = useState('');
 
   const otpInputRefs = useRef<(TextInput | null)[]>([]);
 
@@ -75,8 +81,11 @@ export default function LoginOtpScreen() {
         toast.error(result.message || t('login_otp.otp_request_failed'));
         return;
       }
+      setIsNewUser(result.data?.isNewUser ?? false);
       setStep('otp');
-      setResendTimer(APP_CONFIG.OTP_RESEND_DELAY);
+      // Drive the countdown from the server's own expiry rather than a local
+      // constant, so the two cannot disagree about when a code is dead.
+      setResendTimer(result.data?.expiresInSeconds ?? APP_CONFIG.OTP_RESEND_DELAY);
       toast.success(t('login_otp.otp_sent'));
       // Focus first OTP input
       setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
@@ -122,9 +131,17 @@ export default function LoginOtpScreen() {
       return;
     }
 
+    if (isNewUser && !fullName.trim()) {
+      toast.error(t('login_otp.enter_full_name'));
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const result = await verifyOtp(normalizePhone(phone), otpCode);
+      // Same code either way — requesting a second one invalidates the first.
+      const result = isNewUser
+        ? await completeRegistration(normalizePhone(phone), otpCode, fullName.trim())
+        : await verifyOtp(normalizePhone(phone), otpCode);
       if (!result.success || !result.data) {
         toast.error(result.message || t('login_otp.verification_failed'));
         return;
@@ -154,12 +171,15 @@ export default function LoginOtpScreen() {
 
     setIsLoading(true);
     try {
-      const result = await requestOtp(normalizePhone(phone));
+      // resend-otp, not request-otp: this invalidates the previous code, which
+      // is what a user who never received it actually wants.
+      const result = await resendOtp(normalizePhone(phone));
       if (!result.success) {
         toast.error(result.message || t('login_otp.otp_request_failed'));
         return;
       }
-      setResendTimer(APP_CONFIG.OTP_RESEND_DELAY);
+      setIsNewUser(result.data?.isNewUser ?? isNewUser);
+      setResendTimer(result.data?.expiresInSeconds ?? APP_CONFIG.OTP_RESEND_DELAY);
       setOtp(['', '', '', '', '', '']);
       toast.success(t('login_otp.otp_resent'));
     } catch (error: any) {
@@ -227,6 +247,17 @@ export default function LoginOtpScreen() {
             </View>
           ) : (
             <View style={styles.form}>
+              {isNewUser && (
+                <TextInput
+                  style={styles.nameInput}
+                  placeholder={t('login_otp.full_name_placeholder')}
+                  placeholderTextColor={Colors.textLight}
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                />
+              )}
               <View style={styles.otpContainer}>
                 {otp.map((digit, index) => (
                   <TextInput
@@ -356,6 +387,17 @@ const styles = StyleSheet.create({
     height: 56,
     fontSize: 18,
     color: Colors.text,
+  },
+  nameInput: {
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 20,
   },
   otpContainer: {
     flexDirection: 'row',

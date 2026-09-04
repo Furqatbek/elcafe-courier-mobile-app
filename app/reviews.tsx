@@ -14,15 +14,14 @@ import { ArrowLeft, Star } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useCourier } from '@/context/CourierContext';
+import { API_ENDPOINTS } from '@/constants/config';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
 import logger from '@/lib/logger';
 import { errorFromResponse } from '@/lib/errors';
 
-// API_ENDPOINTS-style path builder; move into constants/config.ts
-// (API_ENDPOINTS.COURIER.REVIEWS) once that file is free to edit.
 const REVIEWS_ENDPOINT = (page: number, size: number) =>
-  `/api/v1/couriers/me/reviews?page=${page}&size=${size}`;
+  `${API_ENDPOINTS.COURIER.REVIEWS}?page=${page}&size=${size}`;
 
 interface Review {
   id: number | string;
@@ -35,7 +34,11 @@ interface Review {
   foodRating?: number;
   courierRating: number;
   comment: string;
-  tags?: string;
+  /** The API returns an ARRAY: ["polite", "on time"]. It was typed as a
+   *  comma-separated string, and .split() on an array throws — so any review
+   *  that actually carried tags crashed this screen. Accept both, since a
+   *  string is cheap to tolerate and the crash was not. */
+  tags?: string[] | string;
   createdAt: string;
 }
 
@@ -156,6 +159,11 @@ export default function ReviewsScreen() {
 
   const renderReviewItem = useCallback(({ item }: { item: Review }) => {
     const reviewerName = item.consumerName || t('reviews.anonymous');
+    const tagList = Array.isArray(item.tags)
+      ? item.tags
+      : typeof item.tags === 'string' && item.tags
+        ? item.tags.split(',')
+        : [];
     return (
       <View style={styles.reviewCard}>
         <View style={styles.reviewHeader}>
@@ -177,9 +185,9 @@ export default function ReviewsScreen() {
         {item.comment ? (
           <Text style={styles.reviewComment}>{item.comment}</Text>
         ) : null}
-        {item.tags ? (
+        {tagList.length > 0 ? (
           <View style={styles.tagsRow}>
-            {item.tags.split(',').map((tag) => (
+            {tagList.map((tag) => (
               <View key={tag} style={styles.tag}>
                 <Text style={styles.tagText}>{tag.replace(/_/g, ' ')}</Text>
               </View>

@@ -47,8 +47,6 @@ export default function EditVehicleScreen() {
   const [vehicleType, setVehicleType] = useState<VehicleType>(
     (user?.vehicleType as VehicleType) || VEHICLE_TYPES.CAR
   );
-  const [vehicleBrand, setVehicleBrand] = useState(user?.vehicleBrand || '');
-  const [vehicleModel, setVehicleModel] = useState(user?.vehicleModel || '');
   const [vehiclePlate, setVehiclePlate] = useState(user?.vehiclePlate || '');
   const [licenseNumber, setLicenseNumber] = useState(user?.licenseNumber || '');
   const [isLoading, setIsLoading] = useState(false);
@@ -70,16 +68,6 @@ export default function EditVehicleScreen() {
     const newErrors: Record<string, string> = {};
 
     if (needsPlate) {
-      const brandResult = validateRequired(vehicleBrand, t('edit_vehicle.brand'));
-      if (!brandResult.isValid) {
-        newErrors.vehicleBrand = brandResult.error || '';
-      }
-
-      const modelResult = validateRequired(vehicleModel, t('edit_vehicle.model'));
-      if (!modelResult.isValid) {
-        newErrors.vehicleModel = modelResult.error || '';
-      }
-
       const plateResult = validateLicensePlate(vehiclePlate);
       if (!plateResult.isValid) {
         newErrors.vehiclePlate = plateResult.error || '';
@@ -106,7 +94,7 @@ export default function EditVehicleScreen() {
     try {
       await courierApi.updateProfile({
         vehicleType,
-        ...(needsPlate ? { vehicleNumber: vehiclePlate, vehicleBrand, vehicleModel } : {}),
+        ...(needsPlate ? { vehicleNumber: vehiclePlate } : {}),
         ...(needsLicense ? { licenseNumber } : {}),
       });
       await fetchCourierProfile();
@@ -186,35 +174,11 @@ export default function EditVehicleScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('edit_vehicle.vehicle_details')}</Text>
 
-            <View style={styles.row}>
-              <View style={styles.halfInput}>
-                <Input
-                  label={t('edit_vehicle.brand')}
-                  placeholder={t('edit_vehicle.brand_placeholder')}
-                  value={vehicleBrand}
-                  onChangeText={(text) => {
-                    setVehicleBrand(text);
-                    setErrors(prev => ({ ...prev, vehicleBrand: '' }));
-                  }}
-                  icon={Car}
-                  error={errors.vehicleBrand}
-                  required
-                />
-              </View>
-              <View style={styles.halfInput}>
-                <Input
-                  label={t('edit_vehicle.model')}
-                  placeholder={t('edit_vehicle.model_placeholder')}
-                  value={vehicleModel}
-                  onChangeText={(text) => {
-                    setVehicleModel(text);
-                    setErrors(prev => ({ ...prev, vehicleModel: '' }));
-                  }}
-                  error={errors.vehicleModel}
-                  required
-                />
-              </View>
-            </View>
+            {/* Brand and model used to be collected here, and were REQUIRED.
+                PUT /couriers/me accepts only vehicleType, vehicleNumber,
+                licenseNumber, preferredRadiusKm and maxConcurrentOrders — the
+                two values were discarded by the backend every time, so the
+                form blocked couriers on input nothing would ever store. */}
 
             <Input
               label={t('edit_vehicle.plate_number')}

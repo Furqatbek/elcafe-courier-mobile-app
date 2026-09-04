@@ -29,7 +29,7 @@ const queryClient = new QueryClient();
 
 // Auth navigation handler component
 function AuthNavigator({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isSessionLoading, courierProfile } = useCourier();
+  const { isAuthenticated, isSessionLoading, courierProfile, hasCourierProfile } = useCourier();
   const segments = useSegments();
   const router = useRouter();
   const navigationState = useRootNavigationState();
@@ -39,10 +39,24 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
     if (!navigationState?.key || isSessionLoading) return;
 
     const authScreens = ['login', 'login-otp', 'register', 'become-courier', 'forgot-password', 'onboarding'];
+    const inCourierRegistration = segments[0] === 'become-courier';
     const inAuthGroup = authScreens.includes(segments[0] as string);
     const inVerificationScreen = segments[0] === 'verification-pending';
 
     if (isAuthenticated) {
+      // No courier profile at all (GET /couriers/me answered 403). OTP signup
+      // produces a plain CONSUMER — a courier is that account PLUS a profile
+      // from POST /couriers/register. Without this branch such a session fell
+      // through into the app and then failed on every courier endpoint.
+      // hasCourierProfile is null until the first fetch answers; do not route
+      // on "not asked yet".
+      if (hasCourierProfile === false) {
+        if (!inCourierRegistration) {
+          router.replace('/become-courier');
+        }
+        return;
+      }
+
       // Check if courier needs verification
       // API returns 'verified' boolean, also support legacy 'verificationStatus' string
       const isVerified = courierProfile?.verified === true ||
@@ -60,7 +74,7 @@ function AuthNavigator({ children }: { children: React.ReactNode }) {
       // User is not logged in and not on auth screen, redirect to login
       router.replace('/login');
     }
-  }, [isAuthenticated, isSessionLoading, segments, navigationState?.key, courierProfile]);
+  }, [isAuthenticated, isSessionLoading, segments, navigationState?.key, courierProfile, hasCourierProfile]);
 
   // Show loading screen while checking session
   if (isSessionLoading) {

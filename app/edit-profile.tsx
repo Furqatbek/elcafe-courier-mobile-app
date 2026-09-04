@@ -48,11 +48,6 @@ export default function EditProfileScreen() {
       newErrors.lastName = lastNameResult.error || '';
     }
 
-    const emailResult = validateEmail(email);
-    if (!emailResult.isValid) {
-      newErrors.email = emailResult.error || '';
-    }
-
     const phoneResult = validatePhone(phone);
     if (!phoneResult.isValid) {
       newErrors.phone = phoneResult.error || '';
@@ -71,7 +66,9 @@ export default function EditProfileScreen() {
     try {
       // Personal fields go to the USER resource — PUT /couriers/me silently
       // ignores them (backend-verified), which made this save a no-op before
-      await userApi.updatePersonalInfo({ firstName, lastName, email, phone });
+      // PUT /users/me accepts firstName, lastName, phone and profileImageUrl
+      // only. `email` was being sent and silently discarded.
+      await userApi.updatePersonalInfo({ firstName, lastName, phone });
       // fetchCourierProfile alone was not enough: GET /couriers/me does not
       // carry the personal fields, so the screen kept showing the old values
       // (or "-") after a successful save. Re-read the USER record as well.
@@ -153,20 +150,15 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
+          {/* Read-only: the API has no way to change an email address, so an
+              editable field here would take input and throw it away. */}
           <Input
             label={t('edit_profile.email')}
-            placeholder={t('login.email_placeholder')}
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setErrors(prev => ({ ...prev, email: '' }));
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
+            value={email || '-'}
+            editable={false}
             icon={Mail}
-            error={errors.email}
-            required
           />
+          <Text style={styles.readOnlyHint}>{t('edit_profile.email_read_only')}</Text>
 
           <Input
             label={t('edit_profile.phone')}
@@ -196,6 +188,12 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  readOnlyHint: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: -12,
+    marginBottom: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

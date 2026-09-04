@@ -92,20 +92,42 @@ export interface OtpRequestResponse {
   success: boolean;
   message: string;
   data?: {
-    otpId: string;
-    expiresAt: string;
+    /** Masked, e.g. "9989****67" — safe to echo back to the user. */
+    phone: string;
+    message: string;
+    /** Drive the resend countdown from this; do NOT hardcode 300. */
+    expiresInSeconds: number;
+    /**
+     * true  -> the phone has no account: finish with complete-registration,
+     *          which needs a fullName and re-uses THIS code.
+     * false -> finish with verify-otp.
+     * Getting this branch wrong is why a brand-new phone number could not
+     * sign up: the app always called verify-otp, which is for existing users.
+     */
+    isNewUser: boolean;
+    remainingAttempts: number;
   };
 }
 
+/**
+ * Response of BOTH verify-otp and complete-registration — they are identical.
+ *
+ * Note there is no `courier` here. A courier profile is never returned by an
+ * auth call; it comes from GET /couriers/me, which is also the only thing that
+ * decides whether the account is a courier at all. `user.role` reads CONSUMER
+ * even for a fully registered courier, so it must never be used for that.
+ */
 export interface OtpVerifyResponse {
   success: boolean;
   message: string;
   data?: {
     accessToken: string;
     refreshToken: string;
+    tokenType?: string;
+    /** MILLISECONDS here, SECONDS on /auth/refresh. Do not compute expiry
+     *  from either — the app refreshes reactively on 401. */
+    expiresIn?: number;
     user: User;
-    courier?: CourierProfile;
-    isNewUser: boolean;
   };
 }
 
@@ -333,6 +355,16 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [orders, setOrders] = useState<Order[]>([]);
   // Non-null when the last active-orders sync failed and the list may be stale
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  // Non-null when the backend refused the available-orders list for a reason
+  // the courier can act on. 'NOT_VERIFIED' means an admin has not approved the
+  // profile yet — the screen must say so rather than show an empty list.
+  const [availableOrdersBlockedReason, setAvailableOrdersBlockedReason] =
+    useState<'NOT_VERIFIED' | null>(null);
+
+  // null  = not asked yet (do not route on it)
+  // false = GET /couriers/me answered 403: consumer, needs to register
+  // true  = a courier profile exists
+  const [hasCourierProfile, setHasCourierProfile] = useState<boolean | null>(null);
   const [stats, setStats] = useState<DriverStats>(DEFAULT_STATS);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [currentLocation, setCurrentLocation] = useState<{latitude: number; longitude: number} | null>(null);
@@ -591,9 +623,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const fetchNotifications = useCallback(async (page: number = 0, pageSize: number = 20) => {
     setIsLoadingNotifications(true);
     try {
+      // The API paging parameter is `size`, not `pageSize` — an unrecognised
+      // name falls back to the server default, so a page size other than the
+      // default was silently ignored. `pageSize` is kept alongside it because
+      // the response is read as { notifications, page, pageSize, ... } and the
+      // two names have not both been observed against the live service.
       const params = new URLSearchParams({
         role: 'COURIER',
         page: page.toString(),
+        size: pageSize.toString(),
         pageSize: pageSize.toString(),
       });
       const response = await authenticatedFetch(
@@ -649,12 +687,28 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch]);
 
   // Fetch courier profile and sync online status from backend
+  /**
+   * GET /couriers/me — the source of truth for onboarding state.
+   *
+   * A 403 means no courier profile exists: the account is an ordinary consumer
+   * who has not called POST /couriers/register yet. That is a state to route
+   * on, not an error, so it is recorded rather than swallowed — without it a
+   * restored session with no profile fell straight through into the app and
+   * then failed on every courier endpoint.
+   */
   const fetchCourierProfile = useCallback(async () => {
     try {
       const response = await authenticatedFetch(API_ENDPOINTS.COURIER.ME);
+
+      if (response.status === 403) {
+        setHasCourierProfile(false);
+        return null;
+      }
+
       const data = await response.json();
 
       if (data.success && data.data) {
+        setHasCourierProfile(true);
         const profile = data.data as CourierProfile;
         setCourierProfile(profile);
         await AsyncStorage.setItem('courier_profile', JSON.stringify(profile));
@@ -685,7 +739,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // screen showed "-" no matter how many times they entered it.
   const refreshUser = useCallback(async () => {
     try {
-      const response = await authenticatedFetch(API_ENDPOINTS.AUTH.ME);
+      const response = await authenticatedFetch(API_ENDPOINTS.USER.ME);
       if (!response.ok) {
         logger.warn('[CourierContext] GET auth/me failed:', response.status);
         return null;
@@ -758,25 +812,42 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, [authenticatedFetch, unreadCount, user, courierProfile]);
 
   // Fetch available orders nearby
-  const fetchAvailableOrders = useCallback(async (lat?: number, lng?: number, radiusKm?: number) => {
+  /**
+   * Open orders the courier can accept.
+   *
+   * The endpoint takes NO parameters and is NOT filtered by distance — every
+   * courier sees every unassigned DELIVERY order the restaurant has accepted,
+   * oldest first, regardless of preferredRadiusKm. This used to send
+   * lat/lng/radiusKm, which the backend ignores; sending them implied a
+   * proximity filter that does not exist. The arguments are kept so existing
+   * call sites still compile, and are deliberately unused.
+   */
+  const fetchAvailableOrders = useCallback(async (_lat?: number, _lng?: number, _radiusKm?: number) => {
     setIsLoadingAvailableOrders(true);
     try {
-      // Build query params
-      const params = new URLSearchParams();
-      if (lat !== undefined) params.append('lat', lat.toString());
-      if (lng !== undefined) params.append('lng', lng.toString());
-      if (radiusKm !== undefined) params.append('radiusKm', radiusKm.toString());
+      const response = await authenticatedFetch(API_ENDPOINTS.COURIER.AVAILABLE_ORDERS);
 
-      const queryString = params.toString();
-      const endpoint = queryString
-        ? `${API_ENDPOINTS.COURIER.AVAILABLE_ORDERS}?${queryString}`
-        : API_ENDPOINTS.COURIER.AVAILABLE_ORDERS;
+      // The approval gate. Until an admin verifies the courier this answers
+      // 400 "Courier must be verified to see available orders". That is a
+      // state, not a failure — it used to fall through as an empty list with
+      // no explanation, which looks exactly like "there is no work today".
+      if (response.status === 400) {
+        const body = await response.clone().text();
+        if (body.includes('must be verified')) {
+          setAvailableOrders([]);
+          setAvailableOrdersBlockedReason('NOT_VERIFIED');
+          return;
+        }
+      }
 
-      const response = await authenticatedFetch(endpoint);
+      if (!response.ok) {
+        throw await errorFromResponse(response, 'Failed to load available orders');
+      }
+
       const data = await response.json();
-
       if (data.success && Array.isArray(data.data)) {
         setAvailableOrders(data.data);
+        setAvailableOrdersBlockedReason(null);
       }
     } catch (error) {
       logger.error('Failed to fetch available orders:', error);
@@ -1565,35 +1636,93 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   };
 
   // Verify OTP and login
+  /**
+   * Adopt the session returned by verify-otp or complete-registration. Both
+   * endpoints return exactly the same shape, so this is shared.
+   *
+   * Deliberately does NOT set a courier profile: no auth endpoint returns one.
+   * The caller follows up with fetchCourierProfile(), whose result is the only
+   * thing that says whether this account is a courier (see login-otp.tsx).
+   */
+  const adoptOtpSession = async (data: OtpVerifyResponse) => {
+    if (!data.success || !data.data) return;
+    setAccessToken(data.data.accessToken);
+    setRefreshToken(data.data.refreshToken);
+    accessTokenRef.current = data.data.accessToken;
+    refreshTokenRef.current = data.data.refreshToken;
+    await tokenManager.setTokens(data.data.accessToken, data.data.refreshToken);
+    setUser(data.data.user);
+    hasLoadedInitialData.current = false;
+    await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
+  };
+
+  // Verify an OTP for an EXISTING user. For a new phone number (request-otp
+  // answered isNewUser: true) call completeRegistration instead — this endpoint
+  // is only for accounts that already exist.
   const verifyOtp = async (phone: string, otp: string): Promise<OtpVerifyResponse> => {
     try {
       const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_VERIFY_OTP}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp }),
+        // The reference names this field `code` on verify-otp and `otp` on
+        // complete-registration. `otp` is what this app has always sent; both
+        // are included so the documented name takes effect without betting the
+        // whole login flow on the doc being right about which one the DTO uses.
+        // Drop `otp` once a real verify-otp call has been observed to work.
+        body: JSON.stringify({ phone, code: otp, otp }),
       });
 
       const data: OtpVerifyResponse = await response.json();
-
-      if (data.success && data.data) {
-        setAccessToken(data.data.accessToken);
-        setRefreshToken(data.data.refreshToken);
-        accessTokenRef.current = data.data.accessToken;
-        refreshTokenRef.current = data.data.refreshToken;
-        await tokenManager.setTokens(data.data.accessToken, data.data.refreshToken);
-        setUser(data.data.user);
-        if (data.data.courier) {
-          setCourierProfile(data.data.courier);
-          await AsyncStorage.setItem('courier_profile', JSON.stringify(data.data.courier));
-        }
-        hasLoadedInitialData.current = false;
-
-        await AsyncStorage.setItem(TOKEN_CONFIG.USER_KEY, JSON.stringify(data.data.user));
-      }
-
+      await adoptOtpSession(data);
       return data;
     } catch (error) {
       logger.error('Verify OTP error:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Finish signup for a phone number that had no account.
+   *
+   * Uses the SAME code request-otp already sent — requesting a second one
+   * invalidates the first and the user ends up entering a code that no longer
+   * matches. The backend creates a CONSUMER here; POST /couriers/register
+   * (become-courier) is what turns them into a courier.
+   */
+  const completeRegistration = async (
+    phone: string,
+    otp: string,
+    fullName: string,
+    email?: string
+  ): Promise<OtpVerifyResponse> => {
+    try {
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_COMPLETE_REGISTRATION}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp, fullName, ...(email ? { email } : {}) }),
+      });
+
+      const data: OtpVerifyResponse = await response.json();
+      await adoptOtpSession(data);
+      return data;
+    } catch (error) {
+      logger.error('Complete registration error:', error);
+      throw error;
+    }
+  };
+
+  // Resend the code. Distinct from requestOtp: this invalidates the previous
+  // code, which is the correct behaviour for a user who never received it.
+  const resendOtp = async (phone: string): Promise<OtpRequestResponse> => {
+    try {
+      const response = await fetch(`${BASE_URL}${API_ENDPOINTS.AUTH.PHONE_RESEND_OTP}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      return await response.json();
+    } catch (error) {
+      logger.error('Resend OTP error:', error);
       throw error;
     }
   };
@@ -2055,11 +2184,14 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     logoutAllDevices,
     requestOtp,
     verifyOtp,
+    completeRegistration,
+    resendOtp,
     authenticatedFetch,
 
     // Courier profile
     courierProfile,
     fetchCourierProfile,
+    hasCourierProfile,
     refreshUser,
     updateCourierStatus,
 
@@ -2095,6 +2227,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     // Available orders (nearby orders to accept)
     availableOrders,
     isLoadingAvailableOrders,
+    availableOrdersBlockedReason,
     fetchAvailableOrders,
     acceptOrder,
 

@@ -120,7 +120,9 @@
     "hours_ago_few": "{{count}}h ago",
     "hours_ago_many": "{{count}}h ago",
     "minutes_ago_few": "{{count}} mins ago",
-    "minutes_ago_many": "{{count}} mins ago"
+    "minutes_ago_many": "{{count}} mins ago",
+    "awaiting_approval": "Your courier account is waiting for approval. You will see orders as soon as it is approved.",
+    "awaiting_approval_action": "View application status"
   },
   "notifications_page": {
     "title": "Notifications",
@@ -323,7 +325,8 @@
     "choose_from_library": "Choose from Library",
     "tap_to_change": "Tap to change photo",
     "photo_permission_denied": "Permission to access photos was denied.",
-    "camera_permission_denied": "Permission to access camera was denied."
+    "camera_permission_denied": "Permission to access camera was denied.",
+    "email_read_only": "Email cannot be changed here. Contact support if it is wrong."
   },
   "edit_vehicle": {
     "title": "Edit Vehicle",
@@ -521,7 +524,9 @@
     "otp_placeholder": "Enter the 6-digit code",
     "resend_otp": "Resend code",
     "send_otp": "Send code",
-    "verify_button": "Verify"
+    "verify_button": "Verify",
+    "full_name_placeholder": "Your full name",
+    "enter_full_name": "Please enter your full name"
   },
   "become_courier": {
     "title": "Become a Courier",

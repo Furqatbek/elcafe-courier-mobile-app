@@ -120,7 +120,9 @@
     "hours_ago_few": "{{count}}s oldin",
     "hours_ago_many": "{{count}}s oldin",
     "minutes_ago_few": "{{count}} daq oldin",
-    "minutes_ago_many": "{{count}} daq oldin"
+    "minutes_ago_many": "{{count}} daq oldin",
+    "awaiting_approval": "Kuryer hisobingiz tasdiqlanishini kutmoqda. Tasdiqlangach, buyurtmalar darhol ko'rinadi.",
+    "awaiting_approval_action": "Ariza holati"
   },
   "notifications_page": {
     "title": "Bildirishnomalar",
@@ -323,7 +325,8 @@
     "choose_from_library": "Galereyadan tanlash",
     "tap_to_change": "Suratni o'zgartirish uchun bosing",
     "photo_permission_denied": "Suratlarga kirish rad etildi.",
-    "camera_permission_denied": "Kameraga kirish rad etildi."
+    "camera_permission_denied": "Kameraga kirish rad etildi.",
+    "email_read_only": "Email bu yerda o'zgartirilmaydi. Noto'g'ri bo'lsa, qo'llab-quvvatlashga murojaat qiling."
   },
   "edit_vehicle": {
     "title": "Transportni tahrirlash",
@@ -521,7 +524,9 @@
     "otp_resent": "Tasdiqlash kodi qayta yuborildi!",
     "resend_code": "Kodni qayta yuborish",
     "send_code": "Kod yuborish",
-    "verify": "Tasdiqlash"
+    "verify": "Tasdiqlash",
+    "full_name_placeholder": "To'liq ismingiz",
+    "enter_full_name": "To'liq ismingizni kiriting"
   },
   "become_courier": {
     "title": "Kuryer bo'lish",

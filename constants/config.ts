@@ -89,16 +89,25 @@ export const API_ENDPOINTS = {
     LOGIN: '/api/v1/auth/login',
     REGISTER: '/api/v1/auth/register',
     REFRESH: '/api/v1/auth/refresh',
-    ME: '/api/v1/auth/me',
     LOGOUT: '/api/v1/auth/logout',
     PHONE_REQUEST_OTP: '/api/v1/auth/phone/request-otp',
+    // Existing users. Takes { phone, code } — note the field is `code` here and
+    // `otp` on complete-registration below. That asymmetry is in the API.
     PHONE_VERIFY_OTP: '/api/v1/auth/phone/verify-otp',
+    // NEW users (request-otp answered isNewUser: true). Takes the SAME code
+    // that request-otp sent plus fullName — do NOT request a second OTP.
+    PHONE_COMPLETE_REGISTRATION: '/api/v1/auth/phone/complete-registration',
+    // Invalidates the previous code and sends a new one.
+    PHONE_RESEND_OTP: '/api/v1/auth/phone/resend-otp',
   },
 
-  // User endpoints
+  // User endpoints — the courier's IDENTITY (name, phone, avatar).
+  //
+  // Deliberately distinct from COURIER.ME below, which holds their WORK data
+  // (status, vehicle, rating, verified). The profile screen reads both.
+  // PUT /couriers/me silently ignores personal fields (backend-verified), and
+  // PUT /users/me accepts only firstName, lastName, phone and profileImageUrl.
   USER: {
-    // Personal fields (firstName/lastName/email/phone) live on the USER
-    // resource — PUT /couriers/me silently ignores them (backend-verified)
     ME: '/api/v1/users/me',
     LOGOUT_ALL: '/api/v1/users/me/logout-all',
   },
@@ -113,6 +122,7 @@ export const API_ENDPOINTS = {
     ACTIVE_ORDERS: '/api/v1/couriers/me/orders/active',
     ORDER_HISTORY: '/api/v1/couriers/me/orders/history',
     EARNINGS: '/api/v1/couriers/me/earnings',
+    REVIEWS: '/api/v1/couriers/me/reviews',
   },
 
   // Order management endpoints
@@ -123,6 +133,7 @@ export const API_ENDPOINTS = {
     TRANSIT: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/transit`,
     COMPLETE: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/complete`,
     ISSUE: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/issue`,
+    RATING: (orderId: string | number) => `/api/v1/couriers/me/orders/${orderId}/rating`,
   },
 
   // Notifications

@@ -235,12 +235,19 @@ export async function unregisterDeviceToken(accessToken: string): Promise<boolea
   try {
     const authToken = await resolveAuthToken(accessToken);
 
+    // The backend needs to know WHICH token to remove, and the field is named
+    // `deviceToken` here even though registering sends it as `token`. That
+    // asymmetry is real: sending nothing (as this did) or sending `token` is a
+    // silent no-op, and the phone keeps receiving push after logout.
+    const storedToken = await AsyncStorage.getItem(DEVICE_TOKEN_KEY);
+
     const response = await fetch(`${BASE_URL}${API_ENDPOINTS.DEVICE_TOKENS.UNREGISTER}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`,
       },
+      ...(storedToken ? { body: JSON.stringify({ deviceToken: storedToken }) } : {}),
     });
 
     // Clear local storage regardless of API response
