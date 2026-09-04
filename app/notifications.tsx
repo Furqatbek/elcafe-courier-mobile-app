@@ -20,13 +20,12 @@ import {
   XCircle,
   AlertCircle,
   ChevronRight,
+  Truck,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useCourier, Notification } from '@/context/CourierContext';
 import { EmptyState } from '@/components/EmptyState';
 import { formatRelativeTime } from '@/lib/formatting';
-
-import { Truck } from 'lucide-react-native';
 
 const notificationIcons: Record<string, any> = {
   NEW_ORDER_NEARBY: Package,

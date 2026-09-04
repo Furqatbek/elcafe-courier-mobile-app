@@ -21,7 +21,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useCourier } from '@/context/CourierContext';
 import { userApi } from '@/services/api';
-import { validateEmail, validatePhone, validateRequired } from '@/lib/validation';
+import { validatePhone, validateRequired } from '@/lib/validation';
 
 export default function EditProfileScreen() {
   const { t } = useTranslation();
@@ -30,7 +30,8 @@ export default function EditProfileScreen() {
 
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
-  const [email, setEmail] = useState(user?.email || '');
+  // Display only — PUT /users/me cannot change an email address.
+  const email = user?.email || '';
   const [phone, setPhone] = useState(user?.phone || '');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});

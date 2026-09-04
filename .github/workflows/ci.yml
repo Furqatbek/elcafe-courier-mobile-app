@@ -14,24 +14,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # npm, matching how releases are actually built. This job used to install
+      # with bun while the release AAB was built locally with npm, so CI was
+      # verifying a different dependency tree than the one that shipped. Two
+      # lock files also meant `expo install` updated whichever one it detected
+      # and left the other stale — which is exactly how expo-asset ended up
+      # missing from package-lock.json.
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+          cache: npm
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Typecheck
-        run: bun run typecheck
+        run: npm run typecheck
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
       - name: Test
-        run: bun run test
+        run: npm run test

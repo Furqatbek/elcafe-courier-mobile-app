@@ -1,14 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, VehicleType, WEBSOCKET_CONFIG } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, VehicleType } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { AppState, AppStateStatus, Platform } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import * as Location from 'expo-location';
 // Foreground location only. There is deliberately no background task and no
 // foreground service: either one pulls in FOREGROUND_SERVICE_LOCATION /
 // ACCESS_BACKGROUND_LOCATION, which re-open the Play declarations this build
 // exists to avoid. Position updates stop when the app leaves the foreground.
-import websocketService, { NewOrderNotification, OrderTakenNotification, AvailableOrdersChannelMessage, OrderChannelMessage, OrderDto, OrderStatusUpdate, WebSocketNotification, LocationConfirmation } from '@/services/websocket';
+import websocketService, { NewOrderNotification, OrderTakenNotification, WebSocketNotification } from '@/services/websocket';
 import { registerDeviceToken, unregisterDeviceToken } from '@/services/pushNotification';
 import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
@@ -373,7 +373,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   const [isLoadingAvailableOrders, setIsLoadingAvailableOrders] = useState(false);
   const [earnings, setEarnings] = useState<EarningsSummary>(DEFAULT_EARNINGS);
   const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
-  const [earningsPeriod, setEarningsPeriod] = useState<EarningsPeriod>('THIS_WEEK');
+  // Fixed, not state: GET /couriers/me/earnings takes no period parameter and
+  // always returns its own computed window, so nothing could ever change
+  // this. It stays on the context only to keep the shape stable for
+  // consumers that display a label.
+  const earningsPeriod: EarningsPeriod = 'THIS_WEEK';
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyPagination, setHistoryPagination] = useState<HistoryPagination>(DEFAULT_HISTORY_PAGINATION);
@@ -954,44 +958,10 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     setIsWebSocketConnected(false);
     setNewOrderOffer(null);
   }, []);
-
-  // Helper: add a new-order notification to state
-  const addNewOrderToState = useCallback((notification: NewOrderNotification) => {
-    setNewOrderOffer(notification);
-    setAvailableOrders((prev) => {
-      try {
-        if (prev.some((o) => o.orderId === notification.orderId)) {
-          return prev;
-        }
-        const newOrder: AvailableOrder = {
-          orderId: notification.orderId,
-          externalOrderNo: notification.externalOrderNo ?? '',
-          restaurantId: notification.restaurantId,
-          restaurantName: notification.restaurantName || 'Restaurant',
-          restaurantAddress: notification.restaurantAddress || '',
-          restaurantLat: notification.restaurantLat || 0,
-          restaurantLng: notification.restaurantLng || 0,
-          deliveryAddress: notification.deliveryAddress || '',
-          deliveryLat: notification.deliveryLat || 0,
-          deliveryLng: notification.deliveryLng || 0,
-          customerName: '',
-          customerPhone: '',
-          status: 'PENDING',
-          deliveryFee: notification.deliveryFee || 0,
-          tipAmount: notification.tipAmount || 0,
-          total: notification.total || notification.deliveryFee || 0,
-          itemCount: notification.itemCount || 0,
-          createdAt: notification.createdAt || new Date().toISOString(),
-          pickupDistance: notification.restaurantDistance,
-          estimatedDistance: notification.deliveryDistance,
-        };
-        return [newOrder, ...prev];
-      } catch (innerError) {
-        logger.error('[CourierContext] Error in setAvailableOrders callback:', innerError);
-        return prev;
-      }
-    });
-  }, []);
+  // A helper that optimistically inserted a pushed new-order notification into
+  // the available list used to live here. Nothing called it — new orders arrive
+  // through handleNewOrderPush and the foreground poll — so it was ~35 lines of
+  // untested order-shaping that would have silently rotted.
 
   // Helper: handle ORDER_TAKEN — remove from available list and dismiss offer
   const handleOrderTaken = useCallback((takenNotification: OrderTakenNotification) => {
@@ -1134,7 +1104,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   // Subscribe to order-specific topics (status updates + taken) for active orders.
   // Topics 3 and 4 are subscribed/unsubscribed dynamically as orders are accepted and completed.
   const subscribeToOrderStatusUpdates = useCallback((orderId: string | number) => {
-    const unsubs: Array<() => void> = [];
+    const unsubs: (() => void)[] = [];
 
     // 3. Full order updates (/topic/orders/{orderId}) — receives full OrderDto.
     // Cancellations/refunds arrive here too: the CANCELLED status propagates
@@ -1514,7 +1484,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
       try {
         data = JSON.parse(text);
-      } catch (e) {
+      } catch {
         // Do not log the raw body — it can contain tokens/PII
         logger.error('Failed to parse login response, status:', response.status);
         throw new Error(`Invalid server response: ${text.substring(0, 100)}`);

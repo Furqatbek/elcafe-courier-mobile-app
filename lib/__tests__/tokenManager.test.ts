@@ -40,7 +40,7 @@ jest.mock('@/services/api', () => ({
 const ACCESS_KEY = TOKEN_CONFIG.ACCESS_TOKEN_KEY;
 const REFRESH_KEY = TOKEN_CONFIG.REFRESH_TOKEN_KEY;
 
-type TokenManagerModule = typeof import('@/services/tokenManager');
+type TokenManagerModule = typeof import('@/services/tokenManager').default;
 type TokenEvent = import('@/services/tokenManager').TokenEvent;
 
 const jsonResponse = (body: unknown, status = 200) => ({
@@ -77,8 +77,11 @@ describe('tokenManager', () => {
     (globalThis as any).fetch = fetchMock;
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // .default: the module exposes one object, not individual named exports.
+    // require, not import: re-required after resetModules() so each test starts
+    // with fresh single-flight state.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    tokenManager = require('@/services/tokenManager');
+    tokenManager = require('@/services/tokenManager').default;
     events = [];
     tokenManager.subscribe((event) => events.push(event));
   });
@@ -111,6 +114,7 @@ describe('tokenManager', () => {
   describe('getTokens — read-only session-restore priming', () => {
     it('loads the stored pair on a cold cache WITHOUT writing to storage', async () => {
       seedSession('access-0', 'refresh-0');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { tokenStorage } = require('@/services/api');
       (tokenStorage.setItem as jest.Mock).mockClear();
 

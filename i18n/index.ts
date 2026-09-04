@@ -46,6 +46,9 @@ const LANGUAGE_DETECTOR = {
   },
 };
 
+// i18next exports both a default instance and a named `use`; this IS the
+// documented way to configure the instance.
+// eslint-disable-next-line import/no-named-as-default-member
 i18n
   .use(initReactI18next)
   .use(LANGUAGE_DETECTOR)

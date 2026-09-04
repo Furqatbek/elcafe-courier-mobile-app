@@ -1,4 +1,7 @@
-import logger, { log, warn, error } from '@/lib/logger';
+import logger from '@/lib/logger';
+
+// logger exposes exactly one shape; these aliases keep the assertions terse.
+const { log, warn, error } = logger;
 
 declare const global: { __DEV__: boolean } & typeof globalThis;
 

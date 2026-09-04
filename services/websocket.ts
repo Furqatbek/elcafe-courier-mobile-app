@@ -1,7 +1,7 @@
 import { Client, IMessage, ReconnectionTimeMode, StompSubscription } from '@stomp/stompjs';
 import { Platform } from 'react-native';
 import { WEBSOCKET_CONFIG } from '@/constants/config';
-import { log, warn, error as logError } from '@/lib/logger';
+import logger from '@/lib/logger';
 
 // WebSocket message types
 // Matches the flat structure sent by the backend
@@ -182,7 +182,7 @@ class WebSocketService {
       ? this.staticToken === tokenOrProvider
       : this.tokenProvider === tokenOrProvider;
     if (this.client && sameAuthSource && (this.isConnecting || this.client.active)) {
-      log('[WebSocket] Already connected or connecting');
+      logger.log('[WebSocket] Already connected or connecting');
       return;
     }
 
@@ -202,7 +202,7 @@ class WebSocketService {
       oldClient.onWebSocketError = () => {};
       oldClient.onStompError = () => {};
       oldClient.deactivate().catch((error) => {
-        warn('[WebSocket] Error deactivating previous client:', error);
+        logger.warn('[WebSocket] Error deactivating previous client:', error);
       });
     }
 
@@ -226,7 +226,7 @@ class WebSocketService {
       }
     }
 
-    log('[WebSocket] Connecting to:', wsUrl);
+    logger.log('[WebSocket] Connecting to:', wsUrl);
 
     this.client = new Client({
       brokerURL: wsUrl,
@@ -251,7 +251,7 @@ class WebSocketService {
         } catch (error) {
           // Provider failed (e.g. refresh network error): keep the previous
           // headers and let this attempt play out; the next retry re-asks.
-          logError('[WebSocket] Failed to obtain access token before connect:', error);
+          logger.error('[WebSocket] Failed to obtain access token before connect:', error);
         }
       },
 
@@ -259,13 +259,16 @@ class WebSocketService {
       ...(Platform.OS === 'web' && {
         webSocketFactory: () => {
           // Dynamic import for web only
+          // require, not import: sockjs-client is web-only and pulling it in
+          // at module scope would bundle it into the native builds too.
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const SockJS = require('sockjs-client');
           return new SockJS(wsUrl);
         },
       }),
 
       onConnect: () => {
-        log('[WebSocket] Connected successfully');
+        logger.log('[WebSocket] Connected successfully');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         this.wasConnected = true;
@@ -276,7 +279,7 @@ class WebSocketService {
       // Fires only on graceful STOMP disconnect (client.deactivate()) —
       // NOT on network drops. Abrupt losses are handled by onWebSocketClose.
       onDisconnect: () => {
-        log('[WebSocket] Disconnected (graceful)');
+        logger.log('[WebSocket] Disconnected (graceful)');
         this.isConnecting = false;
         if (this.wasConnected) {
           this.wasConnected = false;
@@ -291,7 +294,7 @@ class WebSocketService {
       onWebSocketClose: () => {
         this.isConnecting = false;
         if (this.wasConnected) {
-          log('[WebSocket] Connection lost');
+          logger.log('[WebSocket] Connection lost');
           this.wasConnected = false;
           this.onDisconnectedCallback?.();
         }
@@ -306,16 +309,16 @@ class WebSocketService {
         // connection closes after ERROR; exponential reconnect backoff
         // bounds any retry churn.
         if (/denied|forbidden|unauthori[sz]ed|access/i.test(message)) {
-          logError('[WebSocket] SUBSCRIBE rejected by server authorizer:', message);
+          logger.error('[WebSocket] SUBSCRIBE rejected by server authorizer:', message);
         } else {
-          logError('[WebSocket] STOMP error:', message);
+          logger.error('[WebSocket] STOMP error:', message);
         }
         this.isConnecting = false;
         this.onErrorCallback?.(message || 'Connection error');
       },
 
       onWebSocketError: (event) => {
-        logError('[WebSocket] WebSocket error:', event);
+        logger.error('[WebSocket] WebSocket error:', event);
         this.isConnecting = false;
         this.reconnectAttempts++;
 
@@ -333,13 +336,13 @@ class WebSocketService {
    */
   disconnect(): void {
     if (this.client) {
-      log('[WebSocket] Disconnecting...');
+      logger.log('[WebSocket] Disconnecting...');
       this.subscriptions.clear();
       // Intentional disconnect (logout/token change): suppress the
       // lost-connection notification so no re-assert or auto-offline fires
       this.wasConnected = false;
       this.client.deactivate().catch((error) => {
-        warn('[WebSocket] Error during deactivate:', error);
+        logger.warn('[WebSocket] Error during deactivate:', error);
       });
       this.client = null;
       this.tokenProvider = null;
@@ -443,7 +446,7 @@ class WebSocketService {
       return;
     }
 
-    log('[WebSocket] Subscribing to:', destination);
+    logger.log('[WebSocket] Subscribing to:', destination);
 
     const subscription = this.client.subscribe(destination, (message: IMessage) => {
       try {
@@ -451,7 +454,7 @@ class WebSocketService {
         const handlers = this.messageHandlers.get(destination);
         handlers?.forEach((handler) => handler(body));
       } catch (error) {
-        logError('[WebSocket] Failed to parse message:', error);
+        logger.error('[WebSocket] Failed to parse message:', error);
       }
     });
 
@@ -491,7 +494,7 @@ class WebSocketService {
    */
   send(destination: string, body: Record<string, unknown>): void {
     if (!this.client?.connected) {
-      warn('[WebSocket] Cannot send message - not connected');
+      logger.warn('[WebSocket] Cannot send message - not connected');
       return;
     }
 
@@ -503,6 +506,8 @@ class WebSocketService {
 }
 
 // Singleton instance
-export const websocketService = new WebSocketService();
+// Singleton. Exported as the default only — a named export of the same
+// identifier makes `import websocketService from ...` look like an error.
+const websocketService = new WebSocketService();
 
 export default websocketService;

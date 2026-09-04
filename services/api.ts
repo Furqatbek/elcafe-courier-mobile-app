@@ -15,7 +15,7 @@ import {
   IssueType,
   EarningsPeriodType,
 } from '@/constants/config';
-import { error as logError } from '@/lib/logger';
+import logger from '@/lib/logger';
 // NOTE: tokenManager imports tokenStorage back from this module. The cycle is
 // safe because neither module touches the other at module-eval time — all
 // cross-references happen inside functions.
@@ -279,11 +279,11 @@ export interface EarningsSummary {
   totalDeliveries: number;
   avgPerDelivery: number;
   onlineHours: number;
-  breakdown: Array<{
+  breakdown: {
     date: string;
     earnings: number;
     deliveries: number;
-  }>;
+  }[];
 }
 
 export interface Notification {
@@ -343,13 +343,13 @@ class ApiClient {
   // are kept as thin delegates for backward compatibility.
   setTokens(accessToken: string, refreshToken: string) {
     tokenManager.setTokens(accessToken, refreshToken).catch((error) => {
-      logError('Failed to persist tokens:', error);
+      logger.error('Failed to persist tokens:', error);
     });
   }
 
   clearTokens() {
     tokenManager.clearTokens().catch((error) => {
-      logError('Failed to clear tokens:', error);
+      logger.error('Failed to clear tokens:', error);
     });
   }
 

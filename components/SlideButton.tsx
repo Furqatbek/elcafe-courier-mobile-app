@@ -127,7 +127,9 @@ export function SlideButton({ title, onComplete, isLoading, disabled }: SlideBut
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, []);
+    // translateX is useRef(...).current — stable for the component's lifetime,
+    // so listing it changes nothing at runtime.
+  }, [translateX]);
 
   // Web-specific: handle press start on the thumb
   const handlePressIn = (e: any) => {

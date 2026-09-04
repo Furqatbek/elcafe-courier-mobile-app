@@ -23,7 +23,7 @@
 
 import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG } from '@/constants/config';
 import { tokenStorage, NetworkError, ApiRequestError } from '@/services/api';
-import { warn, error as logError } from '@/lib/logger';
+import logger from '@/lib/logger';
 
 // ============================================================================
 // Events
@@ -56,7 +56,7 @@ function notify(event: TokenEvent): void {
     try {
       listener(event);
     } catch (err) {
-      logError('[TokenManager] Token listener failed:', err);
+      logger.error('[TokenManager] Token listener failed:', err);
     }
   });
 }
@@ -65,7 +65,7 @@ function notify(event: TokenEvent): void {
  * Subscribe to token-change events (rotation AND definitive session death).
  * Returns an unsubscribe function.
  */
-export function subscribe(listener: TokenListener): () => void {
+function subscribe(listener: TokenListener): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -81,7 +81,7 @@ export function subscribe(listener: TokenListener): () => void {
  * within TOKEN_CONFIG.REFRESH_THRESHOLD_MS. Returns false when exp cannot be
  * determined — better to attempt using the token than to block on it.
  */
-export const isAccessTokenExpiringSoon = (token: string): boolean => {
+const isAccessTokenExpiringSoon = (token: string): boolean => {
   try {
     const payloadPart = token.split('.')[1];
     const atobFn: ((data: string) => string) | undefined = (globalThis as any).atob;
@@ -121,7 +121,7 @@ async function ensureLoaded(): Promise<void> {
       cacheLoaded = true;
     }
   } catch (err) {
-    logError('[TokenManager] Failed to load tokens from storage:', err);
+    logger.error('[TokenManager] Failed to load tokens from storage:', err);
   }
 }
 
@@ -129,7 +129,7 @@ async function ensureLoaded(): Promise<void> {
  * Current access token: cached, storage-backed. Does NOT check expiry —
  * use getValidAccessToken() when a usable token is required.
  */
-export async function getAccessToken(): Promise<string | null> {
+async function getAccessToken(): Promise<string | null> {
   await ensureLoaded();
   return cachedAccessToken;
 }
@@ -143,7 +143,7 @@ export async function getAccessToken(): Promise<string | null> {
  * would re-persist an already-spent refresh token over a rotated one and
  * kill the session on the next refresh.
  */
-export async function getTokens(): Promise<{ accessToken: string | null; refreshToken: string | null }> {
+async function getTokens(): Promise<{ accessToken: string | null; refreshToken: string | null }> {
   await ensureLoaded();
   return { accessToken: cachedAccessToken, refreshToken: cachedRefreshToken };
 }
@@ -151,7 +151,7 @@ export async function getTokens(): Promise<{ accessToken: string | null; refresh
 /**
  * Persist a new token pair (cache + storage) and notify listeners.
  */
-export async function setTokens(accessToken: string, refreshToken: string): Promise<void> {
+async function setTokens(accessToken: string, refreshToken: string): Promise<void> {
   cachedAccessToken = accessToken;
   cachedRefreshToken = refreshToken;
   cacheLoaded = true;
@@ -165,7 +165,7 @@ export async function setTokens(accessToken: string, refreshToken: string): Prom
  * Used on logout and on definitive session death — clearing storage is what
  * prevents any other JS context from replaying a revoked refresh token.
  */
-export async function clearTokens(): Promise<void> {
+async function clearTokens(): Promise<void> {
   cachedAccessToken = null;
   cachedRefreshToken = null;
   cacheLoaded = true;
@@ -186,7 +186,7 @@ export async function clearTokens(): Promise<void> {
  * 'session-dead' event is emitted), and THROWS on transport/5xx failures
  * (the session may still be valid — nothing is cleared).
  */
-export async function refresh(): Promise<string | null> {
+async function refresh(): Promise<string | null> {
   if (refreshInFlight) {
     return refreshInFlight;
   }
@@ -207,7 +207,7 @@ async function doRefresh(): Promise<string | null> {
   try {
     spentRefreshToken = await tokenStorage.getItem(TOKEN_CONFIG.REFRESH_TOKEN_KEY);
   } catch (err) {
-    logError('[TokenManager] Failed to re-read stored refresh token:', err);
+    logger.error('[TokenManager] Failed to re-read stored refresh token:', err);
   }
   spentRefreshToken = spentRefreshToken ?? cachedRefreshToken;
 
@@ -228,7 +228,7 @@ async function doRefresh(): Promise<string | null> {
     });
   } catch (err: any) {
     // Transport failure — do NOT treat as an auth failure; keep the session
-    logError('[TokenManager] Token refresh network error:', err);
+    logger.error('[TokenManager] Token refresh network error:', err);
     throw new NetworkError(err?.message || 'Token refresh network error');
   }
 
@@ -271,7 +271,7 @@ async function handleDefinitiveRejection(spentRefreshToken: string): Promise<str
     if (storedRefresh && storedRefresh !== spentRefreshToken) {
       const storedAccess = await tokenStorage.getItem(TOKEN_CONFIG.ACCESS_TOKEN_KEY);
       if (storedAccess) {
-        warn('[TokenManager] Refresh rejected but a concurrent rotation succeeded — adopting stored tokens');
+        logger.warn('[TokenManager] Refresh rejected but a concurrent rotation succeeded — adopting stored tokens');
         cachedAccessToken = storedAccess;
         cachedRefreshToken = storedRefresh;
         cacheLoaded = true;
@@ -280,14 +280,14 @@ async function handleDefinitiveRejection(spentRefreshToken: string): Promise<str
       }
     }
   } catch (err) {
-    logError('[TokenManager] Failed to re-check stored tokens after refresh rejection:', err);
+    logger.error('[TokenManager] Failed to re-check stored tokens after refresh rejection:', err);
   }
 
   // Definitive death: purge memory AND storage so no context (foreground or
   // headless) can replay the revoked token, then tell listeners. In a
   // headless context no listeners exist — the foreground discovers the
   // cleared storage on resume/restart and lands on the login screen.
-  warn('[TokenManager] Refresh token definitively rejected — session is dead');
+  logger.warn('[TokenManager] Refresh token definitively rejected — session is dead');
   await clearTokens();
   notify({ type: 'session-dead' });
   return null;
@@ -300,7 +300,7 @@ async function handleDefinitiveRejection(spentRefreshToken: string): Promise<str
  * is returned — it may still be accepted, and the caller's retry loop will
  * come back through here for another refresh attempt.
  */
-export async function getValidAccessToken(): Promise<string | null> {
+async function getValidAccessToken(): Promise<string | null> {
   const token = await getAccessToken();
   if (!token) {
     return null;
@@ -313,11 +313,16 @@ export async function getValidAccessToken(): Promise<string | null> {
     return refreshed ?? cachedAccessToken;
   } catch (err) {
     // Network error during refresh — try the current token anyway
-    warn('[TokenManager] Refresh before use failed, using current token:', err);
+    logger.warn('[TokenManager] Refresh before use failed, using current token:', err);
     return cachedAccessToken;
   }
 }
 
+/**
+ * The single public shape. Each of these used to be exported individually too,
+ * which made `tokenManager.refresh()` indistinguishable from a mistaken default
+ * import. Nothing imported the named forms. Types above stay exported.
+ */
 const tokenManager = {
   getAccessToken,
   getTokens,

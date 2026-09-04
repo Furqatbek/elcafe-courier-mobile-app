@@ -133,7 +133,7 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
-            handleDecline();
+            handleDeclineRef.current();
             return 0;
           }
           return prev - 1;
@@ -148,7 +148,10 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
         cleanup();
       };
     }
-  }, [visible, order, timeoutSeconds]);
+    // cleanup is useCallback([]) and the three Animated values are
+    // useRef(...).current — all stable, so listing them cannot restart the
+    // countdown. handleDecline is deliberately NOT here; see the ref above.
+  }, [visible, order, timeoutSeconds, cleanup, progressAnim, pulseAnim, slideAnim]);
 
   // Safety net: stop timers/vibration/sound whenever the modal is hidden
   useEffect(() => {
@@ -178,6 +181,12 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
     }
   };
 
+  // Held in a ref so the countdown interval always calls the CURRENT version
+  // without the effect having to depend on it. Depending on it directly would
+  // restart the timer on every parent re-render; capturing it once would call a
+  // stale onDecline. This does neither.
+  const handleDeclineRef = useRef<() => void>(() => {});
+
   const handleDecline = useCallback(() => {
     cleanup();
 
@@ -190,6 +199,8 @@ export const OrderOfferModal = React.memo(function OrderOfferModal({
       onDecline();
     });
   }, [cleanup, onDecline, slideAnim]);
+
+  handleDeclineRef.current = handleDecline;
 
   if (!order) return null;
 

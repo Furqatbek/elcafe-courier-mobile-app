@@ -130,7 +130,7 @@ export const validateLicensePlate = (plate: string): ValidationResult => {
 // Validate multiple fields at once
 export interface FieldValidation {
   value: string;
-  validators: Array<(value: string) => ValidationResult>;
+  validators: ((value: string) => ValidationResult)[];
   fieldName: string;
 }
 

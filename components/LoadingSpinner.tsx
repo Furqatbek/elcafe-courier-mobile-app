@@ -42,7 +42,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     animation.start();
 
     return () => animation.stop();
-  }, []);
+  }, [spinValue]);
 
   const getActivitySize = () => {
     switch (size) {
@@ -132,7 +132,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     animation.start();
 
     return () => animation.stop();
-  }, []);
+  }, [opacity]);
 
   return (
     <Animated.View

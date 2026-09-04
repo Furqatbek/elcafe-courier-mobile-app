@@ -8,22 +8,27 @@
  *   are still responsible for not passing PII to `error`.
  */
 
-export const log = (...args: unknown[]): void => {
+const log = (...args: unknown[]): void => {
   if (__DEV__) {
     console.log(...args);
   }
 };
 
-export const warn = (...args: unknown[]): void => {
+const warn = (...args: unknown[]): void => {
   if (__DEV__) {
     console.warn(...args);
   }
 };
 
-export const error = (...args: unknown[]): void => {
+const error = (...args: unknown[]): void => {
   console.error(...args);
 };
 
+/**
+ * The single public shape. These were also exported individually, which made
+ * `logger.error(...)` indistinguishable (to a linter, and to a reader) from a
+ * mistaken default import. One way in means the question does not arise.
+ */
 const logger = { log, warn, error };
 
 export default logger;
