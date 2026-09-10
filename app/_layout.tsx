@@ -113,7 +113,6 @@ function RootLayoutNav() {
       {/* Order Screens */}
       <Stack.Screen name="order/[id]" options={{ headerShown: false, presentation: 'card' }} />
       <Stack.Screen name="order-rating/[orderId]" options={{ headerShown: false, presentation: 'card' }} />
-      <Stack.Screen name="available-orders" options={{ headerShown: true, title: 'Available Orders' }} />
       <Stack.Screen name="report-issue" options={{ headerShown: true, title: 'Report Issue', presentation: 'modal' }} />
 
       {/* Other Screens */}

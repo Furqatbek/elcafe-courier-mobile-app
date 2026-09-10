@@ -13,7 +13,6 @@ import {
   CourierStatusType,
   VehicleType,
   IssueType,
-  EarningsPeriodType,
 } from '@/constants/config';
 import logger from '@/lib/logger';
 // NOTE: tokenManager imports tokenStorage back from this module. The cycle is
@@ -240,50 +239,6 @@ export interface AvailableOrder {
   orderNumber?: string;
   restaurant?: Restaurant;
   estimatedEarnings?: number;
-}
-
-export interface ActiveOrder {
-  orderId: number;
-  orderNumber: string;
-  status: string;
-  restaurant: Restaurant;
-  customer: Customer;
-  deliveryAddress: DeliveryAddress;
-  items: OrderItem[];
-  paymentMethod: string;
-  isPaid: boolean;
-  totalAmount: number;
-  deliveryFee?: number;
-  tip?: number;
-  createdAt: string;
-  acceptedAt?: string;
-  pickedUpAt?: string;
-}
-
-export interface OrderIssueRequest {
-  issueType: IssueType;
-  description: string;
-  photos?: string[];
-}
-
-export interface DeliveryCompleteRequest {
-  deliveryPhoto?: string;
-  deliveryNotes?: string;
-}
-
-export interface EarningsSummary {
-  period: EarningsPeriodType;
-  totalEarnings: number;
-  deliveryFees: number;
-  tips: number;
-  totalDeliveries: number;
-  avgPerDelivery: number;
-  onlineHours: number;
-  breakdown: {
-    date: string;
-    earnings: number;
-    deliveries: number;
-  }[];
 }
 
 export interface Notification {
@@ -530,72 +485,27 @@ export const courierApi = {
 };
 
 // Orders
-export const ordersApi = {
-  getAvailableOrders: (lat?: number, lng?: number, radiusKm?: number) => {
-    let endpoint = API_ENDPOINTS.COURIER.AVAILABLE_ORDERS;
-    const params = new URLSearchParams();
-    if (lat !== undefined) params.append('lat', lat.toString());
-    if (lng !== undefined) params.append('lng', lng.toString());
-    if (radiusKm !== undefined) params.append('radiusKm', radiusKm.toString());
-    const queryString = params.toString();
-    if (queryString) endpoint += `?${queryString}`;
-    return apiClient.get<AvailableOrder[]>(endpoint);
-  },
+// Orders are driven by CourierContext, which owns the state the screens read.
+//
+// An ordersApi used to sit here with a full set of order calls, none of them
+// called from anywhere, and several describing an API that does not exist:
+// getAvailableOrders sent ?lat=&lng=&radiusKm= to an endpoint that takes no
+// parameters and is not distance-filtered; getActiveOrders typed the reply as a
+// nested {restaurant,customer,deliveryAddress,items} object when the endpoint
+// returns the same FLAT shape as available-orders; completeOrder sent a body to
+// a call that takes none. See docs/COURIER_API_REFERENCE.md sections 4 and 5.
 
-  getAvailableOrderDetails: (orderId: string | number) =>
-    apiClient.get<AvailableOrder>(`${API_ENDPOINTS.COURIER.AVAILABLE_ORDERS}/${orderId}`),
-
-  getActiveOrders: () => apiClient.get<ActiveOrder[]>(API_ENDPOINTS.COURIER.ACTIVE_ORDERS),
-
-  getOrderDetail: (orderId: string | number) =>
-    apiClient.get<ActiveOrder>(API_ENDPOINTS.ORDERS.DETAIL(orderId)),
-
-  acceptOrder: (orderId: string | number) =>
-    apiClient.post<ActiveOrder>(API_ENDPOINTS.ORDERS.ACCEPT(orderId)),
-
-  pickupOrder: (orderId: string | number) =>
-    apiClient.put<{ orderId: number; status: string; message: string }>(
-      API_ENDPOINTS.ORDERS.PICKUP(orderId)
-    ),
-
-  startTransit: (orderId: string | number) =>
-    apiClient.put<{ orderId: number; status: string; message: string }>(
-      API_ENDPOINTS.ORDERS.TRANSIT(orderId)
-    ),
-
-  completeOrder: (orderId: string | number, data?: DeliveryCompleteRequest) =>
-    apiClient.post<{ orderId: number; status: string; earnings: number; message: string }>(
-      API_ENDPOINTS.ORDERS.COMPLETE(orderId),
-      data
-    ),
-
-  reportIssue: (orderId: string | number, data: OrderIssueRequest) =>
-    apiClient.post<{ message: string }>(API_ENDPOINTS.ORDERS.ISSUE(orderId), data),
-
-  getOrderHistory: (page = 0, size = 20, dateFrom?: string, dateTo?: string) => {
-    let endpoint = API_ENDPOINTS.COURIER.ORDER_HISTORY;
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('size', size.toString());
-    if (dateFrom) params.append('dateFrom', dateFrom);
-    if (dateTo) params.append('dateTo', dateTo);
-    return apiClient.get<{ content: ActiveOrder[]; totalElements: number; totalPages: number }>(
-      `${endpoint}?${params.toString()}`
-    );
-  },
-};
-
-// Earnings
-export const earningsApi = {
-  getSummary: (period: EarningsPeriodType = 'THIS_WEEK', startDate?: string, endDate?: string) => {
-    let endpoint = API_ENDPOINTS.COURIER.EARNINGS;
-    const params = new URLSearchParams();
-    params.append('period', period);
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-    return apiClient.get<EarningsSummary>(`${endpoint}?${params.toString()}`);
-  },
-};
+// Earnings live on CourierContext.fetchEarnings, which is what the screens use.
+//
+// An earningsApi.getSummary() used to sit here, uncalled, describing an endpoint
+// that does not exist: it appended ?period=&startDate=&endDate= to
+// GET /couriers/me/earnings, which takes no parameters and always returns its
+// own computed window, and typed the reply as { period, deliveryFees, tips,
+// avgPerDelivery, onlineHours, breakdown[] } — none of which the API returns.
+// The real shape (todayEarnings/weekEarnings/monthEarnings/totalEarnings,
+// cash vs card, withdrawableBalance, ...) is EarningsSummary in
+// context/CourierContext.tsx. Dead code that contradicts the contract is worse
+// than no code: the next person to need earnings would have reached for it.
 
 // Notifications
 export const notificationsApi = {
@@ -623,8 +533,6 @@ export const notificationsApi = {
 export const api = {
   auth: authApi,
   courier: courierApi,
-  orders: ordersApi,
-  earnings: earningsApi,
   notifications: notificationsApi,
   client: apiClient,
 };

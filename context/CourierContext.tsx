@@ -585,13 +585,26 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
           setOrderHistory(orders);
         }
 
-        // Update pagination info
+        // The page index field is `page`, not Spring's `number` — see
+        // docs/COURIER_API_REFERENCE.md section 4. Reading `number` gave
+        // undefined, and `undefined < n` is false, so hasMore was ALWAYS false
+        // and order history silently stopped at the first page however much
+        // the courier had delivered.
+        //
+        // `last` answers the question directly when present; the arithmetic is
+        // the fallback, computed from the page we asked for rather than from a
+        // field that may not come back.
+        const currentPage = historyData.page ?? page;
+        const totalPages = historyData.totalPages ?? 1;
         setHistoryPagination({
-          page: historyData.number ?? page,
+          page: currentPage,
           size: historyData.size ?? size,
-          totalPages: historyData.totalPages ?? 1,
+          totalPages,
           totalElements: historyData.totalElements ?? orders.length,
-          hasMore: historyData.number < (historyData.totalPages - 1),
+          hasMore:
+            typeof historyData.last === 'boolean'
+              ? !historyData.last
+              : currentPage < totalPages - 1,
         });
       }
     } catch (error) {

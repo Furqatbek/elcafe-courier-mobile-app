@@ -92,7 +92,19 @@ export default function BecomeCourierScreen() {
       toast.success(t('become_courier.success'));
       router.replace('/verification-pending');
     } catch (error: any) {
-      toast.error(error.message || t('become_courier.error'));
+      // "Courier already exists with userId : '42'" is a 400, but it means the
+      // profile is already there — the reference says to treat it as success.
+      // Showing it as an error left a courier who had registered before (a
+      // reinstall, a second device, a retry after a dropped response) stuck on
+      // this screen with no way forward: registering again always fails, and
+      // one user can only ever have one courier profile.
+      const message: string = error?.message ?? '';
+      if (/already exists/i.test(message)) {
+        await fetchCourierProfile();
+        router.replace('/verification-pending');
+        return;
+      }
+      toast.error(message || t('become_courier.error'));
     } finally {
       setIsLoading(false);
     }

@@ -31,6 +31,30 @@ the reference; it does not mean a real request was observed.
 | 15 | `POST /couriers/register`: only `vehicleType` required | Required licence **and** plate from everyone | Fixed in the previous change — `WALKING`/`BICYCLE`/`E_BIKE` couriers could not register at all. |
 | 16 | Endpoints missing from the shared table | Reviews and rating hardcoded at call sites | Now in `API_ENDPOINTS`, locked by `lib/__tests__/api-contract.test.ts`. |
 
+## 1b. Second pass — found after the code had moved on
+
+Re-verified every point against the current tree (the first pass predates the
+config rewrite, the logger refactor and the dead-code sweep). Four more:
+
+| # | Contract | Was | Consequence |
+|---|---|---|---|
+| 17 | `400 Courier already exists with userId` → treat as success | `toast.error`, stay on the form | **A courier who had already registered could never get in.** A reinstall, a second device, or a retry after a dropped response all land here, and registering again always fails — one user gets one courier profile, forever. |
+| 18 | History pages carry `page`, not Spring's `number` | `hasMore: historyData.number < (totalPages - 1)` | `undefined < n` is `false`, so **hasMore was always false** and order history silently stopped at the first page however much the courier had delivered. Now prefers the `last` flag the API actually sends. |
+| 19 | `GET /couriers/me/earnings` takes no parameters | A dead `earningsApi.getSummary()` sent `?period=&startDate=&endDate=` and typed the reply as `{period, deliveryFees, tips, avgPerDelivery, onlineHours, breakdown[]}` — **none** of which the API returns | Never called, so it broke nothing; but it was the thing the next person would have reached for. Removed; the real shape lives on `CourierContext`. |
+| 20 | Available orders take no parameters and are not distance-filtered | `app/available-orders.tsx` — an orphan screen, registered in the router but linked from nowhere — sent `?lat=&lng=&radiusKm=`, took a **GPS fix per refresh** to build them, and called `requestForegroundPermissionsAsync()` directly | A second, divergent copy of a list the tabs already show. Worse than stale: the direct permission request bypasses the LocationDisclosureModal that the rest of the app is built around, which is the Play prominent-disclosure rule. Deleted, with its route and the uncalled `ordersApi` whose other members also described a non-existent API (nested order DTOs, a body on `complete`). |
+
+The shape of all four is the same: **code nothing calls, contradicting the
+contract, sitting where someone would find it and trust it.** Item 17 is the
+exception — that one was live and blocking.
+
+## 1c. Deliberate deviation
+
+`PUT /couriers/me/location` sends `accuracy`, `heading` and `speed` alongside
+`latitude`/`longitude`. The reference lists only the two coordinates, so the
+extras are almost certainly dropped by the DTO. Left in place: unknown fields
+are ignored, and if the backend ever starts recording them the data is already
+arriving. Costs a few bytes per update.
+
 ## 2. Already correct — verified, not assumed
 
 - Order transitions and their verbs: `accept` POST, `pickup` PUT, `transit` PUT,
