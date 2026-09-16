@@ -202,6 +202,7 @@ function NotificationHandler() {
     fetchNotifications,
     fetchUnreadCount,
     handleNewOrderPush,
+    fetchAvailableOrders,
     isOnline,
     isAuthenticated,
     isSessionLoading,
@@ -279,6 +280,11 @@ function NotificationHandler() {
       // Handle NEW_DELIVERY_AVAILABLE tap - navigate to available order
       if (notificationType === PUSH_TYPES.NEW_DELIVERY_AVAILABLE && data?.orderId) {
         logger.log('[Notification] Navigating to available order:', data.orderId);
+        // The detail screen reads the order out of the in-memory available list,
+        // which is empty on a cold start — tapping the push went straight to
+        // "order not found" until the 20s poll happened to fill it. Kick the
+        // fetch off now so the list is populated by the time it renders.
+        fetchAvailableOrders().catch(() => {});
         navigateWhenReady(`/available-order/${data.orderId}`);
         return;
       }
@@ -311,11 +317,10 @@ function NotificationHandler() {
 
         // Only show modal if courier is online
         if (isOnline) {
-          handleNewOrderPush({
-            orderId: data?.orderId as string | number | undefined,
-            orderNumber: data?.orderNumber as string | undefined,
-            restaurantName: data?.restaurantName as string | undefined,
-          });
+          // Pass the payload WHOLE. This used to copy three fields out of it,
+          // so everything the backend sent about the money, the pickup and the
+          // drop-off was thrown away here and the offer card rendered empty.
+          handleNewOrderPush(data);
         } else {
           // Show toast if offline
           const title = notification.request.content.title || 'New Delivery';

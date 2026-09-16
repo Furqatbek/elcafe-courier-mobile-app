@@ -55,6 +55,7 @@ const CONSUMED_EXPO_PUBLIC_ENV: Record<string, string | undefined> = {
   EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL,
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
   EXPO_PUBLIC_CRASH_ENDPOINT: process.env.EXPO_PUBLIC_CRASH_ENDPOINT,
+  EXPO_PUBLIC_WEBSOCKET_ENABLED: process.env.EXPO_PUBLIC_WEBSOCKET_ENABLED,
 };
 
 /**
@@ -421,6 +422,30 @@ export const NAVIGATION_URLS = {
 } as const;
 
 // WebSocket Configuration (STOMP over SockJS)
+/**
+ * Feature switches that change how much work the backend is asked to hold open.
+ */
+export const FEATURES = {
+  /**
+   * STOMP live updates. Default ON; set EXPO_PUBLIC_WEBSOCKET_ENABLED=false to
+   * run on push alone.
+   *
+   * The socket is NOT how a courier learns about a new order — FCM/APNs is, and
+   * always was. A socket only delivers while the app is foregrounded and
+   * connected, which is exactly when a riding courier is not looking, and it
+   * costs the backend one held connection per courier. Push costs it nothing:
+   * the connection is held by the phone's OS and shared by every app on the
+   * device, and Google/Apple do the fan-out.
+   *
+   * What the socket adds is in-app liveness while the courier IS looking —
+   * an order disappearing from the list the moment someone else takes it,
+   * status changes landing without waiting for the next poll. Useful, not
+   * load-bearing. Turning it off costs a few seconds of freshness on screens
+   * that already poll; it costs nothing in orders missed.
+   */
+  WEBSOCKET_ENABLED: process.env.EXPO_PUBLIC_WEBSOCKET_ENABLED !== 'false',
+} as const;
+
 export const WEBSOCKET_CONFIG = {
   // Native WebSocket endpoint for mobile apps
   URL: enforceSecureTransport(process.env.EXPO_PUBLIC_WS_URL || `${BASE_URL}/ws`),

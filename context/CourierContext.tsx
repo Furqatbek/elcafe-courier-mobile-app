@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, VehicleType } from '@/constants/config';
+import { BASE_URL, API_ENDPOINTS, TOKEN_CONFIG, ORDER_CONFIG, LOCATION_CONFIG, IssueType, VehicleType, FEATURES } from '@/constants/config';
 import createContextHook from '@nkzw/create-context-hook';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
@@ -14,6 +14,7 @@ import tokenManager from '@/services/tokenManager';
 import logger from '@/lib/logger';
 import { errorFromResponse } from '@/lib/errors';
 import { distanceMeters } from '@/lib/formatting';
+import { parseNewOrderPush, isOfferRenderable } from '@/lib/pushPayload';
 
 export type OrderStatus = 'PENDING' | 'COURIER_ASSIGNED' | 'READY' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
 // OFFLINE / AVAILABLE / ON_BREAK are courier-selectable. BUSY is set by the
@@ -873,6 +874,13 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     }
   }, [authenticatedFetch]);
 
+  // Held in a ref so handleNewOrderPush can reach it without depending on it.
+  // The push handler is passed to a notification listener that is registered
+  // once; depending on fetchAvailableOrders directly would leave that listener
+  // holding whichever version existed when it was installed.
+  const fetchAvailableOrdersRef = useRef<typeof fetchAvailableOrders | null>(null);
+  fetchAvailableOrdersRef.current = fetchAvailableOrders;
+
   // Refresh all data including courier status from backend
   const refreshData = useCallback(async () => {
     if (!user) return;
@@ -913,6 +921,15 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // WebSocket connection management
   const connectWebSocket = useCallback(() => {
+    // Push is the primary channel for new-order alerts; the socket only adds
+    // in-app liveness while the courier is looking at the screen. When it is
+    // switched off the app keeps working entirely on FCM/APNs plus the existing
+    // foreground poll, and the backend holds no connection per courier.
+    if (!FEATURES.WEBSOCKET_ENABLED) {
+      logger.log('[CourierContext] WebSocket disabled (EXPO_PUBLIC_WEBSOCKET_ENABLED=false)');
+      return;
+    }
+
     // Set up event handlers
     websocketService.onConnected(() => {
       logger.log('[CourierContext] WebSocket connected');
@@ -1181,31 +1198,45 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
   }, []);
 
   // Handle push notification for new delivery (FCM NEW_DELIVERY_AVAILABLE)
-  const handleNewOrderPush = useCallback((data: {
-    orderId?: string | number;
-    orderNumber?: string;
-    restaurantName?: string;
-  }) => {
-    if (!data.orderId) {
-      logger.log('[CourierContext] Push notification missing orderId');
+  /**
+   * A NEW_DELIVERY_AVAILABLE push became an order offer.
+   *
+   * Push is the PRIMARY path for this, not a fallback for the WebSocket: a
+   * socket only delivers while the app is open and connected, and a courier is
+   * riding with the app backgrounded most of the time. It is also the only one
+   * that costs the backend nothing to hold open.
+   *
+   * This used to keep three fields — orderId, orderNumber, restaurantName —
+   * and hardcode restaurantId: 0, itemCount: 0, no fee, no addresses. The modal
+   * then rendered an empty card asking the courier to accept a job with no
+   * stated pay and no destination. Everything the push carries is now kept
+   * (see lib/pushPayload.ts for why the coercion is not trivial: FCM data
+   * values are all strings).
+   *
+   * When the payload is too thin to show — an id and nothing else — the offer
+   * is NOT rendered as a shell. The push has still done its job by waking the
+   * app, so we refetch the list and let the normal new-order path pick it up
+   * with real data.
+   */
+  const handleNewOrderPush = useCallback((data: Record<string, unknown> | null | undefined) => {
+    const offer = parseNewOrderPush(data);
+    if (!offer) {
+      logger.log('[CourierContext] NEW_DELIVERY_AVAILABLE push carried no usable orderId');
       return;
     }
 
-    const orderId = typeof data.orderId === 'string' ? parseInt(data.orderId, 10) : data.orderId;
+    if (!isOfferRenderable(offer)) {
+      logger.log(
+        '[CourierContext] Thin push payload for order',
+        offer.orderId,
+        '- refetching rather than showing an empty offer'
+      );
+      fetchAvailableOrdersRef.current?.();
+      return;
+    }
 
-    logger.log('[CourierContext] Handling NEW_DELIVERY_AVAILABLE push:', orderId);
-
-    // Create a minimal NewOrderNotification to trigger the modal
-    const notification: NewOrderNotification = {
-      type: 'NEW_ORDER',
-      orderId,
-      externalOrderNo: data.orderNumber,
-      restaurantId: 0,
-      restaurantName: data.restaurantName || 'Restaurant',
-      itemCount: 0,
-    };
-
-    setNewOrderOffer(notification);
+    logger.log('[CourierContext] NEW_DELIVERY_AVAILABLE push -> offer', offer.orderId);
+    setNewOrderOffer(offer);
   }, []);
 
   // Clear order taken event (after user acknowledges it)
