@@ -42,6 +42,54 @@ them in `.env` at the repo root (Expo loads it) or launch Xcode from a terminal
 that has them exported. If you get the config error screen instead of the app,
 this is why.
 
+## 0b. A version train closes once it has been submitted
+
+Apple rejected the first upload of 1.0.1's predecessor with:
+
+```
+90062  CFBundleShortVersionString [1.0.0] must contain a higher version
+       than that of the previously approved version [1.0.0]
+90186  Invalid Pre-Release Train. The train version '1.0.0' is closed
+       for new build submissions
+```
+
+A **version train** is the `CFBundleShortVersionString`, e.g. `1.0.0`. You may
+upload as many builds as you like into an open train — that is what the build
+number is for. But once a version has been through review and been acted on,
+that train **closes permanently**. No further build can carry it, whatever its
+build number.
+
+So the rule for a resubmission after a rejection is not one rule but two:
+
+| Situation | What to do |
+|---|---|
+| Build failed upload, or TestFlight only — the version never went to review | Keep the version; the fresh build number is enough. |
+| The version was **submitted** and rejected or approved | **Bump the version**: `npm run bump 1.0.1`. Then create that version in App Store Connect and attach the build to it. |
+
+The build number cannot help here. It is derived and always unique
+(scripts/build-number.js), but Apple is refusing on the version *name*.
+
+After bumping, commit `app.config.ts` — the version name is tracked, unlike the
+build number.
+
+## 0c. "Upload Symbols Failed" is a warning, not a failure
+
+```
+The archive did not include a dSYM for React.framework …
+                               ReactNativeDependencies.framework …
+                               hermes.framework …
+```
+
+These three ship as prebuilt XCFrameworks in React Native 0.81 and carry no
+dSYMs. The build still uploads and processes normally — the only cost is that a
+crash inside those frameworks arrives at App Store Connect unsymbolicated.
+
+Nothing in this repo can produce them: they are binary artifacts of the React
+Native distribution, not something the app compiles. To stop seeing the warning,
+uncheck **"Upload your app's symbols"** in the Distribute App flow. Leave it
+checked if you want symbolication for your OWN code, which does have dSYMs —
+the warning is per-framework, not per-archive.
+
 ## 0. What will get this app rejected
 
 Ordered by how likely it is to bite:
