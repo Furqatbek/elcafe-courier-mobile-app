@@ -42,6 +42,60 @@ them in `.env` at the repo root (Expo loads it) or launch Xcode from a terminal
 that has them exported. If you get the config error screen instead of the app,
 this is why.
 
+## 0a-2. 1.0.1 shipped a SIGBUS on launch — pin native module versions
+
+Build 1426033 (1.0.1) reached the App Store and crashed 125ms into launch on
+every device. Crash `C23CF3EE-87CD-433B-A1E5-957A558D8F76`:
+
+```
+EXC_BAD_ACCESS (SIGBUS) KERN_PROTECTION_FAILURE   main thread
+  -[RCTComponentViewFactory registerComponentViewClass:]
+  → ComponentDescriptorProviderRegistry::add
+  → <app> +899584 / +905860 / +911148          (unsymbolicated)
+  → BaseViewProps::BaseViewProps(PropsParserContext, …)
+  → YogaStylableProps → Props::Props()          ← here
+```
+
+That is Fabric registering a native component's descriptor at startup. The
+component's codegen'd `Props` struct did not match `React.framework`'s layout,
+so the constructor wrote into protected memory — an ABI mismatch between a
+native module and React Native, not an app-code bug.
+
+**Cause: `react-native-safe-area-context` drifted from 5.6.1 to 5.6.2.** It
+ships `ios/Fabric/RNCSafeAreaProviderComponentView.h`, registered through
+exactly the frame above. `package.json` declared `~5.6.0`, which floats.
+
+It drifted because this project carried **two lock files**. The approved 1.0.0
+build was installed from `bun.lock` (5.6.1); 1.0.1 was installed with `npm ci`
+from `package-lock.json` (5.6.2), after the lock files were consolidated onto
+npm. The two had disagreed for some time and nothing surfaced it — the
+consolidation simply picked the side that had 5.6.2.
+
+Now pinned exactly: `"react-native-safe-area-context": "5.6.1"`.
+
+### The rule this buys
+
+**Native modules with Fabric components get exact versions, not ranges.** A
+caret or tilde on one of these is a silent ABI bet re-rolled on every install,
+and it does not fail at build time, in tests, in a typecheck, or in review — it
+fails as a bus error on a user's phone. The app's own code cannot defend against
+it.
+
+The same argument applies to `react-native-screens`,
+`react-native-gesture-handler`, `react-native-maps`, `react-native-svg` and the
+`expo-*` view modules. They are on ranges today. Pin them at the next
+deliberate dependency bump, and verify on a device after each one.
+
+### Checking for drift
+
+```bash
+npm ls react-native-safe-area-context react-native-screens \
+       react-native-gesture-handler react-native-maps react-native-svg
+```
+
+Run this after any dependency change, and compare against the versions in the
+last build that launched.
+
 ## 0b. A version train closes once it has been submitted
 
 Apple rejected the first upload of 1.0.1's predecessor with:
