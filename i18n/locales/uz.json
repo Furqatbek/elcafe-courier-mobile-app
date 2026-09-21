@@ -786,5 +786,14 @@
     "offline_note": "Siz oflayn bo'lganingizda yoki ilova yopiq bo'lganda joylashuvingiz to'planmaydi.",
     "agree": "Roziman",
     "not_now": "Hozir emas"
+  },
+  "update": {
+    "available_title": "Yangi versiya mavjud",
+    "available_message": "{{version}} versiyasi o'rnatishga tayyor.",
+    "action": "Yangilash",
+    "required_title": "Yangilash talab qilinadi",
+    "required_message": "Eng so'nggi imkoniyat va yaxshilanishlardan foydalanishda davom etish uchun ilovani yangilang.",
+    "action_now": "Hozir yangilash",
+    "current_version": "Sizda {{version}} versiyasi"
   }
 }

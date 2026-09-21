@@ -4,6 +4,8 @@
 // origin via EXPO_PUBLIC_RORK_API_BASE_URL and are forced onto TLS
 // (http:// is upgraded to https://, ws:// to wss://).
 
+import * as Application from 'expo-application';
+
 /**
  * Upgrade plaintext transport schemes to their TLS equivalents
  * (http:// → https://, ws:// → wss://).
@@ -56,6 +58,8 @@ const CONSUMED_EXPO_PUBLIC_ENV: Record<string, string | undefined> = {
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
   EXPO_PUBLIC_CRASH_ENDPOINT: process.env.EXPO_PUBLIC_CRASH_ENDPOINT,
   EXPO_PUBLIC_WEBSOCKET_ENABLED: process.env.EXPO_PUBLIC_WEBSOCKET_ENABLED,
+  EXPO_PUBLIC_IOS_APP_STORE_URL: process.env.EXPO_PUBLIC_IOS_APP_STORE_URL,
+  EXPO_PUBLIC_ANDROID_PLAY_STORE_URL: process.env.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL,
 };
 
 /**
@@ -190,6 +194,15 @@ export const API_ENDPOINTS = {
     READ_BATCH: '/api/v1/notifications/read-batch',
     DISMISS: (id: string | number) => `/api/v1/notifications/${id}/dismiss`,
     BULK_ACTION: '/api/v1/notifications/bulk-action',
+  },
+
+  // App release metadata — the version gate polls this on launch and resume.
+  //
+  // Deliberately NOT under /api/v1: the version check has to keep working when
+  // the rest of the API has moved on to a version this build does not speak,
+  // which is precisely the situation it exists to get the courier out of.
+  APP: {
+    VERSION: '/api/app/version',
   },
 
   // Device tokens for push notifications
@@ -352,10 +365,55 @@ export const FEATURE_FLAGS = {
   ENABLE_PHONE_LOGIN: true,
 } as const;
 
+/**
+ * Where to send a courier who needs to update.
+ *
+ * Per-platform and kept apart on purpose: an iOS device sent to a Play listing
+ * gets a web page it cannot install from, and vice versa. The two are never
+ * interchangeable, so they are never one value.
+ *
+ * The backend may also return a `storeUrl`. That is preferred when present —
+ * but only after checking it belongs to THIS platform, because a single
+ * `storeUrl` field in one JSON document cannot be right for both. See
+ * services/appVersion.ts.
+ */
+export const STORE_URLS = {
+  IOS: process.env.EXPO_PUBLIC_IOS_APP_STORE_URL || 'https://apps.apple.com/app/id6807758268',
+  ANDROID:
+    process.env.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL ||
+    'https://play.google.com/store/apps/details?id=app.zbr.courier',
+} as const;
+
+/**
+ * How the version gate behaves. See components/UpdateGate.tsx.
+ */
+export const VERSION_CHECK_CONFIG = {
+  /** Don't re-prompt about the same version more often than this. */
+  OPTIONAL_PROMPT_COOLDOWN_MS: 24 * 60 * 60 * 1000,
+  /** Don't re-check on every resume; a release does not land minute to minute. */
+  MIN_CHECK_INTERVAL_MS: 60 * 60 * 1000,
+  /** The check must never delay or block startup if the endpoint is slow. */
+  REQUEST_TIMEOUT_MS: 8000,
+} as const;
+
 // App Configuration
 export const APP_CONFIG = {
-  VERSION: '1.0.0',
-  BUILD_NUMBER: '1',
+  /**
+   * The version this build actually is, read from the binary at runtime
+   * (CFBundleShortVersionString on iOS, versionName on Android) rather than
+   * copied here by hand.
+   *
+   * It was the literal '1.0.0' while the app shipped 1.0.1 and 1.0.2, so every
+   * crash report and every POST /device-tokens has been claiming a version that
+   * has not been current since the first release. A version CHECK built on a
+   * hardcoded string would be worse than useless: it would compare the wrong
+   * number and either nag forever or never nag at all.
+   *
+   * Falls back to the app.config.ts value only where there is no native binary
+   * to ask (web, and the jest environment).
+   */
+  VERSION: Application.nativeApplicationVersion ?? '1.0.2',
+  BUILD_NUMBER: Application.nativeBuildVersion ?? '1',
   MIN_PASSWORD_LENGTH: 6,
   MAX_PASSWORD_LENGTH: 128,
   PHONE_REGEX: /^\+?[\d\s-()]+$/,

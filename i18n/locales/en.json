@@ -786,5 +786,14 @@
     "offline_note": "Your location is not collected while you are offline or the app is closed.",
     "agree": "Agree",
     "not_now": "Not now"
+  },
+  "update": {
+    "available_title": "New version available",
+    "available_message": "Version {{version}} is ready to install.",
+    "action": "Update",
+    "required_title": "Update required",
+    "required_message": "Please update the app to continue using the latest features and improvements.",
+    "action_now": "Update now",
+    "current_version": "You have version {{version}}"
   }
 }

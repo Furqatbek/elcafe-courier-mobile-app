@@ -10,6 +10,7 @@ import { ORDER_CONFIG, CONFIG_ERROR } from '@/constants/config';
 import { CourierProvider, useCourier } from "@/context/CourierContext";
 
 import { ToastProvider, useToast } from "@/components/Toast";
+import { UpdateGate } from "@/components/UpdateGate";
 import { Logo } from "@/components/Logo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Colors from "@/constants/colors";
@@ -412,6 +413,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ToastProvider>
+          {/* Version gate: needs the toast host, needs nothing else. Sits
+              outside CourierProvider on purpose — a courier stuck on a build the
+              backend no longer serves may not be able to log in at all, and that
+              is exactly when they most need to be told to update. */}
+          <UpdateGate />
           <CourierProvider>
             <ErrorBoundary onError={(error) => reportCrash(error, false)}>
               <NotificationHandler />

@@ -18,6 +18,15 @@ interface Toast {
   title: string;
   message?: string;
   duration?: number;
+  /**
+   * Optional action button, e.g. "Update" on the new-version toast.
+   *
+   * Tapping it dismisses the toast and runs onPress. A toast carrying an action
+   * is something the user is meant to act on, so give it a longer duration than
+   * the default when you raise it — the default is tuned for "read and forget".
+   */
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface ToastContextValue {
@@ -132,6 +141,23 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onHide }) => {
         <Text style={styles.title}>{toast.title}</Text>
         {toast.message && <Text style={styles.message}>{toast.message}</Text>}
       </View>
+      {toast.actionLabel && toast.onAction && (
+        <TouchableOpacity
+          onPress={() => {
+            // Dismiss first: the action usually opens the store, which
+            // backgrounds the app, and a toast left mid-animation reappears on
+            // return with its timer already expired.
+            hideAnimation();
+            toast.onAction?.();
+          }}
+          style={styles.actionButton}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={[styles.actionLabel, { color: colors.icon }]}>
+            {toast.actionLabel}
+          </Text>
+        </TouchableOpacity>
+      )}
       <TouchableOpacity onPress={hideAnimation} style={styles.closeButton}>
         <X size={18} color={Colors.textSecondary} />
       </TouchableOpacity>
@@ -227,6 +253,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     lineHeight: 20,
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  actionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   closeButton: {
     padding: 4,

@@ -283,3 +283,64 @@ the saved connections as a bonus rather than the reason.
    device and repeat step 4. These vendors delay or drop high-priority push
    aggressively; couriers should be prompted to exempt the app, and you should
    know what the delay looks like before a courier reports it as a missed order.
+
+---
+
+# Appendix — `GET /api/app/version`
+
+The app polls this on launch and on resume to decide whether to nag a courier to
+update, or to stop them using a build you no longer support.
+
+**Unauthenticated, and deliberately not under `/api/v1`.** It has to keep
+answering when the app and the backend disagree about everything else — that is
+the situation it exists to get the courier out of. A courier on a build too old
+to log in still needs to be told to update.
+
+```json
+{
+  "latestVersion": "1.4.0",
+  "minimumVersion": "1.2.0",
+  "updateRequired": false,
+  "storeUrl": "https://apps.apple.com/app/id6807758268"
+}
+```
+
+The standard `{ success, data }` envelope is accepted too; the app unwraps it if
+present.
+
+| Field | Effect |
+|---|---|
+| `latestVersion` | Installed version below it → non-blocking toast with an "Update" action. |
+| `minimumVersion` | Installed version below it → **blocking dialog**, no way past. |
+| `updateRequired` | Promotes an optional update to blocking. Cannot create one: a courier already on the newest build is never blocked, because the dialog's only button would send them to a store page reading "Open". |
+| `storeUrl` | Optional. Used **only if it matches the requesting platform** — see below. |
+
+## `storeUrl` and platforms
+
+One `storeUrl` in one JSON document cannot be right for both platforms. The app
+therefore validates it (`apps.apple.com` / `itunes.apple.com` / `itms-apps://`
+on iOS, `play.google.com/store/apps` / `market://` on Android) and falls back to
+its own configured URL when it does not match.
+
+So sending a Play link to an iPhone is harmless — but it is also pointless.
+Either omit `storeUrl` and let the app use its configured links, or branch on
+the platform. The app sends its platform in `POST /device-tokens`; this endpoint
+has no body, so if you want to branch here, read `User-Agent` or add a query
+parameter and tell us.
+
+## Versions are compared numerically
+
+`1.10.0` is newer than `1.9.0`; `2.0.0` is newer than `1.99.99`. Send plain
+`MAJOR.MINOR.PATCH`. Prerelease and build metadata (`1.2.3-beta+sha`) are
+ignored rather than ranked, so do not rely on them to express ordering.
+
+Anything unparseable is treated as "no opinion" and the courier is left alone —
+the check fails **open**, because a malformed version string must never be able
+to lock a working app.
+
+## Rate
+
+The app checks at most once an hour, and will not re-prompt about the same
+version for 24 hours after a courier has seen it. A new `latestVersion` always
+prompts immediately regardless. The endpoint should expect roughly one request
+per courier per hour of active use, and can be cached aggressively.
