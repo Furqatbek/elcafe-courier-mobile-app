@@ -12,11 +12,22 @@
  *
  * Usage:
  *   node scripts/bump-version.mjs 1.1.0          set the version
+ *   node scripts/bump-version.mjs --patch        1.0.2 -> 1.0.3
+ *   node scripts/bump-version.mjs --minor        1.0.2 -> 1.1.0
+ *   node scripts/bump-version.mjs --major        1.0.2 -> 2.0.0
  *   node scripts/bump-version.mjs 1.1.0 --dry-run
  *   node scripts/bump-version.mjs                print the current state
  *   node scripts/bump-version.mjs --config path  (testing)
  *
  * Commit the change: `version` is tracked, unlike the build number.
+ *
+ * WHY --patch exists, given this is meant to be deliberate: App Store Connect
+ * closes a version's "pre-release train" the moment a build under it is
+ * submitted for review. After that, every further upload carrying the same
+ * CFBundleShortVersionString is rejected with 90062/90186 — no matter how high
+ * the build number is. So on iOS the marketing version is burned per UPLOAD,
+ * not per release, and `npm run release:ios` bumps it as part of preparing one.
+ * Play has no such rule: a new versionCode under the same versionName is fine.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -73,9 +84,29 @@ function replaceField(source, key, nextValue) {
   );
 }
 
+const STEPS = ['major', 'minor', 'patch'];
+
+/**
+ * Apply a semantic step, resetting everything below it.
+ *
+ * @param {string} current MAJOR.MINOR.PATCH
+ * @param {'major'|'minor'|'patch'} step
+ */
+function stepVersion(current, step) {
+  const [major, minor, patch] = current.split('.').map(Number);
+  if (step === 'major') return `${major + 1}.0.0`;
+  if (step === 'minor') return `${major}.${minor + 1}.0`;
+  return `${major}.${minor}.${patch + 1}`;
+}
+
 function main(argv) {
   const args = argv.slice(2);
   const dryRun = args.includes('--dry-run');
+  const steps = STEPS.filter((step) => args.includes(`--${step}`));
+
+  if (steps.length > 1) {
+    fail(`pass at most one of --${STEPS.join(', --')}; got --${steps.join(', --')}.`);
+  }
 
   const configIndex = args.indexOf('--config');
   if (configIndex !== -1 && !args[configIndex + 1]) {
@@ -98,6 +129,12 @@ function main(argv) {
   if (positional.length > 1) {
     fail(`expected at most one version argument, got: ${positional.join(', ')}`);
   }
+  if (positional.length > 0 && steps.length > 0) {
+    fail(
+      `refusing to guess: got both an explicit version (${positional[0]}) and --${steps[0]}. ` +
+        'Pass one or the other.'
+    );
+  }
   const requestedVersion = positional[0];
 
   if (requestedVersion && !/^\d+\.\d+\.\d+$/.test(requestedVersion)) {
@@ -115,18 +152,24 @@ function main(argv) {
   }
 
   const current = { version: readField(source, 'version').value };
-  const next = { version: requestedVersion ?? current.version };
+  // `--patch` and friends are resolved against whatever the config says now, so
+  // the caller never has to know the current version to move past it.
+  const targetVersion =
+    requestedVersion ?? (steps[0] ? stepVersion(current.version, steps[0]) : undefined);
+  const next = { version: targetVersion ?? current.version };
 
   // Called with no version: report, change nothing. Useful for checking what a
   // build is about to ship as.
-  if (!requestedVersion) {
+  if (!targetVersion) {
     console.log(`version            ${current.version}`);
     console.log(`build number       ${resolveBuildNumber()}  (derived now; every build gets a fresh one)`);
-    console.log('\nPass a version to change it, e.g. `npm run bump 1.1.0`.');
+    console.log(
+      '\nPass a version to change it, e.g. `npm run bump 1.1.0`, or `npm run bump --  --patch`.'
+    );
     return;
   }
 
-  if (requestedVersion) {
+  {
     const asTuple = (v) => v.split('.').map(Number);
     const [curMajor, curMinor, curPatch] = asTuple(current.version);
     const [nxtMajor, nxtMinor, nxtPatch] = asTuple(next.version);
@@ -169,7 +212,9 @@ function main(argv) {
       'The build number is not: it is derived at build time and needs nothing from you.\n' +
       '\nThen build:\n' +
       '  npm run prebuild                  # android\n' +
-      '  cd android && ./gradlew :app:bundleRelease'
+      '  cd android && ./gradlew :app:bundleRelease\n' +
+      '\n  npm run prebuild:ios              # ios\n' +
+      '  cd ios && pod install && open ZBRCourier.xcworkspace'
   );
 }
 

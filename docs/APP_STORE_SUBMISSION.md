@@ -118,10 +118,29 @@ So the rule for a resubmission after a rejection is not one rule but two:
 | Situation | What to do |
 |---|---|
 | Build failed upload, or TestFlight only — the version never went to review | Keep the version; the fresh build number is enough. |
-| The version was **submitted** and rejected or approved | **Bump the version**: `npm run bump 1.0.1`. Then create that version in App Store Connect and attach the build to it. |
+| The version was **submitted** and rejected or approved | **Bump the version**: `npm run release:ios`. Then create that version in App Store Connect and attach the build to it. |
 
 The build number cannot help here. It is derived and always unique
 (scripts/build-number.js), but Apple is refusing on the version *name*.
+
+**This has cost two uploads — 1.0.0 and 1.0.2 — so do not prepare an iOS
+archive by hand.** Use:
+
+```bash
+npm run release:ios     # bump the patch version, then prebuild
+```
+
+which is `node scripts/bump-version.mjs --patch && expo prebuild --platform ios
+--clean`. It exists because the two version fields have different rules and
+only one of them is automatic:
+
+| Field | Plist key | How it moves |
+|---|---|---|
+| Build number | `CFBundleVersion` | **Automatic.** Derived from the clock on every config evaluation (scripts/build-number.js). Nothing to remember, nothing to commit. |
+| Version name | `CFBundleShortVersionString` | **Manual by design** — it is the string users read in the store. But on iOS every *upload* burns it, so `release:ios` steps it for you. |
+
+Android needs no equivalent: Play accepts a new `versionCode` under an
+unchanged `versionName`, so `npm run prebuild` alone is enough there.
 
 After bumping, commit `app.config.ts` — the version name is tracked, unlike the
 build number.
@@ -411,6 +430,8 @@ dependencies are missing.
 > - `npx expo prebuild` — equally safe now; there is no step to miss
 > - `npm run bump 1.1.0` — set the user-visible **version name**, which is a
 >   release decision and stays explicit. Commit it.
+> - `npm run release:ios` — the one to use before an App Store upload: steps the
+>   patch version (because submitting closes a train, see §0b) and prebuilds.
 >
 > `ZBR_BUILD_NUMBER=1407604 npm run prebuild` pins the number, for reproducing
 > one specific build.
@@ -424,13 +445,15 @@ dependencies are missing.
    throws at startup by design.
 2. **Never bump the build number in Xcode.** Prebuild regenerates `Info.plist`
    from `app.config.ts`, so an edit made in Xcode is silently discarded on the
-   next run. `npm run prebuild:ios` bumps it in the config for you (see the
-   note above); if you archive without prebuilding, bump with `npm run bump`
-   first. App Store Connect **rejects a `CFBundleVersion` it has already
-   seen**, even from a build you deleted.
+   next run. Prebuilding derives a fresh one for you (see the note above); if
+   you archive without prebuilding, you ship the number from last time. App
+   Store Connect **rejects a `CFBundleVersion` it has already seen**, even from
+   a build you deleted.
+3. **Never edit the version name in Xcode either**, and never reuse one you
+   have already uploaded — see §0b.
 
 ```bash
-npm run prebuild:ios          # bumps ios.buildNumber, then prebuilds
+npm run release:ios           # patch-bumps the version, then prebuilds
 cd ios && pod install && cd ..
 ```
 
