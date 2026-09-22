@@ -11,6 +11,7 @@ import { CourierProvider, useCourier } from "@/context/CourierContext";
 
 import { ToastProvider, useToast } from "@/components/Toast";
 import { UpdateGate } from "@/components/UpdateGate";
+import { OrderOfferHost } from "@/components/OrderOfferHost";
 import { Logo } from "@/components/Logo";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Colors from "@/constants/colors";
@@ -421,6 +422,11 @@ export default function RootLayout() {
           <CourierProvider>
             <ErrorBoundary onError={(error) => reportCrash(error, false)}>
               <NotificationHandler />
+            {/* The order offer, available from EVERY screen. It used to live
+                inside the Orders tab, so a courier on the navigation screen —
+                mid-delivery, exactly who you want to offer the next job to —
+                got a silent system notification and no offer at all. */}
+            <OrderOfferHost />
               <AuthNavigator>
                 <RootLayoutNav />
               </AuthNavigator>

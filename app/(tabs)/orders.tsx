@@ -11,9 +11,7 @@ import { useCourier, AvailableOrder, Order } from '@/context/CourierContext';
 import { OrderCard } from '@/components/OrderCard';
 import { AvailableOrderCard } from '@/components/AvailableOrderCard';
 import { WithSwipeGesture, TAB_ROUTES } from '@/components/WithSwipeGesture';
-import { OrderOfferModal } from '@/components/OrderOfferModal';
 import { LocationDisclosureModal, LOCATION_DISCLOSURE_ACCEPTED_KEY } from '@/components/LocationDisclosureModal';
-import { soundService } from '@/services/soundService';
 import logger from '@/lib/logger';
 
 // Get greeting key based on current hour
@@ -51,182 +49,25 @@ export default function OrdersScreen() {
     fetchOrderHistory,
     loadMoreHistory,
     unreadCount,
-    newOrderOffer,
-    clearNewOrderOffer,
-    acceptOrder,
-    orderTakenEvent,
-    clearOrderTakenEvent,
-    courierProfile,
   } = useCourier();
   const [activeTab, setActiveTab] = useState<'available' | 'active' | 'history'>('available');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isHistoryRefreshing, setIsHistoryRefreshing] = useState(false);
 
   // Order offer modal state
-  const [showOrderOfferModal, setShowOrderOfferModal] = useState(false);
-  const [offerOrder, setOfferOrder] = useState<AvailableOrder | null>(null);
-  const previousOrderIdsRef = useRef<Set<number>>(new Set());
-  const hasInitializedRef = useRef(false);
 
   // Location prominent disclosure (Google Play policy): location permission
   // may only be requested after the user accepts this disclosure once.
   const [showLocationDisclosure, setShowLocationDisclosure] = useState(false);
   const disclosureAcceptedRef = useRef<boolean | null>(null); // null = not read yet
 
-  // Initialize sound service
-  useEffect(() => {
-    soundService.initialize();
-    return () => {
-      soundService.cleanup();
-    };
-  }, []);
 
-  // Detect new orders from API fetches
-  useEffect(() => {
-    // Reset when going offline
-    if (!isOnline) {
-      previousOrderIdsRef.current = new Set();
-      hasInitializedRef.current = false;
-      return;
-    }
-
-    // Skip if no orders yet
-    if (availableOrders.length === 0) {
-      return;
-    }
-
-    const currentOrderIds = new Set(availableOrders.map(o => o.orderId));
-
-    // First time seeing orders - just store them, don't notify
-    if (!hasInitializedRef.current) {
-      logger.log('[Orders] Initial load, storing order IDs:', Array.from(currentOrderIds));
-      previousOrderIdsRef.current = currentOrderIds;
-      hasInitializedRef.current = true;
-      return;
-    }
-
-    // Find new orders (in current but not in previous)
-    const newOrders = availableOrders.filter(
-      order => !previousOrderIdsRef.current.has(order.orderId)
-    );
-
-    logger.log('[Orders] Checking for new orders:', {
-      previous: Array.from(previousOrderIdsRef.current),
-      current: Array.from(currentOrderIds),
-      newOrders: newOrders.map(o => o.orderId),
-      showingModal: showOrderOfferModal
-    });
-
-    // Show order offer modal for the first new order
-    if (newOrders.length > 0 && !showOrderOfferModal) {
-      const newestOrder = newOrders[0];
-      logger.log('[Orders] New order detected! Showing offer modal for:', newestOrder.orderId);
-      showOrderOffer(newestOrder);
-    }
-
-    // Update previous order IDs
-    previousOrderIdsRef.current = currentOrderIds;
-  }, [availableOrders, isOnline, showOrderOfferModal]);
 
   // Show order offer modal
-  const showOrderOffer = useCallback((order: AvailableOrder) => {
-    logger.log('[Orders] Showing order offer modal for:', order.orderId);
-    setOfferOrder(order);
-    setShowOrderOfferModal(true);
-  }, []);
 
-  // Show notification when new order arrives via WebSocket
-  useEffect(() => {
-    if (newOrderOffer && isOnline && !showOrderOfferModal) {
-      try {
-        logger.log('[Orders] WebSocket new order notification:', newOrderOffer.orderId);
-        // Convert WebSocket notification to AvailableOrder format for display
-        const wsOrder: AvailableOrder = {
-          orderId: newOrderOffer.orderId,
-          externalOrderNo: newOrderOffer.externalOrderNo ?? String(newOrderOffer.orderId),
-          restaurantId: newOrderOffer.restaurantId,
-          restaurantName: newOrderOffer.restaurantName || 'Restaurant',
-          restaurantAddress: newOrderOffer.restaurantAddress || '',
-          restaurantLat: newOrderOffer.restaurantLat || 0,
-          restaurantLng: newOrderOffer.restaurantLng || 0,
-          deliveryAddress: newOrderOffer.deliveryAddress || '',
-          deliveryLat: newOrderOffer.deliveryLat || 0,
-          deliveryLng: newOrderOffer.deliveryLng || 0,
-          customerName: '',
-          customerPhone: '',
-          status: 'PENDING',
-          deliveryFee: newOrderOffer.deliveryFee || 0,
-          tipAmount: newOrderOffer.tipAmount || 0,
-          total: newOrderOffer.total || newOrderOffer.deliveryFee || 0,
-          itemCount: newOrderOffer.itemCount || 0,
-          createdAt: newOrderOffer.createdAt || new Date().toISOString(),
-          pickupDistance: newOrderOffer.restaurantDistance,
-          estimatedDistance: newOrderOffer.deliveryDistance,
-        };
-        showOrderOffer(wsOrder);
-      } catch (error) {
-        logger.error('[Orders] Error processing newOrderOffer:', error);
-      }
-    }
-  }, [newOrderOffer, isOnline, showOrderOfferModal, showOrderOffer]);
 
-  // Handle accepting order from modal
-  const handleAcceptOrder = useCallback(async (orderId: number) => {
-    try {
-      await acceptOrder(orderId);
-      setShowOrderOfferModal(false);
-      setOfferOrder(null);
-      clearNewOrderOffer();
-      // Navigate to the map navigation screen
-      router.push(`/map-navigation/${orderId}`);
-    } catch (error: any) {
-      // Check if order was already taken
-      const errorMessage = error.message || '';
-      if (
-        errorMessage.includes('already has a courier assigned') ||
-        errorMessage.includes('already assigned') ||
-        errorMessage.includes('ORDER_TAKEN')
-      ) {
-        Alert.alert(
-          t('available_orders.order_taken_title', 'Order No Longer Available'),
-          t('available_orders.order_already_taken', 'This order was already taken by another courier.')
-        );
-        setShowOrderOfferModal(false);
-        setOfferOrder(null);
-        clearNewOrderOffer();
-        fetchAvailableOrders(currentLocation?.latitude, currentLocation?.longitude);
-      } else {
-        Alert.alert(t('common.error'), errorMessage || t('available_orders.accept_error'));
-        throw error; // Re-throw so modal knows acceptance failed
-      }
-    }
-  }, [acceptOrder, clearNewOrderOffer, fetchAvailableOrders, currentLocation, router, t]);
 
-  // Handle declining order from modal
-  const handleDeclineOrder = useCallback(() => {
-    setShowOrderOfferModal(false);
-    setOfferOrder(null);
-    clearNewOrderOffer();
-  }, [clearNewOrderOffer]);
 
-  // Close the offer modal if the displayed order gets taken by another
-  // courier while it is still on screen. Our own accept also broadcasts
-  // ORDER_TAKEN — ignore events carrying our courierId (handleAcceptOrder
-  // already closes the modal on success).
-  useEffect(() => {
-    if (!orderTakenEvent || !offerOrder || orderTakenEvent.orderId !== offerOrder.orderId) {
-      return;
-    }
-    const myCourierId = courierProfile?.id;
-    if (myCourierId != null && Number(orderTakenEvent.courierId) === Number(myCourierId)) {
-      return;
-    }
-    logger.log('[Orders] Offered order taken by another courier, closing modal:', orderTakenEvent.orderId);
-    setShowOrderOfferModal(false);
-    setOfferOrder(null);
-    clearNewOrderOffer();
-    clearOrderTakenEvent();
-  }, [orderTakenEvent, offerOrder, courierProfile, clearNewOrderOffer, clearOrderTakenEvent]);
 
   // Read the persisted disclosure acceptance lazily (first toggle wins)
   const isDisclosureAccepted = useCallback(async (): Promise<boolean> => {
@@ -391,13 +232,6 @@ export default function OrdersScreen() {
   return (
     <WithSwipeGesture routes={TAB_ROUTES} currentRouteName="orders">
       <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Full-screen Order Offer Modal */}
-      <OrderOfferModal
-        visible={showOrderOfferModal}
-        order={offerOrder}
-        onAccept={handleAcceptOrder}
-        onDecline={handleDeclineOrder}
-      />
 
       {/* Prominent location disclosure — must be accepted before the OS
           location permission prompt is ever shown */}

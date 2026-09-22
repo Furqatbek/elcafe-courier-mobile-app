@@ -221,6 +221,43 @@ Note the field name: registering uses `token`, removing uses `deviceToken`.
 
 ---
 
+## 4b. If push arrives SILENTLY
+
+Reported from the field: notifications land, but with no sound. Everything the
+app controls is already set — the `orders_v2` channel is created at startup with
+`IMPORTANCE_HIGH` and `sound: 'default'`, `defaultChannel` is `orders_v2` so an
+FCM message that names no channel still lands there, and the foreground handler
+returns `shouldPlaySound: true`. So the remaining causes are in the payload or
+on the device.
+
+**Check the payload first.**
+
+- **iOS: `aps.sound` must be present.** Omit it and APNs delivers the alert
+  silently — it is not a default, it is an opt-in. `"sound": "default"` is the
+  minimum; `interruption-level: time-sensitive` additionally gets it past Focus
+  and Do Not Disturb, which a courier on shift very often has on.
+- **Android: send `android.notification.sound` as well as the channel.** The
+  channel supplies the sound only when the message does not override it, and
+  some senders set an empty sound field, which counts as an override to silence.
+
+**Then check the channel on the device.** Android freezes a channel's settings
+at creation. If any earlier build created `orders_v2` with a different sound or
+importance, the current definition is ignored, forever, for that install —
+changing the app does nothing. Confirm on a real device:
+
+```
+Settings → Apps → ZBR Courier → Notifications → New Orders
+```
+
+If sound is off or importance is not "Urgent" there, the channel is stale.
+Reinstalling fixes that install; fixing it for everyone needs a **new channel
+id** and a matching backend change, because Android will not take an update to
+an existing one.
+
+**And check the obvious.** Ring/silent switch, per-app notification volume, and
+on Xiaomi/Huawei/Oppo the vendor's own notification settings, which are separate
+from Android's and frequently default to silent for apps installed recently.
+
 ## 5. What the app does on receipt
 
 | App state | What the courier sees |

@@ -4,7 +4,6 @@ import {
   AppStateStatus,
   Linking,
   Modal,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,

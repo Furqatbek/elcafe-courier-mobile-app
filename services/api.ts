@@ -12,7 +12,6 @@ import {
   REQUEST_CONFIG,
   CourierStatusType,
   VehicleType,
-  IssueType,
 } from '@/constants/config';
 import logger from '@/lib/logger';
 // NOTE: tokenManager imports tokenStorage back from this module. The cycle is
