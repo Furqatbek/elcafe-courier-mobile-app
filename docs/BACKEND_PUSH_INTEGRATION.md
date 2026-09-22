@@ -286,61 +286,97 @@ the saved connections as a bonus rather than the reason.
 
 ---
 
-# Appendix — `GET /api/app/version`
+# Appendix — `GET /api/v1/app/version`
 
 The app polls this on launch and on resume to decide whether to nag a courier to
 update, or to stop them using a build you no longer support.
 
-**Unauthenticated, and deliberately not under `/api/v1`.** It has to keep
-answering when the app and the backend disagree about everything else — that is
-the situation it exists to get the courier out of. A courier on a build too old
-to log in still needs to be told to update.
-
-```json
-{
-  "latestVersion": "1.4.0",
-  "minimumVersion": "1.2.0",
-  "updateRequired": false,
-  "storeUrl": "https://apps.apple.com/app/id6807758268"
-}
+```
+GET /api/v1/app/version?platform=ios|android      (no token)
 ```
 
-The standard `{ success, data }` envelope is accepted too; the app unwraps it if
-present.
+`platform` is always sent — `ios` or `android`, lower case, from the app's own
+platform abstraction rather than a user-agent guess.
+
+An earlier draft of this appendix asked for the endpoint to sit outside
+`/api/v1`, reasoning that the version check must survive the rest of the API
+moving to a version the build cannot speak. The backend team pushed back, and
+they were right: `/api/v1` is a path prefix, not content negotiation, and one
+endpoint spelled differently from every other is a bigger hazard than the one it
+guarded against. **The app calls `/api/v1/app/version`.**
+
+```json
+{ "success": true,
+  "data": { "latestVersion": "1.0.2",
+            "minimumVersion": "1.0.0",
+            "storeUrl": "https://play.google.com/store/apps/details?id=app.zbr.courier" } }
+```
+
+Bare objects are accepted too; the envelope is unwrapped if present.
 
 | Field | Effect |
 |---|---|
 | `latestVersion` | Installed version below it → non-blocking toast with an "Update" action. |
 | `minimumVersion` | Installed version below it → **blocking dialog**, no way past. |
-| `updateRequired` | Promotes an optional update to blocking. Cannot create one: a courier already on the newest build is never blocked, because the dialog's only button would send them to a store page reading "Open". |
-| `storeUrl` | Optional. Used **only if it matches the requesting platform** — see below. |
+| `updateRequired` | Optional. Promotes an optional update to blocking. Cannot create one: a courier already on the newest build is never blocked, because the dialog's only button would send them to a store page reading "Open". |
+| `storeUrl` | Optional. Used only if it points at **this app** on **this platform** — see below. |
 
-## `storeUrl` and platforms
+## The store URL is checked twice
 
-One `storeUrl` in one JSON document cannot be right for both platforms. The app
-therefore validates it (`apps.apple.com` / `itunes.apple.com` / `itms-apps://`
-on iOS, `play.google.com/store/apps` / `market://` on Android) and falls back to
-its own configured URL when it does not match.
+Host **and** app identity.
 
-So sending a Play link to an iPhone is harmless — but it is also pointless.
-Either omit `storeUrl` and let the app use its configured links, or branch on
-the platform. The app sends its platform in `POST /device-tokens`; this endpoint
-has no body, so if you want to branch here, read `User-Agent` or add a query
-parameter and tell us.
+The host check catches a Play link sent to an iPhone. The identity check catches
+the subtler case: the seeded config returns
+`play.google.com/store/apps/details?id=app.zbr.customer` — the **customer** app.
+Right host, right platform, wrong product. A courier tapping "Update" would have
+installed a different app and still not had the update, with no error anywhere.
+
+The app compares the `id=` package (Android) or the `id<digits>` (Apple) against
+its own configured listing, so a mismatch is discarded and the built-in link is
+used instead. Nothing breaks — but the field is then doing nothing, so it is
+worth correcting.
+
+**Ours are:**
+
+```
+android   app.zbr.courier
+          https://play.google.com/store/apps/details?id=app.zbr.courier
+ios       6807758268
+          https://apps.apple.com/app/id6807758268
+```
+
+## Do not advertise 1.0.1
+
+`1.0.1` crashes on launch on every device — a native ABI mismatch, fixed in
+1.0.2. It must never appear as `latestVersion`, and `minimumVersion` must never
+reach it: a minimum of `1.0.1` would force the entire fleet onto a build that
+cannot start, and the app they would be updating from is the only thing still
+working.
+
+The seeded `latestVersion: "1.0.1"` is safe only because nothing is below it.
+Move it to `1.0.2` once that build is live.
 
 ## Versions are compared numerically
 
 `1.10.0` is newer than `1.9.0`; `2.0.0` is newer than `1.99.99`. Send plain
 `MAJOR.MINOR.PATCH`. Prerelease and build metadata (`1.2.3-beta+sha`) are
-ignored rather than ranked, so do not rely on them to express ordering.
+ignored rather than ranked, so do not use them to express ordering.
 
 Anything unparseable is treated as "no opinion" and the courier is left alone —
-the check fails **open**, because a malformed version string must never be able
-to lock a working app.
+the check fails **open**, because a malformed version string must never lock a
+working app.
+
+## `?version=` — not needed
+
+Thank you for offering to compute `updateRequired` server-side. The app already
+compares locally and must keep doing so: the comparison has to work identically
+whether the response is fresh or five minutes stale from cache, and two places
+deciding the same thing is two places that can disagree. Sending the installed
+version would also make the response uncacheable per-courier, which the 300s
+`Cache-Control` currently avoids.
 
 ## Rate
 
-The app checks at most once an hour, and will not re-prompt about the same
-version for 24 hours after a courier has seen it. A new `latestVersion` always
-prompts immediately regardless. The endpoint should expect roughly one request
-per courier per hour of active use, and can be cached aggressively.
+At most one request per courier per hour, and no re-prompt about the same
+version for 24 hours after they have seen it. A new `latestVersion` prompts
+immediately regardless. `Cache-Control: public, max-age=300` is more than enough.

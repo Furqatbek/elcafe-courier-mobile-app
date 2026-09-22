@@ -198,11 +198,20 @@ export const API_ENDPOINTS = {
 
   // App release metadata — the version gate polls this on launch and resume.
   //
-  // Deliberately NOT under /api/v1: the version check has to keep working when
-  // the rest of the API has moved on to a version this build does not speak,
-  // which is precisely the situation it exists to get the courier out of.
+  // Under /api/v1 like everything else. An earlier draft put it outside, on the
+  // reasoning that the version check must survive the rest of the API moving to
+  // a version this build cannot speak. The backend team pushed back and they
+  // are right: /api/v1 is a path prefix, not content negotiation, and it is not
+  // going to be retired out from under a client. One endpoint spelled
+  // differently from every other is a bigger hazard than the one it guards
+  // against.
+  //
+  // REQUIRES ?platform=ios|android. There is no default and a missing or
+  // unknown value is a 400 — deliberately, because a default would have to pick
+  // one store's link to answer with, and answering an iPhone with a Play link
+  // is the failure this whole design exists to prevent.
   APP: {
-    VERSION: '/api/app/version',
+    VERSION: '/api/v1/app/version',
   },
 
   // Device tokens for push notifications

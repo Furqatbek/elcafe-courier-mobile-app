@@ -4,7 +4,7 @@ import { isOlderThan } from '@/lib/semver';
 import logger from '@/lib/logger';
 
 /**
- * Release metadata from `GET /api/app/version`.
+ * Release metadata from `GET /api/v1/app/version?platform=ios|android`.
  *
  * Everything is optional because this is the one endpoint that must keep
  * working when the app and the backend disagree about everything else — it is
@@ -34,15 +34,48 @@ export function platformStoreUrl(): string {
 }
 
 /**
- * Does a URL point at the store for the platform we are running on?
+ * Is the host the right store for this platform?
+ */
+function storeHostIsRight(value: string, os: string): boolean {
+  if (os === 'ios') {
+    return /^https:\/\/(apps|itunes)\.apple\.com\//i.test(value) ||
+      /^itms-apps:\/\//i.test(value);
+  }
+  if (os === 'android') {
+    return /^https:\/\/play\.google\.com\/store\/apps\//i.test(value) ||
+      /^market:\/\//i.test(value);
+  }
+  return false;
+}
+
+/**
+ * The token that identifies WHICH app a store link points at:
+ * `id6807758268` for Apple, the `id=` package name for Play.
+ */
+function storeAppIdentity(value: string, os: string): string | null {
+  if (os === 'ios') {
+    const m = value.match(/\bid(\d{6,})\b/);
+    return m ? m[1] : null;
+  }
+  const m = value.match(/[?&]id=([A-Za-z0-9_.]+)/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Does a URL point at THIS app's listing on THIS platform?
  *
- * The backend returns a single `storeUrl`, and a single value in one JSON
- * document cannot be correct for both platforms. Sending an iPhone to a Play
- * listing gives the courier a web page they cannot install from, and the
- * failure is silent — the button "works", the page loads, nothing installs.
+ * Two separate checks, and the second one is not paranoia.
  *
- * Exported for tests; the decision is small but it is the one that quietly
- * strands half the fleet if it is wrong.
+ * The host check catches the obvious error — a Play link sent to an iPhone —
+ * where the failure is silent: the button works, a web page loads, nothing
+ * installs, and the courier is stranded with no error to report.
+ *
+ * The identity check catches the subtler one. The backend's first draft of this
+ * endpoint returned a Play URL for `id=app.zbr.customer` — the CUSTOMER app.
+ * Correct host, correct platform, wrong product: a courier tapping "Update"
+ * would install the customer app and still not have the update. Comparing
+ * against our own configured link means the check follows the app rather than
+ * needing a constant kept in step by hand.
  */
 export function isStoreUrlForThisPlatform(
   url: unknown,
@@ -51,19 +84,15 @@ export function isStoreUrlForThisPlatform(
   if (typeof url !== 'string' || url.trim() === '') return false;
 
   const value = url.trim();
+  if (!storeHostIsRight(value, os)) return false;
 
-  if (os === 'ios') {
-    // Apple's web listings, plus the itms-apps scheme that opens the App Store
-    // app directly.
-    return /^https:\/\/(apps|itunes)\.apple\.com\//i.test(value) ||
-      /^itms-apps:\/\//i.test(value);
-  }
-  if (os === 'android') {
-    // Play's web listing, plus the market: scheme that opens the Play app.
-    return /^https:\/\/play\.google\.com\/store\/apps\//i.test(value) ||
-      /^market:\/\//i.test(value);
-  }
-  return false;
+  const expected = storeAppIdentity(os === 'ios' ? STORE_URLS.IOS : STORE_URLS.ANDROID, os);
+  const actual = storeAppIdentity(value, os);
+
+  // If our own configured URL carries no identity there is nothing to compare
+  // against, so the host check stands alone rather than rejecting everything.
+  if (!expected) return true;
+  return actual === expected;
 }
 
 /**
@@ -144,7 +173,14 @@ export async function fetchVersionInfo(): Promise<AppVersionInfo | null> {
   );
 
   try {
-    const response = await fetch(`${BASE_URL}${API_ENDPOINTS.APP.VERSION}`, {
+    // platform is REQUIRED; a missing or unknown value is a 400. There is no
+    // default on purpose — a default would have to answer with one store's
+    // link, and answering an iPhone with a Play link is the exact failure the
+    // separation exists to prevent.
+    const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+    const url = `${BASE_URL}${API_ENDPOINTS.APP.VERSION}?platform=${platform}`;
+
+    const response = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       signal: controller.signal,

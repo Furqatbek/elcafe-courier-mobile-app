@@ -8,8 +8,8 @@ import { STORE_URLS } from '@/constants/config';
 describe('isStoreUrlForThisPlatform', () => {
   it('accepts Apple links on iOS', () => {
     expect(isStoreUrlForThisPlatform('https://apps.apple.com/app/id6807758268', 'ios')).toBe(true);
-    expect(isStoreUrlForThisPlatform('https://itunes.apple.com/app/id123', 'ios')).toBe(true);
-    expect(isStoreUrlForThisPlatform('itms-apps://apps.apple.com/app/id123', 'ios')).toBe(true);
+    expect(isStoreUrlForThisPlatform('https://itunes.apple.com/app/id6807758268', 'ios')).toBe(true);
+    expect(isStoreUrlForThisPlatform('itms-apps://apps.apple.com/app/id6807758268', 'ios')).toBe(true);
   });
 
   it('accepts Play links on Android', () => {
@@ -25,7 +25,27 @@ describe('isStoreUrlForThisPlatform', () => {
     expect(
       isStoreUrlForThisPlatform('https://play.google.com/store/apps/details?id=x', 'ios')
     ).toBe(false);
-    expect(isStoreUrlForThisPlatform('https://apps.apple.com/app/id123', 'android')).toBe(false);
+    expect(isStoreUrlForThisPlatform('https://apps.apple.com/app/id6807758268', 'android')).toBe(false);
+  });
+
+  // The backend's first draft returned the CUSTOMER app's Play listing:
+  // right host, right platform, wrong product. A courier tapping "Update" would
+  // have installed a different app and still not had the update.
+  it('rejects the right store but the wrong app', () => {
+    expect(
+      isStoreUrlForThisPlatform(
+        'https://play.google.com/store/apps/details?id=app.zbr.customer',
+        'android'
+      )
+    ).toBe(false);
+    expect(
+      isStoreUrlForThisPlatform(
+        'https://play.google.com/store/apps/details?id=app.zbr.courier',
+        'android'
+      )
+    ).toBe(true);
+    expect(isStoreUrlForThisPlatform('https://apps.apple.com/app/id1111111111', 'ios')).toBe(false);
+    expect(isStoreUrlForThisPlatform('https://apps.apple.com/app/id6807758268', 'ios')).toBe(true);
   });
 
   it.each([null, undefined, '', '   ', 42, {}, 'https://example.com/download', 'javascript:alert(1)'])(
@@ -39,7 +59,7 @@ describe('isStoreUrlForThisPlatform', () => {
 
 describe('resolveStoreUrl', () => {
   it('prefers a backend URL that matches the platform', () => {
-    const url = 'https://apps.apple.com/app/id999';
+    const url = 'https://apps.apple.com/app/id6807758268';
     expect(resolveStoreUrl(url, 'ios')).toBe(url);
   });
 
@@ -47,7 +67,7 @@ describe('resolveStoreUrl', () => {
     expect(resolveStoreUrl('https://play.google.com/store/apps/details?id=x', 'ios')).toBe(
       STORE_URLS.IOS
     );
-    expect(resolveStoreUrl('https://apps.apple.com/app/id1', 'android')).toBe(STORE_URLS.ANDROID);
+    expect(resolveStoreUrl('https://apps.apple.com/app/id6807758268', 'android')).toBe(STORE_URLS.ANDROID);
   });
 
   it('falls back when the backend sends nothing', () => {
@@ -112,8 +132,18 @@ describe('evaluateUpdate', () => {
   });
 
   it('always returns a platform-correct store URL', () => {
-    const wrong = { ...info(), storeUrl: 'https://play.google.com/store/apps/details?id=x' };
-    expect(evaluateUpdate('1.0.0', wrong, 'ios').storeUrl).toBe(STORE_URLS.IOS);
-    expect(evaluateUpdate('1.0.0', wrong, 'android').storeUrl).toBe(wrong.storeUrl);
+    const play = { ...info(), storeUrl: 'https://play.google.com/store/apps/details?id=app.zbr.courier' };
+    // The same Play URL: used on Android, discarded on iOS.
+    expect(evaluateUpdate('1.0.0', play, 'android').storeUrl).toBe(play.storeUrl);
+    expect(evaluateUpdate('1.0.0', play, 'ios').storeUrl).toBe(STORE_URLS.IOS);
+  });
+
+  // What the backend's seeded config actually returns today.
+  it('discards the customer app’s listing and falls back to ours', () => {
+    const customer = {
+      ...info(),
+      storeUrl: 'https://play.google.com/store/apps/details?id=app.zbr.customer',
+    };
+    expect(evaluateUpdate('1.0.0', customer, 'android').storeUrl).toBe(STORE_URLS.ANDROID);
   });
 });
