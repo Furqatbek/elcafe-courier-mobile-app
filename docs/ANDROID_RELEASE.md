@@ -605,6 +605,39 @@ Get-Content "$env:USERPROFILE\.gradle\gradle.properties"
 > **If a password contains a backslash**, double it in the file (`\\`) — `\` is an escape
 > character in properties files. Avoid backslashes in these passwords entirely if you can.
 
+> **Do not quote the password, and do not leave a space after it.** A properties file is not
+> a shell: quotes are ordinary characters and trailing whitespace is part of the value. Only
+> *leading* whitespace is stripped. Measured against `java.util.Properties`, which is what
+> Gradle uses:
+>
+> | Line in `gradle.properties` | Value Gradle actually sees |
+> |---|---|
+> | `PW=secret123 ` (one trailing space) | `secret123 ` — 10 characters, wrong password |
+> | `PW=" secret123 "` | `" secret123 "` — quotes included, wrong password |
+> | `PW=pa\ss\word` | `password` — both backslashes eaten |
+> | `PW=   secret123` | `secret123` — leading space stripped, this one is fine |
+> | `PW=secret#123` | `secret#123` — `#` mid-line is not a comment, fine |
+>
+> All three failures surface as the same message, which names the store rather than the
+> file and so points away from the actual cause:
+>
+> ```
+> Failed to read key zbr-upload from store "...\zbr-upload.keystore":
+> keystore password was incorrect
+> ```
+>
+> **Split the cause before editing anything**, by taking Gradle out of the picture. Let
+> `keytool` prompt rather than passing `-storepass`, so shell quoting cannot interfere
+> either:
+>
+> ```powershell
+> & $keytool -list -v -keystore "C:\Users\you\keys\zbr\zbr-upload.keystore" -alias zbr-upload
+> ```
+>
+> Typing the password at that prompt succeeds → the password is right and `gradle.properties`
+> is mangling it; retype the line with no quotes, no trailing space, `\` doubled. It fails
+> there too → the password itself is wrong, and no amount of editing the file will help.
+
 > **Use forward slashes in that path.** `gradle.properties` is a Java properties file, where
 > `\` is an escape character: `C:\Users\...` makes Gradle read `\U` as an escape and the
 > build fails with a confusing "keystore not found". `C:/Users/...` is correct on Windows.
