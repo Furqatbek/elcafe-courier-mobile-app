@@ -349,6 +349,16 @@ guarded against. **The app calls `/api/v1/app/version`.**
             "storeUrl": "https://play.google.com/store/apps/details?id=app.zbr.courier" } }
 ```
 
+Verify a change with the two calls the app actually makes:
+
+```bash
+curl -s 'https://<host>/api/v1/app/version?platform=android' | jq .
+curl -s 'https://<host>/api/v1/app/version?platform=ios'     | jq .
+```
+
+The `storeUrl` in each must carry the identity in the table further down —
+`id=app.zbr.courier` for Android, `id6807758268` for iOS.
+
 Bare objects are accepted too; the envelope is unwrapped if present.
 
 | Field | Effect |
@@ -382,16 +392,37 @@ ios       6807758268
           https://apps.apple.com/app/id6807758268
 ```
 
-## Do not advertise 1.0.1
+## What to set, and when
 
-`1.0.1` crashes on launch on every device — a native ABI mismatch, fixed in
-1.0.2. It must never appear as `latestVersion`, and `minimumVersion` must never
-reach it: a minimum of `1.0.1` would force the entire fleet onto a build that
-cannot start, and the app they would be updating from is the only thing still
-working.
+`latestVersion` must name a build that is **actually downloadable right now**,
+not the newest one uploaded. Store review and staged rollout both mean a build
+exists without being installable: a courier prompted to update to a version the
+store will not yet serve taps "Update", lands on a page offering the build they
+already have, and learns to ignore the prompt.
 
-The seeded `latestVersion: "1.0.1"` is safe only because nothing is below it.
-Move it to `1.0.2` once that build is live.
+So the rule is: **bump `latestVersion` when the release goes live, not when it
+is submitted.** It is per-platform — the same `platform` parameter already
+splits the response — and the two stores do not release in step.
+
+Current state, to keep this honest as it moves:
+
+| | iOS | Android |
+|---|---|---|
+| Live on the store | `1.0.2` | `1.0.1` |
+| Uploaded, not yet live | `1.0.3` | `1.0.3` |
+| Set `latestVersion` to | `1.0.2` → `1.0.3` once released | `1.0.1` → `1.0.3` once rolled out |
+| Set `minimumVersion` to | `1.0.0` | `1.0.0` |
+
+**`1.0.1` must never be a `minimumVersion` on iOS.** That build crashes on
+launch on every device — a native ABI mismatch, fixed in 1.0.2. A minimum of
+`1.0.1` would force the fleet onto a build that cannot start, and the app they
+would be updating from is the only thing still working. Raising the iOS minimum
+past it is also pointless: a courier on iOS 1.0.1 never reaches the version
+check, because the app aborts before it runs.
+
+Leave `minimumVersion` at `1.0.0` on both platforms until there is a real reason
+to lock a build out. The blocking dialog has no way past it, so it is the one
+field here that can strand a working courier mid-delivery.
 
 ## Versions are compared numerically
 
