@@ -15,7 +15,7 @@ const { resolveBuildNumber } = require("./scripts/build-number");
  *                         defaults to ./google-services.json (repo root)
  *
  * Release signing is supplied at Gradle time, not here - see
- * plugins/withAndroidReleaseSigning.js for the ZBR_UPLOAD_* properties.
+ * plugins/withAndroidReleaseSigning.js for the ZBR_COURIER_UPLOAD_* properties.
  *
  * See docs/PRODUCTION.md for the full launch checklist.
  */
@@ -361,7 +361,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // committed, so anything that has to be true of the native project must be
     // re-applied on every prebuild from here.
     //
-    // Signs release builds with the ZBR_UPLOAD_* keystore instead of the debug
+    // Signs release builds with the ZBR_COURIER_UPLOAD_* keystore instead of the debug
     // keystore the bare template wires up. Play auto-rejects debug-signed AABs.
     "./plugins/withAndroidReleaseSigning",
     // Removes expo-audio's AudioRecordingService (foregroundServiceType

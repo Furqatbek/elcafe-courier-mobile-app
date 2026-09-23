@@ -339,6 +339,39 @@ Certificate fingerprint (SHA-256): 5C:77:CD:88:63:AC:...
 Put the credentials in your **user-level** Gradle properties file — outside the repo, so
 they cannot be committed and are shared by every project you build.
 
+> **"…and are shared by every project you build" is the catch.** The ZBR customer app is
+> built on the same machines as this one, and both once used a `ZBR_UPLOAD_*` prefix. One
+> file, each key defined twice — and a properties file resolves a duplicate key to the
+> **last** occurrence, independently per key. Measured against `java.util.Properties`:
+>
+> ```properties
+> # customer app
+> ZBR_UPLOAD_STORE_FILE=C:/Users/Asus/keys/customer/zbr-customer.keystore
+> ZBR_UPLOAD_STORE_PASSWORD=customerPass
+>
+> # courier app  (no STORE_PASSWORD line — it was "already there")
+> ZBR_UPLOAD_STORE_FILE=C:/Users/Asus/keys/zbr/zbr-upload.keystore
+> ```
+> ```
+> ZBR_UPLOAD_STORE_FILE     -> C:/Users/Asus/keys/zbr/zbr-upload.keystore   (courier)
+> ZBR_UPLOAD_STORE_PASSWORD -> customerPass                                 (customer!)
+> ```
+>
+> This app's keystore, the other app's password. Gradle then reports:
+>
+> ```
+> Failed to read key zbr-upload from store "...\zbr-upload.keystore":
+> keystore password was incorrect
+> ```
+>
+> which names the keystore, so it reads as a bad keystore rather than a bad file.
+>
+> **The prefix here is therefore `ZBR_COURIER_UPLOAD_`**, and the customer app must use
+> something equally specific. The two apps cannot share one key anyway: Play pins an app's
+> upload key at its first upload, so each needs its own. The old `ZBR_UPLOAD_*` names still
+> work and print a warning — they are not silently ignored, because the failure mode there
+> is a debug-signed artifact rather than an error.
+
 ```bash
 mkdir -p ~/.gradle
 ```
@@ -348,10 +381,10 @@ Add to `~/.gradle/gradle.properties`:
 ```properties
 # ZBR Courier upload signing. NEVER commit this file; it lives in $HOME, not the repo.
 # The path MUST be absolute (see the note below).
-ZBR_UPLOAD_STORE_FILE=/Users/you/keys/zbr/zbr-upload.keystore
-ZBR_UPLOAD_STORE_PASSWORD=<keystore password>
-ZBR_UPLOAD_KEY_ALIAS=zbr-upload
-ZBR_UPLOAD_KEY_PASSWORD=<key password>
+ZBR_COURIER_UPLOAD_STORE_FILE=/Users/you/keys/zbr/zbr-upload.keystore
+ZBR_COURIER_UPLOAD_STORE_PASSWORD=<keystore password>
+ZBR_COURIER_UPLOAD_KEY_ALIAS=zbr-upload
+ZBR_COURIER_UPLOAD_KEY_PASSWORD=<key password>
 ```
 
 ```bash
@@ -359,7 +392,7 @@ chmod 600 ~/.gradle/gradle.properties
 ```
 
 > **The path must be absolute.** The generated Gradle code calls
-> `storeFile file(ZBR_UPLOAD_STORE_FILE)`, and Gradle's `file()` resolves a *relative* path
+> `storeFile file(ZBR_COURIER_UPLOAD_STORE_FILE)`, and Gradle's `file()` resolves a *relative* path
 > against the module directory — `android/app/` — which is regenerated and deleted by
 > prebuild. An absolute path is the only correct answer.
 
@@ -372,10 +405,10 @@ where you'd rather not persist secrets to disk:
 ```bash
 cd android
 ./gradlew :app:bundleRelease \
-  -PZBR_UPLOAD_STORE_FILE="$HOME/keys/zbr/zbr-upload.keystore" \
-  -PZBR_UPLOAD_STORE_PASSWORD="$ZBR_STORE_PASSWORD" \
-  -PZBR_UPLOAD_KEY_ALIAS=zbr-upload \
-  -PZBR_UPLOAD_KEY_PASSWORD="$ZBR_KEY_PASSWORD"
+  -PZBR_COURIER_UPLOAD_STORE_FILE="$HOME/keys/zbr/zbr-upload.keystore" \
+  -PZBR_COURIER_UPLOAD_STORE_PASSWORD="$ZBR_STORE_PASSWORD" \
+  -PZBR_COURIER_UPLOAD_KEY_ALIAS=zbr-upload \
+  -PZBR_COURIER_UPLOAD_KEY_PASSWORD="$ZBR_KEY_PASSWORD"
 ```
 
 Be aware that command-line arguments are visible in `ps` output and shell history on a
@@ -430,13 +463,28 @@ this repo:
 ```groovy
     signingConfigs {
         release {
-            if (project.hasProperty('ZBR_UPLOAD_STORE_FILE')) {
-                storeFile file(ZBR_UPLOAD_STORE_FILE)
-                storePassword ZBR_UPLOAD_STORE_PASSWORD
-                keyAlias ZBR_UPLOAD_KEY_ALIAS
-                keyPassword ZBR_UPLOAD_KEY_PASSWORD
+            // Read all four from one prefix. Mixing prefixes is how this app's
+            // keystore ended up paired with the customer app's password.
+            def zbrPrefix = null
+            if (project.hasProperty('ZBR_COURIER_UPLOAD_STORE_FILE')) {
+                zbrPrefix = 'ZBR_COURIER_UPLOAD_'
+            } else if (project.hasProperty('ZBR_UPLOAD_STORE_FILE')) {
+                zbrPrefix = 'ZBR_UPLOAD_'      // legacy, warns
+            }
+
+            if (zbrPrefix != null) {
+                // Fails now rather than in signReleaseBundle, ten minutes later.
+                def zbrRequired = ['STORE_FILE', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD']
+                def zbrMissing = zbrRequired.findAll { !project.hasProperty(zbrPrefix + it) }
+                if (!zbrMissing.isEmpty()) {
+                    throw new GradleException('[ZBR] Incomplete signing configuration: ...')
+                }
+                storeFile file(project.property(zbrPrefix + 'STORE_FILE').toString())
+                storePassword project.property(zbrPrefix + 'STORE_PASSWORD').toString()
+                keyAlias project.property(zbrPrefix + 'KEY_ALIAS').toString()
+                keyPassword project.property(zbrPrefix + 'KEY_PASSWORD').toString()
             } else {
-                logger.warn('[ZBR] ZBR_UPLOAD_STORE_FILE is not set - the release build will be signed with the DEBUG keystore. Google Play will reject this artifact.')
+                logger.warn('[ZBR] ZBR_COURIER_UPLOAD_STORE_FILE is not set - the release build will be signed with the DEBUG keystore. Google Play will reject this artifact.')
                 storeFile file('debug.keystore')
                 storePassword 'android'
                 keyAlias 'androiddebugkey'
@@ -453,18 +501,18 @@ this repo:
             signingConfig signingConfigs.debug
         }
         release {
-            // Signed by withAndroidReleaseSigning: reads ZBR_UPLOAD_* Gradle properties.
+            // Signed by withAndroidReleaseSigning: reads ZBR_COURIER_UPLOAD_* Gradle properties.
             signingConfig signingConfigs.release
             ...
         }
     }
 ```
 
-Note the fallback branch: if the `ZBR_UPLOAD_*` properties are missing, the build
+Note the fallback branch: if the `ZBR_COURIER_UPLOAD_*` properties are missing, the build
 **still succeeds** but is debug-signed, and prints:
 
 ```
-[ZBR] ZBR_UPLOAD_STORE_FILE is not set - the release build will be signed with the DEBUG keystore. Google Play will reject this artifact.
+[ZBR] ZBR_COURIER_UPLOAD_STORE_FILE is not set - the release build will be signed with the DEBUG keystore. Google Play will reject this artifact.
 ```
 
 That is a deliberate trade-off: it keeps `./gradlew assembleRelease` usable for a
@@ -512,8 +560,8 @@ It prompts for a keystore password **once** (twice, to confirm). Because this is
 too. `keytool` will not ask you for a second one. Generate the password in your password
 manager and save it there **before** you close the window; it is not recoverable.
 
-That single password goes into **both** `ZBR_UPLOAD_STORE_PASSWORD` and
-`ZBR_UPLOAD_KEY_PASSWORD` below. Gradle requires both properties; they simply hold the same
+That single password goes into **both** `ZBR_COURIER_UPLOAD_STORE_PASSWORD` and
+`ZBR_COURIER_UPLOAD_KEY_PASSWORD` below. Gradle requires both properties; they simply hold the same
 value.
 
 Record the fingerprint you will later compare against Play Console:
@@ -533,11 +581,11 @@ Copy-Item zbr-upload.keystore "$env:USERPROFILE\OneDrive\backup\zbr-upload.keyst
 
 **Wire it into Gradle** at the user level, never in the repo.
 
-> ### These four `ZBR_UPLOAD_*` lines are FILE CONTENT, not commands
+> ### These four `ZBR_COURIER_UPLOAD_*` lines are FILE CONTENT, not commands
 >
 > They go **inside** `%USERPROFILE%\.gradle\gradle.properties`. Pasting them into a
 > PowerShell prompt gives you
-> `"ZBR_UPLOAD_STORE_FILE=..." is not recognized as the name of a cmdlet`, and `export` is
+> `"ZBR_COURIER_UPLOAD_STORE_FILE=..." is not recognized as the name of a cmdlet`, and `export` is
 > bash — PowerShell has no such command. Use the script below and you never have to think
 > about it.
 
@@ -564,14 +612,14 @@ $storeForGradle = $store -replace '\\', '/'
 
 $block = @"
 # ZBR Courier upload signing - NEVER commit this file.
-ZBR_UPLOAD_STORE_FILE=$storeForGradle
-ZBR_UPLOAD_STORE_PASSWORD=$pw
-ZBR_UPLOAD_KEY_ALIAS=zbr-upload
-ZBR_UPLOAD_KEY_PASSWORD=$pw
+ZBR_COURIER_UPLOAD_STORE_FILE=$storeForGradle
+ZBR_COURIER_UPLOAD_STORE_PASSWORD=$pw
+ZBR_COURIER_UPLOAD_KEY_ALIAS=zbr-upload
+ZBR_COURIER_UPLOAD_KEY_PASSWORD=$pw
 "@
 
 if (Test-Path $gp) {
-  Write-Warning "$gp already exists - appending. Check for duplicate ZBR_UPLOAD_* keys."
+  Write-Warning "$gp already exists - appending. Check for duplicate ZBR_COURIER_UPLOAD_* keys."
   Add-Content -Path $gp -Value $block -Encoding Ascii
 } else {
   Set-Content -Path $gp -Value $block -Encoding Ascii
@@ -585,10 +633,10 @@ The resulting file looks like this — this is what the file *contains*, not wha
 
 ```properties
 # ZBR Courier upload signing - NEVER commit this file.
-ZBR_UPLOAD_STORE_FILE=C:/Users/Asus/keys/zbr/zbr-upload.keystore
-ZBR_UPLOAD_STORE_PASSWORD=<your keystore password>
-ZBR_UPLOAD_KEY_ALIAS=zbr-upload
-ZBR_UPLOAD_KEY_PASSWORD=<the SAME keystore password - PKCS12 has only one>
+ZBR_COURIER_UPLOAD_STORE_FILE=C:/Users/Asus/keys/zbr/zbr-upload.keystore
+ZBR_COURIER_UPLOAD_STORE_PASSWORD=<your keystore password>
+ZBR_COURIER_UPLOAD_KEY_ALIAS=zbr-upload
+ZBR_COURIER_UPLOAD_KEY_PASSWORD=<the SAME keystore password - PKCS12 has only one>
 ```
 
 Check it, then close the window (the passwords are on screen):
@@ -599,7 +647,7 @@ Get-Content "$env:USERPROFILE\.gradle\gradle.properties"
 
 > **Encoding matters.** The script writes ASCII deliberately. PowerShell 5.1's
 > `-Encoding UTF8` prepends a byte-order mark, which Java's properties parser treats as part
-> of the *first key name* — Gradle then cannot find `ZBR_UPLOAD_STORE_FILE` and silently
+> of the *first key name* — Gradle then cannot find `ZBR_COURIER_UPLOAD_STORE_FILE` and silently
 > falls back to the debug keystore.
 >
 > **If a password contains a backslash**, double it in the file (`\\`) — `\` is an escape
@@ -669,7 +717,7 @@ catches the single most common cause of a rejected first upload:
 ```
 
 The `Owner:` line must show your `CN=ZBR Courier, ...` distinguished name. If it says
-`CN=Android Debug, O=Android, C=US`, your `ZBR_UPLOAD_*` properties were not picked up —
+`CN=Android Debug, O=Android, C=US`, your `ZBR_COURIER_UPLOAD_*` properties were not picked up —
 the build fell back to the debug keystore and printed a `[ZBR]` warning that scrolled past.
 Fix the properties and rebuild; do not upload that file.
 
@@ -678,10 +726,10 @@ listings, so prefer `gradle.properties` for routine use):
 
 ```powershell
 .\gradlew.bat :app:bundleRelease `
-  "-PZBR_UPLOAD_STORE_FILE=C:/Users/you/keys/zbr/zbr-upload.keystore" `
-  "-PZBR_UPLOAD_STORE_PASSWORD=$env:ZBR_STORE_PASSWORD" `
-  "-PZBR_UPLOAD_KEY_ALIAS=zbr-upload" `
-  "-PZBR_UPLOAD_KEY_PASSWORD=$env:ZBR_KEY_PASSWORD"
+  "-PZBR_COURIER_UPLOAD_STORE_FILE=C:/Users/you/keys/zbr/zbr-upload.keystore" `
+  "-PZBR_COURIER_UPLOAD_STORE_PASSWORD=$env:ZBR_STORE_PASSWORD" `
+  "-PZBR_COURIER_UPLOAD_KEY_ALIAS=zbr-upload" `
+  "-PZBR_COURIER_UPLOAD_KEY_PASSWORD=$env:ZBR_KEY_PASSWORD"
 ```
 
 **Setting build-time env vars for prebuild** (PowerShell syntax, current session only):
@@ -842,7 +890,7 @@ against this repo at version 1.0.0:
         versionName "1.0.0"
 
         release {
-            // Signed by withAndroidReleaseSigning: reads ZBR_UPLOAD_* Gradle properties.
+            // Signed by withAndroidReleaseSigning: reads ZBR_COURIER_UPLOAD_* Gradle properties.
             signingConfig signingConfigs.release
 
 newArchEnabled=true
@@ -960,7 +1008,7 @@ jarsigner -verify -verbose:summary -certs \
 You want to see `jar verified.`. Two failure modes to look for:
 
 - `jar is unsigned.` — the release build type applied no signing config at all.
-- The certificate owner reads `CN=Android Debug, O=Android, C=US` — the `ZBR_UPLOAD_*`
+- The certificate owner reads `CN=Android Debug, O=Android, C=US` — the `ZBR_COURIER_UPLOAD_*`
   properties were not visible to Gradle and the fallback branch fired. **Play will reject
   this.** Fix `~/.gradle/gradle.properties` and rebuild.
 
@@ -1488,7 +1536,7 @@ not reproduced here.
 | Gradle wrapper version | `grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties` | `gradle-8.14.3-bin.zip` |
 | Prebuild succeeds | `npx expo prebuild --platform android --clean --no-install` | `✔ Finished prebuild` |
 | `gradle.properties` has **no** SDK-level properties | `grep '^android\.' android/gradle.properties` | only `android.useAndroidX=true` and `android.enablePngCrunchInReleaseBuilds=true` |
-| Signing plugin patches the template | `sed -n '/signingConfigs/,/buildTypes/p' android/app/build.gradle` | `release { if (project.hasProperty('ZBR_UPLOAD_STORE_FILE')) … }` present; release build type reads `signingConfig signingConfigs.release` |
+| Signing plugin patches the template | `sed -n '/signingConfigs/,/buildTypes/p' android/app/build.gradle` | `release { if (project.hasProperty('ZBR_COURIER_UPLOAD_STORE_FILE')) … }` present; release build type reads `signingConfig signingConfigs.release` |
 | 16 KB packaging flag | `grep useLegacyPackaging android/gradle.properties` | `expo.useLegacyPackaging=false` |
 | Pre-merge app manifest | `cat android/app/src/main/AndroidManifest.xml` | the **8** permissions listed in §4.3; the **5** blocked ones carry `tools:node="remove"` |
 | Library-merged permissions | `grep uses-permission node_modules/{expo-notifications,expo-image}/android/src/main/AndroidManifest.xml` | `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED` (expo-notifications); `ACCESS_NETWORK_STATE` (expo-image) — none of them in any repo file |

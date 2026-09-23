@@ -20,14 +20,34 @@
  * project, never committed) or on the command line:
  *
  *     ./gradlew :app:bundleRelease \
- *       -PZBR_UPLOAD_STORE_FILE=/absolute/path/to/zbr-upload.keystore \
- *       -PZBR_UPLOAD_STORE_PASSWORD=... \
- *       -PZBR_UPLOAD_KEY_ALIAS=zbr-upload \
- *       -PZBR_UPLOAD_KEY_PASSWORD=...
+ *       -PZBR_COURIER_UPLOAD_STORE_FILE=/absolute/path/to/zbr-upload.keystore \
+ *       -PZBR_COURIER_UPLOAD_STORE_PASSWORD=... \
+ *       -PZBR_COURIER_UPLOAD_KEY_ALIAS=zbr-upload \
+ *       -PZBR_COURIER_UPLOAD_KEY_PASSWORD=...
  *
  * When those properties are absent the release build falls back to the debug
  * keystore so that a local smoke-test build still works, and prints a loud
  * warning. Never upload the output of such a build.
+ *
+ * WHY THE NAMES CARRY "COURIER". `~/.gradle/gradle.properties` is global to the
+ * machine, shared by every Gradle project on it - and the ZBR customer app is
+ * built on the same machines as this one. Both apps using `ZBR_UPLOAD_*` means
+ * one file holding each key twice, and a properties file resolves a duplicate
+ * key to the LAST occurrence, silently and per key. That produced a build
+ * carrying this app's keystore path with the customer app's store password, and
+ * failed as:
+ *
+ *     Failed to read key zbr-upload from store "...\zbr-upload.keystore":
+ *     keystore password was incorrect
+ *
+ * which names the keystore and so points nowhere near the real cause. The two
+ * apps also cannot share one key in the first place: Play pins an app's upload
+ * key at its first upload, so each needs its own, and the property names have to
+ * keep them apart.
+ *
+ * The old `ZBR_UPLOAD_*` names are still honoured, with a warning, so an
+ * existing setup keeps building rather than silently dropping to the debug
+ * keystore - the one failure here that produces an artifact instead of an error.
  */
 
 const { withAppBuildGradle } = require('expo/config-plugins');
@@ -36,13 +56,30 @@ const SIGNING_CONFIGS_ANCHOR = 'signingConfigs {';
 
 const RELEASE_SIGNING_CONFIG = `
         release {
-            if (project.hasProperty('ZBR_UPLOAD_STORE_FILE')) {
-                storeFile file(ZBR_UPLOAD_STORE_FILE)
-                storePassword ZBR_UPLOAD_STORE_PASSWORD
-                keyAlias ZBR_UPLOAD_KEY_ALIAS
-                keyPassword ZBR_UPLOAD_KEY_PASSWORD
+            // Read all four from one prefix. Mixing prefixes is how this app's
+            // keystore ended up paired with the customer app's password.
+            def zbrPrefix = null
+            if (project.hasProperty('ZBR_COURIER_UPLOAD_STORE_FILE')) {
+                zbrPrefix = 'ZBR_COURIER_UPLOAD_'
+            } else if (project.hasProperty('ZBR_UPLOAD_STORE_FILE')) {
+                zbrPrefix = 'ZBR_UPLOAD_'
+                logger.warn('[ZBR] Using the legacy ZBR_UPLOAD_* properties. Rename them to ZBR_COURIER_UPLOAD_* in ~/.gradle/gradle.properties: that file is shared with the ZBR customer app, and a duplicated key silently resolves to whichever copy comes last.')
+            }
+
+            if (zbrPrefix != null) {
+                def zbrRequired = ['STORE_FILE', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD']
+                def zbrMissing = zbrRequired.findAll { !project.hasProperty(zbrPrefix + it) }
+                if (!zbrMissing.isEmpty()) {
+                    // Failing here beats failing in signReleaseBundle, which is
+                    // ten minutes of compilation later.
+                    throw new GradleException('[ZBR] Incomplete signing configuration: ' + zbrMissing.collect { zbrPrefix + it }.join(', ') + ' not set. See docs/ANDROID_RELEASE.md section 2.4.')
+                }
+                storeFile file(project.property(zbrPrefix + 'STORE_FILE').toString())
+                storePassword project.property(zbrPrefix + 'STORE_PASSWORD').toString()
+                keyAlias project.property(zbrPrefix + 'KEY_ALIAS').toString()
+                keyPassword project.property(zbrPrefix + 'KEY_PASSWORD').toString()
             } else {
-                logger.warn('[ZBR] ZBR_UPLOAD_STORE_FILE is not set - the release build will be signed with the DEBUG keystore. Google Play will reject this artifact.')
+                logger.warn('[ZBR] ZBR_COURIER_UPLOAD_STORE_FILE is not set - the release build will be signed with the DEBUG keystore. Google Play will reject this artifact.')
                 storeFile file('debug.keystore')
                 storePassword 'android'
                 keyAlias 'androiddebugkey'

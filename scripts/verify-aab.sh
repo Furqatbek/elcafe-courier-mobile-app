@@ -102,10 +102,10 @@ if command -v jarsigner >/dev/null 2>&1; then
   fi
 
   # The debug keystore's certificate is always CN=Android Debug. If that string
-  # appears, ZBR_UPLOAD_STORE_FILE was not set and the plugin fell back.
+  # appears, ZBR_COURIER_UPLOAD_STORE_FILE was not set and the plugin fell back.
   if grep -qi "CN=Android Debug" "$JS_OUT"; then
     fail "signed with the ANDROID DEBUG certificate - Play will reject this bundle"
-    info "ZBR_UPLOAD_STORE_FILE was not visible to Gradle. Fix ~/.gradle/gradle.properties and rebuild."
+    info "ZBR_COURIER_UPLOAD_STORE_FILE was not visible to Gradle. Fix ~/.gradle/gradle.properties and rebuild."
   else
     pass "not signed with the Android debug certificate"
   fi
