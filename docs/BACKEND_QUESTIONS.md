@@ -1,5 +1,21 @@
 # Backend questions — contracts the app currently assumes
 
+> **Answered** in COURIER_APP_CONTRACTS.md (backend reply). App-side changes
+> made in response:
+> - §5 item name is `itemName`, not `name` — fixed a "2x undefined" render.
+> - §8 `/app/version` now requires `&app=courier` — added; without it the
+>   endpoint answered with the customer app's data.
+> - §3 `/complete` takes no body and returns no `earnings` — body removed,
+>   earnings computed locally from deliveryFee + tip.
+> - §4/§6 already correct in the app (WS `restaurantPhone` typed;
+>   `parseServerDate` handles the timezone-less UTC timestamps).
+> - §2 notification-type constants corrected to the real set.
+>
+> Still needs a decision from us (see the end of this file): a distinct push
+> type for "assigned to you" vs "available to all", whether to add `earnings`
+> to `/complete`, `Z`-suffixed timestamps, and sending the store URLs.
+
+
 These are the places the courier app was integrated against a shape we
 *guessed* rather than one that is written down. Each one is a spot where the
 app can silently show wrong data or do redundant work if our guess is off. None

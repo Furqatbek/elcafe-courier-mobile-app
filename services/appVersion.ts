@@ -4,7 +4,7 @@ import { isOlderThan } from '@/lib/semver';
 import logger from '@/lib/logger';
 
 /**
- * Release metadata from `GET /api/v1/app/version?platform=ios|android`.
+ * Release metadata from `GET /api/v1/app/version?platform=ios|android&app=courier`.
  *
  * Everything is optional because this is the one endpoint that must keep
  * working when the app and the backend disagree about everything else — it is
@@ -178,7 +178,12 @@ export async function fetchVersionInfo(): Promise<AppVersionInfo | null> {
     // link, and answering an iPhone with a Play link is the exact failure the
     // separation exists to prevent.
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
-    const url = `${BASE_URL}${API_ENDPOINTS.APP.VERSION}?platform=${platform}`;
+    // `app=courier` is REQUIRED. The endpoint keys on platform AND app, and
+    // defaults to `customer` when app is omitted — which is what made it answer
+    // this app with the customer app's version and store link (see
+    // docs/BACKEND_QUESTIONS.md §8). Without this parameter the update prompt
+    // points couriers at the wrong app.
+    const url = `${BASE_URL}${API_ENDPOINTS.APP.VERSION}?platform=${platform}&app=courier`;
 
     const response = await fetch(url, {
       method: 'GET',

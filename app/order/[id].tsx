@@ -347,7 +347,7 @@ export default function OrderDetailScreen() {
                 <Text style={styles.infoLabel}>{t('order_detail.order_items')} ({itemCount})</Text>
               </View>
               {order.items?.map((item, index) => (
-                <Text key={index} style={styles.infoValue}>• {item.quantity}x {item.name}</Text>
+                <Text key={index} style={styles.infoValue}>• {item.quantity}x {item.itemName ?? item.name ?? ''}</Text>
               )) ?? (
                 <Text style={styles.infoValue}>{itemCount} {t('orders.items', 'items')}</Text>
               )}

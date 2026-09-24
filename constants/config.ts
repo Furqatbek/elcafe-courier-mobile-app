@@ -308,14 +308,20 @@ export const ISSUE_TYPES = {
 
 export type IssueType = typeof ISSUE_TYPES[keyof typeof ISSUE_TYPES];
 
-// Notification Types
+// Notification `type` values a courier can actually receive, verified against
+// the backend's NotificationType enum (docs/BACKEND_QUESTIONS.md §2). The push
+// `data.type` is the enum name exactly — compare against these spellings.
+//
+// The earlier constants here (NEW_ORDER_NEARBY, ORDER_ASSIGNED, PAYOUT_ISSUED,
+// VERIFICATION_APPROVED, RATING_RECEIVED) were never sent by the backend and
+// have been removed. Note that ASSIGNMENT is delivered as NEW_DELIVERY_AVAILABLE
+// — the same type as an open broadcast — so type alone cannot distinguish "this
+// job is yours" from "a job is going spare".
 export const NOTIFICATION_TYPES = {
-  NEW_ORDER_NEARBY: 'NEW_ORDER_NEARBY',
-  ORDER_ASSIGNED: 'ORDER_ASSIGNED',
+  NEW_DELIVERY_AVAILABLE: 'NEW_DELIVERY_AVAILABLE',
+  ORDER_READY: 'ORDER_READY',
+  DELIVERY_COMPLETED: 'DELIVERY_COMPLETED',
   ORDER_CANCELLED: 'ORDER_CANCELLED',
-  PAYOUT_ISSUED: 'PAYOUT_ISSUED',
-  VERIFICATION_APPROVED: 'VERIFICATION_APPROVED',
-  RATING_RECEIVED: 'RATING_RECEIVED',
 } as const;
 
 // Earnings Period Types

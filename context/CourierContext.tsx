@@ -154,7 +154,12 @@ export interface RefreshTokenResponse {
 }
 
 export interface OrderItem {
-  name: string;
+  // The socket's OrderItemDto names this `itemName`; older/local shapes used
+  // `name`. Read itemName first (see docs/BACKEND_QUESTIONS.md §5) — reading
+  // only `name` rendered "2x undefined", since the items array only ever
+  // arrives on the WebSocket OrderDto, where the field is itemName.
+  itemName?: string;
+  name?: string;
   quantity: number;
 }
 
@@ -1151,7 +1156,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
                   status: orderDto.status as OrderStatus,
                   customerName: orderDto.customerName ?? order.customerName,
                   customerPhone: orderDto.customerPhone ?? order.customerPhone,
-                  restaurantPhone: (orderDto as any).restaurantPhone ?? order.restaurantPhone,
+                  restaurantPhone: orderDto.restaurantPhone ?? order.restaurantPhone,
                   deliveryFee: orderDto.deliveryFee ?? order.deliveryFee,
                   tipAmount: orderDto.tipAmount ?? order.tipAmount,
                   total: orderDto.total ?? order.total,
@@ -2093,9 +2098,8 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
   // Complete order with optional photo and notes
   const completeOrder = useCallback(async (
-    orderId: number | string,
-    data?: { deliveryPhoto?: string; deliveryNotes?: string }
-  ): Promise<{ orderId: number; status: string; earnings: number; message: string } | null> => {
+    orderId: number | string
+  ): Promise<{ orderId: number; status: string; earnings?: number; message: string } | null> => {
     const numericOrderId = Number(orderId);
     logger.log('[CourierContext] completeOrder called with orderId:', orderId, 'numericOrderId:', numericOrderId);
     logger.log('[CourierContext] Endpoint:', API_ENDPOINTS.ORDERS.COMPLETE(orderId));
@@ -2105,9 +2109,11 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
 
     try {
       logger.log('[CourierContext] Making API call to complete order...');
+      // No body: the endpoint is (currentUser, orderId) and reads no request
+      // body (docs/BACKEND_QUESTIONS.md §3). The response is a CourierOrderDto
+      // with no `earnings` field, so callers compute it from deliveryFee + tip.
       const response = await authenticatedFetch(API_ENDPOINTS.ORDERS.COMPLETE(orderId), {
         method: 'POST',
-        body: data ? JSON.stringify(data) : undefined,
       });
       logger.log('[CourierContext] API response status:', response.status);
 
