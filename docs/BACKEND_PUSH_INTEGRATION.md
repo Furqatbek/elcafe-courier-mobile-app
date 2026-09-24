@@ -386,11 +386,23 @@ worth correcting.
 **Ours are:**
 
 ```
-android   app.zbr.courier
-          https://play.google.com/store/apps/details?id=app.zbr.courier
 ios       6807758268
-          https://apps.apple.com/app/id6807758268
+          https://apps.apple.com/uz/app/zbr-courier/id6807758268   ← LIVE
+android   app.zbr.courier
+          https://play.google.com/store/apps/details?id=app.zbr.courier   ← NOT PUBLISHED YET
 ```
+
+**Only the iOS app is on a store today.** Android is not yet published, so its
+Play URL 404s. The version endpoint must therefore, for `app=courier&platform=android`:
+
+- **omit `storeUrl`** (do not hand out a link to a listing that does not exist), and
+- **not advertise a `latestVersion` above what couriers are already running** —
+  otherwise the app shows an update prompt whose button opens a dead Play page.
+  Keep android `latest`/`minimum` at `1.0.0` until the Play listing is live.
+
+For `platform=ios`: `latestVersion` = `1.0.2` (live now), moving to `1.0.3` when
+that build is released; `minimumVersion` = `1.0.0`. `storeUrl` = the iOS link
+above. The app sends `&app=courier` as of the current build.
 
 ## What to set, and when
 
