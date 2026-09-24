@@ -94,6 +94,14 @@ export function UpdateGate() {
   }, []);
 
   const check = useCallback(async () => {
+    // In development (Expo Go, `npm start`, a dev client) the installed version
+    // is not this app's version — Application.nativeApplicationVersion returns
+    // the host app's, or null, which APP_CONFIG.VERSION falls back to '1.0.2'.
+    // Comparing that against the backend's latestVersion produces a phantom
+    // "new version available" toast on a build that is by definition the newest
+    // code there is. Only a real store build has a meaningful version to check.
+    if (__DEV__) return;
+
     // Resume fires for every return from the camera, Maps, a phone call. A
     // release does not land minute to minute, so most of those are wasted
     // requests on the courier's mobile data.
