@@ -206,6 +206,7 @@ function NotificationHandler() {
     handleNewOrderPush,
     fetchAvailableOrders,
     fetchOrders,
+    isWebSocketConnected,
     isOnline,
     isAuthenticated,
     isSessionLoading,
@@ -338,10 +339,17 @@ function NotificationHandler() {
       fetchUnreadCount();
 
       // Any push that names an order means that order's server-side state just
-      // changed (assigned, cancelled, status advanced). The order detail and
-      // list screens read from the orders in context, so without this refetch
-      // the notification arrives but the order data on screen stays stale.
-      if (data?.orderId != null) {
+      // changed (assigned, cancelled, status advanced). The order screens read
+      // from the orders in context, so a stale list is what made the earlier
+      // "push arrives but data doesn't update" bug.
+      //
+      // The primary path for this is the WebSocket: every active order is
+      // subscribed to /topic/orders/{orderId} and each change patches local
+      // state in place, with no HTTP request. So we only fall back to a refetch
+      // when the socket is DOWN — otherwise a full active-orders GET on every
+      // push would duplicate work the socket already did, and a burst of
+      // updates would mean a burst of list fetches for nothing.
+      if (data?.orderId != null && !isWebSocketConnected) {
         fetchOrders();
       }
 
@@ -376,7 +384,7 @@ function NotificationHandler() {
       responseListener.current?.remove();
       responseListener.current = null;
     };
-  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, fetchOrders, isOnline, navigateWhenReady, router, toast]);
+  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, fetchOrders, isWebSocketConnected, isOnline, navigateWhenReady, router, toast]);
 
   return null;
 }
