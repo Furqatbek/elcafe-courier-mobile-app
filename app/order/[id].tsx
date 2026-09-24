@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator, Modal, TextInput } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Platform, Linking, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Phone, Navigation, ArrowLeft, CreditCard, Package, AlertTriangle, X, ExternalLink, Store } from 'lucide-react-native';
@@ -98,9 +98,21 @@ export default function OrderDetailScreen() {
         const result = await completeOrder(order.orderId);
         logger.log('[OrderDetail] completeOrder result:', result);
         if (result) {
+          // The /complete response is not guaranteed to carry an `earnings`
+          // field (the API reference documents only that it credits
+          // deliveryFee + tipAmount), so a missing/zero value from the server
+          // must not overwrite what we already know this delivery is worth.
+          // courierEarnings(order) is that same deliveryFee + tip, computed from
+          // the order we are holding — use it whenever the server didn't send a
+          // positive number of its own.
+          const serverEarnings = Number(result.earnings);
+          const shownEarnings =
+            Number.isFinite(serverEarnings) && serverEarnings > 0
+              ? serverEarnings
+              : earningsAmount;
           Alert.alert(
             t('order_detail.delivery_complete'),
-            t('order_detail.earned_amount', { amount: formatCurrency(result.earnings) }),
+            t('order_detail.earned_amount', { amount: formatCurrency(shownEarnings) }),
             [{ text: t('common.ok'), onPress: () => router.replace(`/order-rating/${order.orderId}`) }],
             { cancelable: false }
           );
@@ -408,66 +420,85 @@ export default function OrderDetailScreen() {
         transparent={true}
         onRequestClose={() => setShowIssueModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: footerPaddingBottom }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('order_detail.report_issue')}</Text>
-              <TouchableOpacity onPress={() => setShowIssueModal(false)}>
-                <X size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalLabel}>{t('order_detail.issue_type')}</Text>
-            <View style={styles.issueTypesGrid}>
-              {(Object.keys(ISSUE_TYPES) as IssueType[]).map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.issueTypeButton,
-                    selectedIssueType === type && styles.issueTypeButtonActive,
-                  ]}
-                  onPress={() => setSelectedIssueType(type)}
-                >
-                  <Text
-                    style={[
-                      styles.issueTypeText,
-                      selectedIssueType === type && styles.issueTypeTextActive,
-                    ]}
-                  >
-                    {issueTypeLabels[type]}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.modalLabel}>{t('order_detail.issue_description')}</Text>
-            <TextInput
-              style={styles.issueInput}
-              placeholder={t('order_detail.issue_description_placeholder')}
-              placeholderTextColor={Colors.textLight}
-              value={issueDescription}
-              onChangeText={setIssueDescription}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.submitIssueButton,
-                (!selectedIssueType || !issueDescription.trim() || isSubmittingIssue) && styles.submitIssueButtonDisabled,
-              ]}
-              onPress={handleReportIssue}
-              disabled={!selectedIssueType || !issueDescription.trim() || isSubmittingIssue}
+        {/* Tapping the dimmed area behind the sheet dismisses the keyboard
+            (and, if it is already down, closes the modal). Without this the
+            multiline field has no return key to dismiss with. */}
+        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()} accessible={false}>
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              // Keeps the sheet — and the Send button under the input — above the
+              // keyboard instead of behind it, which made the button untappable.
             >
-              {isSubmittingIssue ? (
-                <ActivityIndicator color={Colors.surface} size="small" />
-              ) : (
-                <Text style={styles.submitIssueText}>{t('order_detail.submit_issue')}</Text>
-              )}
-            </TouchableOpacity>
+              <View style={[styles.modalContent, { paddingBottom: footerPaddingBottom }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{t('order_detail.report_issue')}</Text>
+                  <TouchableOpacity onPress={() => setShowIssueModal(false)}>
+                    <X size={24} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Scrolls when the keyboard is up; keyboardShouldPersistTaps
+                    lets the first tap hit Send instead of only closing the
+                    keyboard. */}
+                <ScrollView
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.modalLabel}>{t('order_detail.issue_type')}</Text>
+                  <View style={styles.issueTypesGrid}>
+                    {(Object.keys(ISSUE_TYPES) as IssueType[]).map((type) => (
+                      <TouchableOpacity
+                        key={type}
+                        style={[
+                          styles.issueTypeButton,
+                          selectedIssueType === type && styles.issueTypeButtonActive,
+                        ]}
+                        onPress={() => setSelectedIssueType(type)}
+                      >
+                        <Text
+                          style={[
+                            styles.issueTypeText,
+                            selectedIssueType === type && styles.issueTypeTextActive,
+                          ]}
+                        >
+                          {issueTypeLabels[type]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.modalLabel}>{t('order_detail.issue_description')}</Text>
+                  <TextInput
+                    style={styles.issueInput}
+                    placeholder={t('order_detail.issue_description_placeholder')}
+                    placeholderTextColor={Colors.textLight}
+                    value={issueDescription}
+                    onChangeText={setIssueDescription}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+
+                  <TouchableOpacity
+                    style={[
+                      styles.submitIssueButton,
+                      (!selectedIssueType || !issueDescription.trim() || isSubmittingIssue) && styles.submitIssueButtonDisabled,
+                    ]}
+                    onPress={() => { Keyboard.dismiss(); handleReportIssue(); }}
+                    disabled={!selectedIssueType || !issueDescription.trim() || isSubmittingIssue}
+                  >
+                    {isSubmittingIssue ? (
+                      <ActivityIndicator color={Colors.surface} size="small" />
+                    ) : (
+                      <Text style={styles.submitIssueText}>{t('order_detail.submit_issue')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Footer Action */}

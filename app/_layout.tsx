@@ -205,6 +205,7 @@ function NotificationHandler() {
     fetchUnreadCount,
     handleNewOrderPush,
     fetchAvailableOrders,
+    fetchOrders,
     isOnline,
     isAuthenticated,
     isSessionLoading,
@@ -336,6 +337,14 @@ function NotificationHandler() {
       fetchNotifications();
       fetchUnreadCount();
 
+      // Any push that names an order means that order's server-side state just
+      // changed (assigned, cancelled, status advanced). The order detail and
+      // list screens read from the orders in context, so without this refetch
+      // the notification arrives but the order data on screen stays stale.
+      if (data?.orderId != null) {
+        fetchOrders();
+      }
+
       const title = notification.request.content.title || 'New Notification';
       const body = notification.request.content.body || '';
       toast.info(title, body);
@@ -367,7 +376,7 @@ function NotificationHandler() {
       responseListener.current?.remove();
       responseListener.current = null;
     };
-  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, isOnline, navigateWhenReady, router, toast]);
+  }, [fetchNotifications, fetchUnreadCount, handleNewOrderPush, fetchOrders, isOnline, navigateWhenReady, router, toast]);
 
   return null;
 }

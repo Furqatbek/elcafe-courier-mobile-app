@@ -2222,6 +2222,7 @@ export const [CourierProvider, useCourier] = createContextHook(() => {
     orders,
     activeOrders,
     completedOrders,
+    fetchOrders,
     updateOrderStatus,
     completeOrder,
     reportOrderIssue,
